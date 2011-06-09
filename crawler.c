@@ -2,42 +2,43 @@
 #include <string.h>
 #include <stdlib.h>
 #include <netinet/in.h>
-#include <udns.h>
+#include <netdb.h>
+#include <ares.h>
 #include "h/global.h"
 #include "h/struct.h"
 #include "h/proto.h"
 
-//struct adns__state *my_adns_state;
+
+/** callback funkce, kterou zavola ares
+ */
+void *dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
+{
+	UC *ip;
+	struct surl *u;
+	
+	if(status!=0) printf("error: dnscallback with non zero status!\n");
+	
+	ip=(UC*)(hostent->h_addr);
+	u=(struct surl *)arg;
+	
+	printf("[%d] Resolving %s ended => %d.%d.%d.%d\n",u->index,u->host,ip[0],ip[1],ip[2],ip[3]);
+	
+	u->state=S_GOTIP;
+}
+
 
 /** spusti preklad pres adns
  */
 void launchdns(struct surl *u)
 {
-	struct dns_rr_a4 *answer;
-	struct in_addr *ip;
-	int ipint;
-	char *ipchar;
-
-	printf("chci resolvovat %s\n",u->host);
+	int t;
 	
-//	adns_submit(my_adns_state,"",adns_r_a,0,&(u->my_adns_context),&(u->my_adns_query));
-	dns_init(u->ctx,1);
+	printf("[%d] Resolving %s starts\n",u->index,u->host);
+	
+	t=ares_init(&(u->aresch));
+	if(t) {printf("ares_init failed\n");exit(-1);}
 
-/*      struct dns_query *                                                                                                                        
-       dns_submit_a4(ctx, const char *name, int flags,                                                                                           
-          dns_query_a4_fn *cbck, data);                                                                                                          
-       struct dns_rr_a4 *                                                                                                                        
-       dns_resolve_a4(ctx, const char *name, int flags);*/
-
-	answer=dns_resolve_a4(u->ctx,u->host,0);
-	printf("status=%d",dns_status(u->ctx));
-	if(answer==NULL) {printf("NULL");exit(-1);}
-	printf("hu - %d",answer);
-//	ip=&(answer->dnsa4_addr[0]);
-	ipint=(int)(answer->dnsa4_addr[0].s_addr);
-	ipchar=(char*)ipchar;
-	printf("ha - %d\n",answer->dnsa4_addr[0]);
-	printf("hip - %d.%d.%d.%d\n",ipchar[0],ipchar[1],ipchar[2],ipchar[3]);
+	ares_gethostbyname(u->aresch,u->host,AF_INET,(ares_host_callback)&dnscallback,u);
 
 	u->state=S_INADNS;
 }
@@ -47,22 +48,18 @@ void launchdns(struct surl *u)
 void checkdns(struct surl *u)
 {
 	int t;
+	UC buf[1024];
+	fd_set readfds;
+	fd_set writefds;
+	struct timeval tv, *tvp;
 
-//	struct adns_answer **my_adns_answer;
+	FD_ZERO(&readfds);
+	FD_ZERO(&writefds);
 
-	printf("Uz jsi?\n");
-/*int adns_check(adns_state ads,
-       adns_query *query_io,
-       adns_answer **answer_r,
-       void **context_r);*/
-       
-//       t=adns_check(my_adns_state,&u->my_adns_query,my_adns_answer,u->my_adns_context);
-       
-//       printf("%d status is %d\n",t,(*my_adns_answer)->adns_status);
-       
-//       u->state=S_GOTIP;
-       
-       
+	t=ares_fds(u->aresch,&readfds,&writefds);
+	if(!t) return;
+
+	ares_process(u->aresch,&readfds,&writefds); // pri uspechu zavola callback sama
 }       
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
@@ -84,22 +81,12 @@ void goone(struct surl *u)
   
 }
 
-/** pusti adns
- */
-void initadns()
-{
-//	struct adns_initflags myflags;
-
-//	adns_init(&my_adns_state,0,0);
-}
-
 /** hlavni smycka
  */
 void go()
 {
 	int t;
-	
-	initadns();
+
 	
 	while(1) {
 		for(t=0;url[t].rawurl[0];t++) {
@@ -108,6 +95,6 @@ void go()
 		}
 		
 	//printf("\n"); 
-	usleep(500000);
+	usleep(5000);
 	}
 }

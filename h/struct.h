@@ -1,6 +1,7 @@
 
 
 struct surl {
+	int index;
 	char rawurl[256];
  
 	char host[256];
@@ -9,11 +10,7 @@ struct surl {
  
 	int state;
  
-	// adns:
-//	void *my_adns_context;                                                                                                                   
-//        struct adns__query *my_adns_query;      
-
-	// udns
-	struct dns_ctx *ctx;
+	// ares
+	struct ares_channeldata *aresch;
  
 };
