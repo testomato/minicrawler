@@ -12,8 +12,13 @@ struct surl url[100];
 void simpleparseurl(struct surl *u)
 {
 	u->port=80;
-	sscanf(u->rawurl, "http://%99[^:]:%99d/%99[^\n]", u->host, &(u->port), u->path);
-	/* printf("host = \"%s\"\n", u->host);
+
+	sscanf(u->rawurl, "http://%[^/]/%99[^\n]", u->host, u->path);
+//        printf("host = \"%s\"\n", u->host);
+//	printf("path = \"%s\"\n", u->path);
+
+/*	sscanf(u->rawurl, "http://%99[^:]:%99d/%99[^\n]", u->host, &(u->port), u->path);
+	 printf("host = \"%s\"\n", u->host);
 	printf("port = \"%d\"\n", u->port);
 	printf("path = \"%s\"\n", u->path);*/
 }
