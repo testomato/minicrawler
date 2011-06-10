@@ -110,19 +110,49 @@ void readreply(struct surl *u)
 
 	left=BUFSIZE-u->bufp;
 	if(left<=0) return;
-	if(left>1024) left=1024;
+	if(left>4096) left=4096;
 	t=read(u->sockfd,u->buf+u->bufp,left);
 	
 	printf("[%d] Read %d bytes\n",u->index,t);
 	buf[60]=0;
 	
-	if(t<left) {close(u->sockfd);u->state=S_DONE;}
-
+	if(t<left) {close(u->sockfd);u->state=S_DONE;printf("[%d] done.\n",u->index);}
+	else u->state=S_GETREPLY;
 	//printf("%s",buf);
-
+	
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
+
+/** provede systemovy select nad vsemi streamy, ktere jsou ve stavu GETREPLY (a pripadne je prehodi do READYREPLY)
+ */
+void selectall()
+{
+	int t;
+	fd_set set;
+	struct timeval timeout;	
+	
+	FD_ZERO (&set);
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 50000;	
+	
+	for(t=0;url[t].rawurl[0];t++) {
+		if(url[t].state!=S_GETREPLY) continue;
+		FD_SET (url[t].sockfd, &set);
+	}
+	
+	t=select (FD_SETSIZE,&set, NULL, NULL, &timeout);
+	if(!t) return; // nic
+	//printf("select status: %d\n",t);
+	
+	for(t=0;url[t].rawurl[0];t++) {
+		if(!FD_ISSET(url[t].sockfd,&set)) continue;
+		printf("[%d] is ready for reading\n",t);
+		url[t].state=S_READYREPLY;
+	}
+	
+}
+
 
 /** provede jeden krok pro dane url
  */
@@ -149,9 +179,13 @@ void goone(struct surl *u)
 		break;
   
 	case S_GETREPLY:
-		readreply(u);
+		// nic, z tohohle stavu mne dostane select
 		break;
   
+
+	case S_READYREPLY:
+		readreply(u);
+		break;
 	}
   
 }
@@ -165,6 +199,7 @@ void go()
 
 	do {
 		done=1;
+		selectall();
 		for(t=0;url[t].rawurl[0];t++) {
 			//printf("%d: %d\n",t,url[t].state);
 			if(url[t].state!=S_DONE) {goone(&url[t]);done=0;}
