@@ -103,11 +103,26 @@ void sendhttpget(struct surl *u)
 void output(struct surl *u)
 {
 	UC header[1024];
+	int status;
+	UC *p;
+	int headlen;
 	
-	sprintf(header,"URL: %s\nContent-length: %d\n\n",u->rawurl,u->bufp);
+	status=atoi(u->buf+9);
+	u->buf[u->bufp]=0;
+	
+	p=strstr(u->buf,"\r\n\r\n");
+	if(p) p+=4;
+	
+	if(p==NULL) {p=strstr(u->buf,"\n\n");if(p) p+=2;}
+	
+	if(p==NULL) {debugf("[%d] cannot find end of http header?\n",u->index);return;}
+	
+	headlen=p-u->buf;
+	
+	sprintf(header,"URL: %s\nStatus: %d\nContent-length: %d\n\n",u->rawurl,status,u->bufp-headlen);
 
 	write(STDOUT_FILENO,header,strlen(header));
-	write(STDOUT_FILENO,u->buf,u->bufp);
+	write(STDOUT_FILENO,p,u->bufp-headlen);
 }
 
 /** cti odpoved
