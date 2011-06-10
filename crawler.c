@@ -11,7 +11,6 @@
 #include "h/struct.h"
 #include "h/proto.h"
 
-
 /** callback funkce, kterou zavola ares
  */
 void *dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
@@ -19,13 +18,13 @@ void *dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
 	UC *ip;
 	struct surl *u;
 	
-	if(status!=0) printf("error: dnscallback with non zero status!\n");
+	u=(struct surl *)arg;
+	if(status!=0) {debugf("[%d] error: dnscallback with non zero status! - status=%d\n",u->index,status);u->state=S_ERROR;return;}
 	
 	ip=(UC*)(hostent->h_addr);
-	u=(struct surl *)arg;
 	u->ip=*(int *)ip;
 	
-	printf("[%d] Resolving %s ended => %d.%d.%d.%d\n",u->index,u->host,ip[0],ip[1],ip[2],ip[3]);
+	debugf("[%d] Resolving %s ended => %d.%d.%d.%d\n",u->index,u->host,ip[0],ip[1],ip[2],ip[3]);
 	
 	u->state=S_GOTIP;
 }
@@ -37,10 +36,10 @@ void launchdns(struct surl *u)
 {
 	int t;
 	
-	printf("[%d] Resolving %s starts\n",u->index,u->host);
+	debugf("[%d] Resolving %s starts\n",u->index,u->host);
 	
 	t=ares_init(&(u->aresch));
-	if(t) {printf("ares_init failed\n");exit(-1);}
+	if(t) {debugf("ares_init failed\n");exit(-1);}
 
 	ares_gethostbyname(u->aresch,u->host,AF_INET,(ares_host_callback)&dnscallback,u);
 
@@ -77,7 +76,7 @@ void opensocket(struct surl *u)
 
 	u->sockfd=socket(AF_INET,SOCK_STREAM,0);
 	t=connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
-	if(t) printf("%d: connect failed\n",u->index);
+	if(t) debugf("%d: connect failed\n",u->index);
 
 	u->state=S_CONNECTED;
 }
@@ -90,10 +89,10 @@ void sendhttpget(struct surl *u)
 	int t;
 	
 	sprintf(buf,"GET %s HTTP/1.1\nHost: %s\n\n",u->path,u->host);
-	//printf(buf);
+	//debugf(buf);
 	
 	t=write(u->sockfd,buf,strlen(buf));
-	printf("[%d] Written %d bytes\n",u->index,t);
+	debugf("[%d] Written %d bytes\n",u->index,t);
 	
 	u->state=S_GETREPLY;
 }
@@ -113,12 +112,12 @@ void readreply(struct surl *u)
 	if(left>4096) left=4096;
 	t=read(u->sockfd,u->buf+u->bufp,left);
 	
-	printf("[%d] Read %d bytes\n",u->index,t);
+	debugf("[%d] Read %d bytes\n",u->index,t);
 	buf[60]=0;
 	
-	if(t<left) {close(u->sockfd);u->state=S_DONE;printf("[%d] done.\n",u->index);}
+	if(t<left) {close(u->sockfd);u->state=S_DONE;debugf("[%d] done.\n",u->index);}
 	else u->state=S_GETREPLY;
-	//printf("%s",buf);
+	//debugf("%s",buf);
 	
 }
 
@@ -143,11 +142,11 @@ void selectall()
 	
 	t=select (FD_SETSIZE,&set, NULL, NULL, &timeout);
 	if(!t) return; // nic
-	//printf("select status: %d\n",t);
+	//debugf("select status: %d\n",t);
 	
 	for(t=0;url[t].rawurl[0];t++) {
 		if(!FD_ISSET(url[t].sockfd,&set)) continue;
-		printf("[%d] is ready for reading\n",t);
+		debugf("[%d] is ready for reading\n",t);
 		url[t].state=S_READYREPLY;
 	}
 	
@@ -158,7 +157,7 @@ void selectall()
  */
 void goone(struct surl *u)
 {
-	//printf("[%d]: %d\n",u->index,u->state);
+	//debugf("[%d]: %d\n",u->index,u->state);
 
 	switch(u->state) {
   
@@ -196,17 +195,27 @@ void go()
 {
 	int t;
 	int done;
+	int change;
+	int state;
 
 	do {
 		done=1;
+		change=0;
+		
 		selectall();
 		for(t=0;url[t].rawurl[0];t++) {
-			//printf("%d: %d\n",t,url[t].state);
-			if(url[t].state!=S_DONE) {goone(&url[t]);done=0;}
+			//debugf("%d: %d\n",t,url[t].state);
+			state=url[t].state;
+			if(url[t].state<S_DONE) {goone(&url[t]);done=0;}
+			if(state!=url[t].state) change=1;
 		}
 		
-		//printf("\n"); 
-		usleep(50000);
+		t=gettimeint();
+		if(t>timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);break;}
+		
+		if(!change) usleep(20000);
 	} while(!done);
+	
+	if(done) debugf("All successful. Took %d ms.\n",gettimeint());
 }
 

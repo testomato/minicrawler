@@ -11,5 +11,8 @@
 #define S_GETREPLY	5
 #define S_READYREPLY	6
 #define S_DONE		10
+#define S_ERROR		20
 
 #define BUFSIZE (200*1024)
+
+#define debugf(...)   {if(debug) fprintf(stderr, __VA_ARGS__);}
