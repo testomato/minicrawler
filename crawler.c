@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <unistd.h>
 #include <ares.h>
 #include <sys/types.h>          
 #include <sys/socket.h>
@@ -97,6 +98,18 @@ void sendhttpget(struct surl *u)
 	u->state=S_GETREPLY;
 }
 
+/** vypise vystup na standardni vystup
+ */
+void output(struct surl *u)
+{
+	UC header[1024];
+	
+	sprintf(header,"URL: %s\nContent-length: %d\n\n",u->rawurl,u->bufp);
+
+	write(STDOUT_FILENO,header,strlen(header));
+	write(STDOUT_FILENO,u->buf,u->bufp);
+}
+
 /** cti odpoved
  */
 void readreply(struct surl *u)
@@ -111,11 +124,12 @@ void readreply(struct surl *u)
 	if(left<=0) return;
 	if(left>4096) left=4096;
 	t=read(u->sockfd,u->buf+u->bufp,left);
+	if(t>0) u->bufp+=t;
 	
 	debugf("[%d] Read %d bytes\n",u->index,t);
 	buf[60]=0;
 	
-	if(t<left) {close(u->sockfd);u->state=S_DONE;debugf("[%d] done.\n",u->index);}
+	if(t<left) {close(u->sockfd);u->state=S_DONE;debugf("[%d] done.\n",u->index);output(u);}
 	else u->state=S_GETREPLY;
 	//debugf("%s",buf);
 	
