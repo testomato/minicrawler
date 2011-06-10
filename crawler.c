@@ -4,6 +4,9 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <ares.h>
+#include <sys/types.h>          
+#include <sys/socket.h>
+
 #include "h/global.h"
 #include "h/struct.h"
 #include "h/proto.h"
@@ -20,6 +23,7 @@ void *dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
 	
 	ip=(UC*)(hostent->h_addr);
 	u=(struct surl *)arg;
+	u->ip=*(int *)ip;
 	
 	printf("[%d] Resolving %s ended => %d.%d.%d.%d\n",u->index,u->host,ip[0],ip[1],ip[2],ip[3]);
 	
@@ -27,7 +31,7 @@ void *dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
 }
 
 
-/** spusti preklad pres adns
+/** spusti preklad pres ares
  */
 void launchdns(struct surl *u)
 {
@@ -40,18 +44,16 @@ void launchdns(struct surl *u)
 
 	ares_gethostbyname(u->aresch,u->host,AF_INET,(ares_host_callback)&dnscallback,u);
 
-	u->state=S_INADNS;
+	u->state=S_INDNS;
 }
 
-/** uz je adns hotove?
+/** uz je ares hotovy?
  */
 void checkdns(struct surl *u)
 {
 	int t;
-	UC buf[1024];
 	fd_set readfds;
 	fd_set writefds;
-	struct timeval tv, *tvp;
 
 	FD_ZERO(&readfds);
 	FD_ZERO(&writefds);
@@ -62,20 +64,93 @@ void checkdns(struct surl *u)
 	ares_process(u->aresch,&readfds,&writefds); // pri uspechu zavola callback sama
 }       
 
+/** uz znam IP, otevri socket
+ */
+void opensocket(struct surl *u)
+{
+	struct sockaddr_in addr;
+	int t;
+
+	addr.sin_family=AF_INET;
+	addr.sin_port=htons(80);
+	memcpy(&(addr.sin_addr),&(u->ip),4);
+
+	u->sockfd=socket(AF_INET,SOCK_STREAM,0);
+	t=connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
+	if(t) printf("%d: connect failed\n",u->index);
+
+	u->state=S_CONNECTED;
+}
+
+/** socket bezi, posli dotaz
+ */
+void sendhttpget(struct surl *u)
+{
+	UC buf[1024];
+	int t;
+	
+	sprintf(buf,"GET %s HTTP/1.1\nHost: %s\n\n",u->path,u->host);
+	//printf(buf);
+	
+	t=write(u->sockfd,buf,strlen(buf));
+	printf("[%d] Written %d bytes\n",u->index,t);
+	
+	u->state=S_GETREPLY;
+}
+
+/** cti odpoved
+ */
+void readreply(struct surl *u)
+{
+	UC buf[1024];
+	int t;
+	int left;
+
+//	if(feof(u->sockfd)) {close(u->sockfd);u->state=DONE;}
+
+	left=BUFSIZE-u->bufp;
+	if(left<=0) return;
+	if(left>1024) left=1024;
+	t=read(u->sockfd,u->buf+u->bufp,left);
+	
+	printf("[%d] Read %d bytes\n",u->index,t);
+	buf[60]=0;
+	
+	if(t<left) {close(u->sockfd);u->state=S_DONE;}
+
+	//printf("%s",buf);
+
+}
+
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
 /** provede jeden krok pro dane url
  */
 void goone(struct surl *u)
 {
+	//printf("[%d]: %d\n",u->index,u->state);
+
 	switch(u->state) {
   
 	case S_JUSTBORN:
 		launchdns(u);
 		break;
   
-	case S_INADNS:
+	case S_INDNS:
 		checkdns(u);
+		break;
+
+	case S_GOTIP:
+		opensocket(u);
+		break;
+  
+	case S_CONNECTED:
+		sendhttpget(u);
+		break;
+  
+	case S_GETREPLY:
+		readreply(u);
+		break;
   
 	}
   
@@ -86,15 +161,17 @@ void goone(struct surl *u)
 void go()
 {
 	int t;
+	int done;
 
-	
-	while(1) {
+	do {
+		done=1;
 		for(t=0;url[t].rawurl[0];t++) {
 			//printf("%d: %d\n",t,url[t].state);
-			goone(&url[t]);
+			if(url[t].state!=S_DONE) {goone(&url[t]);done=0;}
 		}
 		
-	//printf("\n"); 
-	usleep(5000);
-	}
+		//printf("\n"); 
+		usleep(50000);
+	} while(!done);
 }
+

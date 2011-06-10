@@ -12,5 +12,12 @@ struct surl {
  
 	// ares
 	struct ares_channeldata *aresch;
+	
+	// network
+	int sockfd;
+	int ip;
+	
+	UC buf[BUFSIZE];
+	int bufp;
  
 };
