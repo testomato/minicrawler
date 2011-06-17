@@ -19,5 +19,8 @@ struct surl {
 	
 	UC buf[BUFSIZE];
 	int bufp;
+	int headlen;
+	int contentlen;
+	int status;		// http navratovy kod
  
 };

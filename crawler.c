@@ -98,16 +98,13 @@ void sendhttpget(struct surl *u)
 	u->state=S_GETREPLY;
 }
 
-/** vypise vystup na standardni vystup
+/** pozná status a hlavičku http požadavku
  */
-void output(struct surl *u)
+void detecthead(struct surl *u)
 {
-	UC header[1024];
-	int status;
 	UC *p;
-	int headlen;
-	
-	status=atoi(u->buf+9);
+
+	u->status=atoi(u->buf+9);
 	u->buf[u->bufp]=0;
 	
 	p=strstr(u->buf,"\r\n\r\n");
@@ -117,12 +114,27 @@ void output(struct surl *u)
 	
 	if(p==NULL) {debugf("[%d] cannot find end of http header?\n",u->index);return;}
 	
-	headlen=p-u->buf;
+	u->headlen=p-u->buf;
 	
-	sprintf(header,"URL: %s\nStatus: %d\nContent-length: %d\n\n",u->rawurl,status,u->bufp-headlen);
+	p=(UC*)memmem(u->buf,u->headlen,"Content-Length: ",16);
+	if(p!=NULL) u->contentlen=atoi(p+16);
+	
+	if(debug) debugf("[%d] status=%d, headlen=%d, content-length=%d\n",u->index,u->status,u->headlen,u->contentlen);
+}
+
+/** vypise vystup na standardni vystup
+ */
+void output(struct surl *u)
+{
+	UC header[1024];
+	
+	if(u->headlen==0) detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
+	
+	sprintf(header,"URL: %s\nStatus: %d\nContent-length: %d\n\n",u->rawurl,u->status,u->bufp-u->headlen);
 
 	write(STDOUT_FILENO,header,strlen(header));
-	write(STDOUT_FILENO,p,u->bufp-headlen);
+	if(writehead) write(STDOUT_FILENO,u->buf,u->headlen);
+	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
 }
 
 /** cti odpoved
@@ -141,10 +153,12 @@ void readreply(struct surl *u)
 	t=read(u->sockfd,u->buf+u->bufp,left);
 	if(t>0) u->bufp+=t;
 	
+	if(u->bufp>1024&&u->headlen==0) detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
+	
 	debugf("[%d] Read %d bytes\n",u->index,t);
 	buf[60]=0;
 	
-	if(t<left) {close(u->sockfd);u->state=S_DONE;debugf("[%d] done.\n",u->index);output(u);}
+	if(t<=0||u->bufp>=u->headlen+u->contentlen) {close(u->sockfd);u->state=S_DONE;debugf("[%d] done.\n",u->index);output(u);}
 	else u->state=S_GETREPLY;
 	//debugf("%s",buf);
 	
