@@ -89,11 +89,12 @@ void sendhttpget(struct surl *u)
 	UC buf[1024];
 	int t;
 	
-	sprintf(buf,"GET %s HTTP/1.1\nHost: %s\n\n",u->path,u->host);
+	sprintf(buf,"GET %s HTTP/1.1\r\nHost: %s\r\n\r\n",u->path,u->host);
 	//debugf(buf);
 	
 	t=write(u->sockfd,buf,strlen(buf));
-	debugf("[%d] Written %d bytes\n",u->index,t);
+	if(t<strlen(buf)) {debugf("[%d] Error - written %d bytes, wanted %d bytes\n",u->index,t,(int)strlen(buf));}
+	else debugf("[%d] Written %d bytes\n",u->index,t);
 	
 	u->state=S_GETREPLY;
 }
@@ -189,7 +190,7 @@ void selectall()
 	
 	for(t=0;url[t].rawurl[0];t++) {
 		if(!FD_ISSET(url[t].sockfd,&set)) continue;
-		debugf("[%d] is ready for reading\n",t);
+		//debugf("[%d] is ready for reading\n",t);
 		url[t].state=S_READYREPLY;
 	}
 	
