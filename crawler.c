@@ -136,6 +136,8 @@ void output(struct surl *u)
 	write(STDOUT_FILENO,header,strlen(header));
 	if(writehead) write(STDOUT_FILENO,u->buf,u->headlen);
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
+	
+	debugf("[%d] Outputed.\n",u->index);
 }
 
 /** cti odpoved
@@ -159,7 +161,7 @@ void readreply(struct surl *u)
 	debugf("[%d] Read %d bytes\n",u->index,t);
 	buf[60]=0;
 	
-	if(t<=0||u->bufp>=u->headlen+u->contentlen) {close(u->sockfd);u->state=S_DONE;debugf("[%d] done.\n",u->index);output(u);}
+	if(t<=0||u->bufp>=u->headlen+u->contentlen) {close(u->sockfd);u->state=S_DONE;output(u);debugf("[%d] Done.\n",u->index);}
 	else u->state=S_GETREPLY;
 	//debugf("%s",buf);
 	
@@ -181,6 +183,7 @@ void selectall()
 	
 	for(t=0;url[t].rawurl[0];t++) {
 		if(url[t].state!=S_GETREPLY) continue;
+		//debugf("[%d] into select...\n",t);
 		FD_SET (url[t].sockfd, &set);
 	}
 	
