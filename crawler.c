@@ -290,6 +290,7 @@ int exitprematurely()
 	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,tim);
 	
 	if(t>=5&&notdone==1&&(tim-lastread)>400) {debugf("[-] Forcing premature end 1!\n");return 1;}
+	if(t>=20&&notdone<=2&&(tim-lastread)>400) {debugf("[-] Forcing premature end 2!\n");return 1;}
 	
 	return 0;
 }
@@ -319,8 +320,8 @@ void go()
 		if(t>timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);break;}
 		
 		if(!change&&!done) {
-			usleep(20000);
 			if(impatient) done=exitprematurely();
+			usleep(20000);
 			}
 	} while(!done);
 	
