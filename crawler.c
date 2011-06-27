@@ -7,6 +7,9 @@
 #include <ares.h>
 #include <sys/types.h>          
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include "h/global.h"
 #include "h/struct.h"
@@ -70,16 +73,22 @@ void opensocket(struct surl *u)
 {
 	struct sockaddr_in addr;
 	int t;
+	int flags;
 
 	addr.sin_family=AF_INET;
 	addr.sin_port=htons(80);
 	memcpy(&(addr.sin_addr),&(u->ip),4);
 
 	u->sockfd=socket(AF_INET,SOCK_STREAM,0);
+	flags=fcntl(u->sockfd,F_GETFL,0);              // Get socket flags
+	fcntl(u->sockfd,F_SETFL,flags | O_NONBLOCK);   // Add non-blocking flag	
+	
 	t=connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
-	if(t) debugf("%d: connect failed\n",u->index);
-
-	u->state=S_CONNECTED;
+	if(t) {
+		if(errno==115) u->state=S_CONNECTING; // 115 je v pohode (operation in progress)
+		else {debugf("%d: connect failed (%d, %s)\n",u->index,errno,strerror(errno));u->state=S_ERROR;}
+		}
+	else u->state=S_CONNECTED;
 }
 
 /** socket bezi, posli dotaz
@@ -176,26 +185,40 @@ void selectall()
 {
 	int t;
 	fd_set set;
+	fd_set writeset;
 	struct timeval timeout;	
 	
 	FD_ZERO (&set);
+	FD_ZERO (&writeset);
 	timeout.tv_sec = 0;
-	timeout.tv_usec = 50000;	
+	timeout.tv_usec = 20000;	
 	
 	for(t=0;url[t].rawurl[0];t++) {
-		if(url[t].state!=S_GETREPLY) continue;
-		//debugf("[%d] into select...\n",t);
-		FD_SET (url[t].sockfd, &set);
+		if(url[t].state==S_GETREPLY) {
+			//debugf("[%d] into read select...\n",t);
+			FD_SET (url[t].sockfd, &set);
+			}
+		
+		if(url[t].state==S_CONNECTING) {
+			//debugf("[%d] into read write select...\n",t);
+			FD_SET (url[t].sockfd, &writeset);
+			}
 	}
 	
-	t=select (FD_SETSIZE,&set, NULL, NULL, &timeout);
+	t=select (FD_SETSIZE,&set, &writeset, NULL, &timeout);
 	if(!t) return; // nic
 	//debugf("select status: %d\n",t);
 	
 	for(t=0;url[t].rawurl[0];t++) {
-		if(!FD_ISSET(url[t].sockfd,&set)) continue;
-		//debugf("[%d] is ready for reading\n",t);
-		url[t].state=S_READYREPLY;
+		if(FD_ISSET(url[t].sockfd,&set)&&url[t].state==S_GETREPLY) {
+			//debugf("[%d] is ready for reading\n",t);
+			url[t].state=S_READYREPLY;
+			}
+		if(FD_ISSET(url[t].sockfd,&writeset)&&url[t].state==S_CONNECTING) {
+			//debugf("[%d] is ready for writing\n",t);
+			url[t].state=S_CONNECTED;
+			}
+		
 	}
 	
 }
@@ -225,6 +248,10 @@ void goone(struct surl *u)
 		opensocket(u);
 		break;
   
+	case S_CONNECTING:
+		// nic, z tohohle stavu mne dostane select
+		break;
+		
 	case S_CONNECTED:
 		sendhttpget(u);
 		break;
