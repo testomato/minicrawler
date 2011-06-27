@@ -13,7 +13,10 @@ struct surl url[100];
 int debug=0;
 int timeout=5;
 int writehead=0;
+int impatient=0;
 
+/** vrati pocet milisekund od spusteni programu (resp. prvniho zavolani teto funkce)
+ */
 int gettimeint()
 {
 	long long static starttime=0;
@@ -53,6 +56,7 @@ void initurls(int argc, char *argv[])
 	for(t=1;t<argc;t++) {
 		if(!strcmp(argv[t],"-d")) {debug=1;continue;}
 		if(!strcmp(argv[t],"-h")) {writehead=1;continue;}
+		if(!strcmp(argv[t],"-i")) {impatient=1;continue;}
 		if(!strncmp(argv[t],"-t",2)) {timeout=atoi(argv[t]+2);continue;}
 		
 		strcpy(url[i].rawurl,argv[t]);
@@ -66,11 +70,22 @@ void initurls(int argc, char *argv[])
 	strcpy(url[i].rawurl,""); // ukoncovaci znacka
 }
 
+/** vypise napovedu
+ */
+void printusage()
+{
+	printf("\nUsage:   minicrawler [-d] [-h] [i] [-tSECONDS] url [url2] [url3] [...]\n\n"
+	         "Where:   -d        enables debug messages (to stderr)\n"
+	         "         -tSECONDS sets timeout (default is 5 seconds)\n"
+	         "         -h        enables output of headers\n"
+	         "         -i        enables impatient mode (minicrawler exits few seconds earlier if doesn't make enough progress\n\n");
+}
+
 /** a jedeeeem...
  */
 int main(int argc, char *argv[])
 {
-	if(argc<2) {printf("\nUsage:   minicrawler [-d] [-h] [-tSECONDS] url [url2] [url3] [...]\n\nWhere:   -d enables debug messages (to stderr)\n         -tSECONDS sets timeout (default is 5 seconds)\n\n");exit(-1);}
+	if(argc<2) {printusage();exit(-1);}
 
 	gettimeint(); // nastavi se
 	

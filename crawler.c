@@ -148,8 +148,6 @@ void readreply(struct surl *u)
 	int t;
 	int left;
 
-//	if(feof(u->sockfd)) {close(u->sockfd);u->state=DONE;}
-
 	left=BUFSIZE-u->bufp;
 	if(left<=0) return;
 	if(left>4096) left=4096;
