@@ -9,6 +9,7 @@ struct surl {
 	char path[256];
  
 	int state;
+	int lastread;		// cas posledniho uspesneho cteni
  
 	// ares
 	struct ares_channeldata *aresch;
@@ -17,6 +18,7 @@ struct surl {
 	int sockfd;
 	int ip;
 	
+	// obsah
 	UC buf[BUFSIZE];
 	int bufp;
 	int headlen;

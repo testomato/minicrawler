@@ -152,7 +152,10 @@ void readreply(struct surl *u)
 	if(left<=0) return;
 	if(left>4096) left=4096;
 	t=read(u->sockfd,u->buf+u->bufp,left);
-	if(t>0) u->bufp+=t;
+	if(t>0) {
+		u->bufp+=t;
+		u->lastread=gettimeint();
+		}
 	
 	if(u->bufp>1024&&u->headlen==0) detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
 	
@@ -202,9 +205,13 @@ void selectall()
  */
 void goone(struct surl *u)
 {
+	int tim,state;
 	//debugf("[%d]: %d\n",u->index,u->state);
 
-	switch(u->state) {
+	tim=gettimeint();
+
+	state=u->state;
+	switch(state) {
   
 	case S_JUSTBORN:
 		launchdns(u);
@@ -231,7 +238,33 @@ void goone(struct surl *u)
 		readreply(u);
 		break;
 	}
+	
+	tim=gettimeint()-tim;
+	if(tim>200) debugf("[%d] State %d (->%d) took too long (%d ms)\n",u->index,state,u->state,tim);
   
+}
+
+/** vrati 1 pokud je dobre ukoncit se predcasne
+ */
+int exitprematurely()
+{
+	int tim;
+	int t;
+	int notdone=0, lastread=0;
+	
+	tim=gettimeint();
+	if(tim<timeout*1000-1000) return 0; // jeste je brzy
+	
+	for(t=0;url[t].rawurl[0];t++) {
+		if(url[t].state<S_DONE) notdone++;
+		if(url[t].lastread>lastread) lastread=url[t].lastread;
+	}
+	
+	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,tim);
+	
+	if(t>=5&&notdone==1&&(tim-lastread)>400) {debugf("[-] Forcing premature end 1!\n");return 1;}
+	
+	return 0;
 }
 
 /** hlavni smycka
@@ -258,7 +291,10 @@ void go()
 		t=gettimeint();
 		if(t>timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);break;}
 		
-		if(!change) usleep(20000);
+		if(!change&&!done) {
+			usleep(20000);
+			if(impatient) done=exitprematurely();
+			}
 	} while(!done);
 	
 	if(done) debugf("All successful. Took %d ms.\n",gettimeint());
