@@ -76,7 +76,7 @@ void opensocket(struct surl *u)
 	int flags;
 
 	addr.sin_family=AF_INET;
-	addr.sin_port=htons(80);
+	addr.sin_port=htons(u->port);
 	memcpy(&(addr.sin_addr),&(u->ip),4);
 
 	u->sockfd=socket(AF_INET,SOCK_STREAM,0);
@@ -171,7 +171,7 @@ void readreply(struct surl *u)
 	debugf("[%d] Read %d bytes\n",u->index,t);
 	buf[60]=0;
 	
-	if(t<=0||u->bufp>=u->headlen+u->contentlen) {close(u->sockfd);u->state=S_DONE;output(u);debugf("[%d] Done.\n",u->index);}
+	if(t<=0||(u->contentlen&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);u->state=S_DONE;output(u);debugf("[%d] Done.\n",u->index);}
 	else u->state=S_GETREPLY;
 	//debugf("%s",buf);
 	

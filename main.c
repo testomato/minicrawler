@@ -33,16 +33,17 @@ int gettimeint()
  */
 void simpleparseurl(struct surl *u)
 {
-	u->port=80;
+	u->port=0;
 	u->path[0]='/';
 
-	sscanf(u->rawurl, "http://%[^/]/%s", u->host, u->path+1);
+	sscanf(u->rawurl, "http://%99[^:]:%99d%99[^\n]", u->host, &(u->port), u->path);
 
-/*	sscanf(u->rawurl, "http://%99[^:]:%99d/%99[^\n]", u->host, &(u->port), u->path);*/
+	if(u->port==0) {sscanf(u->rawurl, "http://%[^/]/%s", u->host, u->path+1);u->port=80;}
 
-	/*printf("host = \"%s\"\n", u->host);
-	printf("port = \"%d\"\n", u->port);
-	printf("path = \"%s\"\n", u->path);*/
+	debugf("[%d] host='%s' port=%d path='%s'\n",u->index,u->host,u->port,u->path);
+//	printf("host = \"%s\"\n", u->host);
+//	printf("port = \"%d\"\n", u->port);
+//	printf("path = \"%s\"\n", u->path);
 }
 
 
