@@ -138,7 +138,7 @@ void detecthead(struct surl *u)
 	p=(char*)memmem(u->buf,u->headlen,"Location: ",10);
 	if(p!=NULL) {strcpy_term(u->location,p+10);debugf("[%d] Location='%s'\n",u->index,u->location);}
 	
-	if(debug) debugf("[%d] status=%d, headlen=%d, content-length=%d\n",u->index,u->status,u->headlen,u->contentlen);
+	debugf("[%d] status=%d, headlen=%d, content-length=%d\n",u->index,u->status,u->headlen,u->contentlen);
 }
 
 /** vypise vystup na standardni vystup
@@ -152,7 +152,7 @@ void output(struct surl *u)
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n\n",u->status,u->bufp-u->headlen);
 
 	write(STDOUT_FILENO,header,strlen(header));
-	if(writehead) write(STDOUT_FILENO,u->buf,u->headlen);
+	if(settings.writehead) write(STDOUT_FILENO,u->buf,u->headlen);
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
 	
 	debugf("[%d] Outputed.\n",u->index);
@@ -326,7 +326,7 @@ int exitprematurely()
 	int notdone=0, lastread=0;
 	
 	tim=gettimeint();
-	if(tim<timeout*1000-1000) return 0; // jeste je brzy
+	if(tim<settings.timeout*1000-1000) return 0; // jeste je brzy
 	
 	for(t=0;url[t].rawurl[0];t++) {
 		if(url[t].state<S_DONE) notdone++;
@@ -373,10 +373,10 @@ void go()
 		}
 		
 		t=gettimeint();
-		if(t>timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);if(partial) outputpartial();break;}
+		if(t>settings.timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);if(settings.partial) outputpartial();break;}
 		
 		if(!change&&!done) {
-			if(impatient) done=exitprematurely();
+			if(settings.impatient) done=exitprematurely();
 			usleep(20000);
 			}
 	} while(!done);

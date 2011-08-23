@@ -1,10 +1,6 @@
 
 
 extern struct surl url[];
-extern int debug;
-extern int timeout;
-extern int writehead;
-extern int impatient;
-extern int partial;
+extern struct ssettings settings;
 
 int gettimeint();

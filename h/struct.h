@@ -29,3 +29,11 @@ struct surl {
 	int status;		// http navratovy kod
  
 };
+
+struct ssettings {
+	int debug;
+	int timeout;
+	int writehead;
+	int impatient;
+	int partial;
+};

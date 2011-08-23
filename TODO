@@ -1,8 +1,5 @@
 
-presmerovani ma zatim tato omezeni:
-- resi pouze absolutni URL (relativni tam podle RFC byt nesmi, ale v praxi tam bohuzel obcas jsou)
-- predpoklada, ze i nove url je na stejne ip (coz obvykle byva, ale obcas nemusi - tohle jeste doresim pozdeji)
+1. presmerovani ma zatim omezeni, ze resi pouze absolutni URL (relativni tam podle RFC byt nesmi, ale v praxi tam bohuzel obcas jsou)
 
-
-neresim "chunked" zpusob posilani
+2. neresim "chunked" zpusob posilani
 

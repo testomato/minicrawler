@@ -10,11 +10,7 @@
 
 struct surl url[100];
 
-int debug=0;
-int timeout=5;
-int writehead=0;
-int impatient=0;
-int partial=0;
+struct ssettings settings;
 
 /** vrati pocet milisekund od spusteni programu (resp. prvniho zavolani teto funkce)
  */
@@ -56,11 +52,11 @@ void initurls(int argc, char *argv[])
 	int i=0;
  
 	for(t=1;t<argc;t++) {
-		if(!strcmp(argv[t],"-d")) {debug=1;continue;}
-		if(!strcmp(argv[t],"-h")) {writehead=1;continue;}
-		if(!strcmp(argv[t],"-i")) {impatient=1;continue;}
-		if(!strcmp(argv[t],"-p")) {partial=1;continue;}
-		if(!strncmp(argv[t],"-t",2)) {timeout=atoi(argv[t]+2);continue;}
+		if(!strcmp(argv[t],"-d")) {settings.debug=1;continue;}
+		if(!strcmp(argv[t],"-h")) {settings.writehead=1;continue;}
+		if(!strcmp(argv[t],"-i")) {settings.impatient=1;continue;}
+		if(!strcmp(argv[t],"-p")) {settings.partial=1;continue;}
+		if(!strncmp(argv[t],"-t",2)) {settings.timeout=atoi(argv[t]+2);continue;}
 		
 		strcpy(url[i].rawurl,argv[t]);
 		simpleparseurl(&url[i]);
@@ -93,6 +89,7 @@ int main(int argc, char *argv[])
 {
 	if(argc<2) {printusage();exit(-1);}
 
+	settings.timeout=5;
 	gettimeint(); // nastavi se
 	
 	initurls(argc,argv);

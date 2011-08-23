@@ -16,4 +16,4 @@
 
 #define BUFSIZE (200*1024)
 
-#define debugf(...)   {if(debug) fprintf(stderr, __VA_ARGS__);}
+#define debugf(...)   {if(settings.debug) fprintf(stderr, __VA_ARGS__);}
