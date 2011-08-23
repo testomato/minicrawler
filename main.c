@@ -14,6 +14,7 @@ int debug=0;
 int timeout=5;
 int writehead=0;
 int impatient=0;
+int partial=0;
 
 /** vrati pocet milisekund od spusteni programu (resp. prvniho zavolani teto funkce)
  */
@@ -58,6 +59,7 @@ void initurls(int argc, char *argv[])
 		if(!strcmp(argv[t],"-d")) {debug=1;continue;}
 		if(!strcmp(argv[t],"-h")) {writehead=1;continue;}
 		if(!strcmp(argv[t],"-i")) {impatient=1;continue;}
+		if(!strcmp(argv[t],"-p")) {partial=1;continue;}
 		if(!strncmp(argv[t],"-t",2)) {timeout=atoi(argv[t]+2);continue;}
 		
 		strcpy(url[i].rawurl,argv[t]);
@@ -80,7 +82,9 @@ void printusage()
 	         "Where:   -d        enables debug messages (to stderr)\n"
 	         "         -tSECONDS sets timeout (default is 5 seconds)\n"
 	         "         -h        enables output of headers\n"
-	         "         -i        enables impatient mode (minicrawler exits few seconds earlier if doesn't make enough progress\n\n");
+	         "         -i        enables impatient mode (minicrawler exits few seconds earlier if doesn't make enough progress\n"
+	         "	   -p	     outputs also partially downloaded urls\n"
+	         "\n");
 }
 
 /** a jedeeeem...

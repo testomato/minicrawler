@@ -1,3 +1,8 @@
-- presmerovani (posilat obe url)
-- poresit dlouhe soubory
+
+presmerovani ma zatim tato omezeni:
+- resi pouze absolutni URL (relativni tam podle RFC byt nesmi, ale v praxi tam bohuzel obcas jsou)
+- predpoklada, ze i nove url je na stejne ip (coz obvykle byva, ale obcas nemusi - tohle jeste doresim pozdeji)
+
+
+neresim "chunked" zpusob posilani
 

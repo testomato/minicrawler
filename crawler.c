@@ -148,7 +148,7 @@ void output(struct surl *u)
 	UC header[1024];
 	
 	sprintf(header,"URL: %s\n",u->rawurl);
-	if(u->redirectedto) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
+	if(u->redirectedto[0]) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n\n",u->status,u->bufp-u->headlen);
 
 	write(STDOUT_FILENO,header,strlen(header));
@@ -156,15 +156,31 @@ void output(struct surl *u)
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
 	
 	debugf("[%d] Outputed.\n",u->index);
+	
+	u->state=S_DONE;
+	debugf("[%d] Done.\n",u->index);
 }
 
 /** vyres presmerovani
  */
 void resolvelocation(struct surl *u)
 {
+	char lhost[256];
+	char lpath[256]="/";
+
 	debugf("[%d] Resolve location='%s'\n",u->index,u->location);
-	strcpy(u->redirectedto,u->location); // zatim nic
-	output(u);
+
+	sscanf(u->location, "http://%[^/]/%s", lhost, lpath+1);
+	debugf("[%d] Lhost='%s' Lpath='%s'\n",u->index,lhost,lpath);
+	
+	strcpy(u->path,lpath);		// bez tam
+	strcpy(u->host,lhost);		// bez tam
+	strcpy(u->redirectedto,u->location);
+	u->state=S_GOTIP;		// radsi se znovu pripoj - !! tady je znamy bug: predpokladam, ze nova domena je na stejne IP, coz ale nemusi byt vzdy pravda (ale v 95% ano)
+	u->location[0]=0;
+	u->headlen=0;
+	u->contentlen=0;
+	u->bufp=0;
 }
 
 /** uz mame cely vstup - bud ho vypis nebo vyres presmerovani
@@ -172,8 +188,8 @@ void resolvelocation(struct surl *u)
 void finish(struct surl *u)
 {
 	if(u->headlen==0) detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
-	
-	if(u->location) resolvelocation(u);
+
+	if(u->location[0]) resolvelocation(u);
 	else output(u);
 }
 
@@ -197,9 +213,9 @@ void readreply(struct surl *u)
 	if(u->bufp>1024&&u->headlen==0) detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
 	
 	debugf("[%d] Read %d bytes\n",u->index,t);
-	buf[60]=0;
+	//buf[60]=0; // wtf?
 	
-	if(t<=0||(u->contentlen&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);u->state=S_DONE;finish(u);debugf("[%d] Done.\n",u->index);}
+	if(t<=0||(u->contentlen&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);finish(u);}
 	else u->state=S_GETREPLY;
 	//debugf("%s",buf);
 	
@@ -323,6 +339,16 @@ int exitprematurely()
 	return 0;
 }
 
+void outputpartial()
+{
+	int t;
+
+	for(t=0;url[t].rawurl[0];t++) {
+		if(url[t].state==S_GETREPLY) output(&url[t]);
+	
+	}
+}
+
 /** hlavni smycka
  */
 void go()
@@ -345,7 +371,7 @@ void go()
 		}
 		
 		t=gettimeint();
-		if(t>timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);break;}
+		if(t>timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);if(partial) outputpartial();break;}
 		
 		if(!change&&!done) {
 			if(impatient) done=exitprematurely();
