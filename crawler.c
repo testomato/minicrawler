@@ -172,11 +172,13 @@ void resolvelocation(struct surl *u)
 
 	sscanf(u->location, "http://%[^/]/%s", lhost, lpath+1);
 	debugf("[%d] Lhost='%s' Lpath='%s'\n",u->index,lhost,lpath);
+
+	if(strcmp(u->host,lhost)) u->state=S_JUSTBORN;	// pokud je to jina domena, tak znovu resolvuj
+	else u->state=S_GOTIP;		// jinak se muzes pripojit na tu puvodni IP
 	
 	strcpy(u->path,lpath);		// bez tam
 	strcpy(u->host,lhost);		// bez tam
 	strcpy(u->redirectedto,u->location);
-	u->state=S_GOTIP;		// radsi se znovu pripoj - !! tady je znamy bug: predpokladam, ze nova domena je na stejne IP, coz ale nemusi byt vzdy pravda (ale v 95% ano)
 	u->location[0]=0;
 	u->headlen=0;
 	u->contentlen=0;
