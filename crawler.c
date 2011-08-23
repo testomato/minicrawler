@@ -108,11 +108,17 @@ void sendhttpget(struct surl *u)
 	u->state=S_GETREPLY;
 }
 
+void strcpy_term(char *to, char *from)
+{
+	for(;*from&&*from!='\r'&&*from!='\n';) *to++=*from++;
+	*to=0;
+}
+
 /** pozná status a hlavičku http požadavku
  */
 void detecthead(struct surl *u)
 {
-	UC *p;
+	char *p;
 
 	u->status=atoi(u->buf+9);
 	u->buf[u->bufp]=0;
@@ -126,8 +132,11 @@ void detecthead(struct surl *u)
 	
 	u->headlen=p-u->buf;
 	
-	p=(UC*)memmem(u->buf,u->headlen,"Content-Length: ",16);
+	p=(char*)memmem(u->buf,u->headlen,"Content-Length: ",16);
 	if(p!=NULL) u->contentlen=atoi(p+16);
+	
+	p=(char*)memmem(u->buf,u->headlen,"Location: ",10);
+	if(p!=NULL) {strcpy_term(u->location,p+10);debugf("[%d] Location='%s'\n",u->index,u->location);}
 	
 	if(debug) debugf("[%d] status=%d, headlen=%d, content-length=%d\n",u->index,u->status,u->headlen,u->contentlen);
 }
@@ -138,15 +147,34 @@ void output(struct surl *u)
 {
 	UC header[1024];
 	
-	if(u->headlen==0) detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
-	
-	sprintf(header,"URL: %s\nStatus: %d\nContent-length: %d\n\n",u->rawurl,u->status,u->bufp-u->headlen);
+	sprintf(header,"URL: %s\n",u->rawurl);
+	if(u->redirectedto) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
+	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n\n",u->status,u->bufp-u->headlen);
 
 	write(STDOUT_FILENO,header,strlen(header));
 	if(writehead) write(STDOUT_FILENO,u->buf,u->headlen);
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
 	
 	debugf("[%d] Outputed.\n",u->index);
+}
+
+/** vyres presmerovani
+ */
+void resolvelocation(struct surl *u)
+{
+	debugf("[%d] Resolve location='%s'\n",u->index,u->location);
+	strcpy(u->redirectedto,u->location); // zatim nic
+	output(u);
+}
+
+/** uz mame cely vstup - bud ho vypis nebo vyres presmerovani
+ */
+void finish(struct surl *u)
+{
+	if(u->headlen==0) detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
+	
+	if(u->location) resolvelocation(u);
+	else output(u);
 }
 
 /** cti odpoved
@@ -171,7 +199,7 @@ void readreply(struct surl *u)
 	debugf("[%d] Read %d bytes\n",u->index,t);
 	buf[60]=0;
 	
-	if(t<=0||(u->contentlen&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);u->state=S_DONE;output(u);debugf("[%d] Done.\n",u->index);}
+	if(t<=0||(u->contentlen&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);u->state=S_DONE;finish(u);debugf("[%d] Done.\n",u->index);}
 	else u->state=S_GETREPLY;
 	//debugf("%s",buf);
 	
