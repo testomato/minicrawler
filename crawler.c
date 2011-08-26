@@ -108,10 +108,43 @@ void sendhttpget(struct surl *u)
 	u->state=S_GETREPLY;
 }
 
+/** strcpy, ktere se ukonci i koncem radku
+ */
 void strcpy_term(char *to, char *from)
 {
 	for(;*from&&*from!='\r'&&*from!='\n';) *to++=*from++;
 	*to=0;
+}
+
+/** sezere to radku tam, kde ceka informaci o delce chunku
+ *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
+ */
+void eatchunked(struct surl *u,int first)
+{
+	int t,i;
+	UC hex[10];
+	int size;
+	int movestart;
+	
+	for(t=u->nextchunkedpos,i=0;u->buf[t]!='\r'&&t<u->bufp;t++) {
+		if(i<9) hex[i++]=u->buf[t];
+		}
+	if(u->buf[t]=='\r') t++;
+	if(u->buf[t]=='\n') t++;
+		
+	hex[i]=0;
+	size=strtol(hex,NULL,16);
+		
+	debugf("[%d] Chunksize at %d (now %d): '%s' (=%d)\n",u->index,u->nextchunkedpos,u->bufp,hex,size);
+
+	movestart=u->nextchunkedpos;
+	if(!first) movestart-=2;
+	memmove(u->buf+movestart,u->buf+t,u->bufp-t);		// cely zbytek posun
+	u->bufp-=(t-movestart);					// ukazatel taky
+	
+	u->nextchunkedpos=movestart+size+2;			// o 2 vic kvuli odradkovani na konci chunku
+	
+	if(size==0) {debugf("[%d] Chunksize=0 (end)\n",u->index);u->contentlen=u->bufp-u->headlen;}	// a to je konec, pratele! ... taaadydaaadydaaa!
 }
 
 /** pozná status a hlavičku http požadavku
@@ -138,7 +171,12 @@ void detecthead(struct surl *u)
 	p=(char*)memmem(u->buf,u->headlen,"Location: ",10);
 	if(p!=NULL) {strcpy_term(u->location,p+10);debugf("[%d] Location='%s'\n",u->index,u->location);}
 	
+	p=(char*)memmem(u->buf,u->headlen,"Transfer-Encoding: chunked",26);
+	if(p!=NULL) {u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);}
+	
 	debugf("[%d] status=%d, headlen=%d, content-length=%d\n",u->index,u->status,u->headlen,u->contentlen);
+	
+	if(u->chunked) eatchunked(u,1);
 }
 
 /** vypise vystup na standardni vystup
@@ -154,6 +192,8 @@ void output(struct surl *u)
 	write(STDOUT_FILENO,header,strlen(header));
 	if(settings.writehead) write(STDOUT_FILENO,u->buf,u->headlen);
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
+	
+	if(u->chunked) debugf("[%d] bufp=%d nextchunkedpos=%d\n",u->index,u->bufp,u->nextchunkedpos);
 	
 	debugf("[%d] Outputed.\n",u->index);
 	
@@ -216,6 +256,10 @@ void readreply(struct surl *u)
 	
 	debugf("[%d] Read %d bytes\n",u->index,t);
 	//buf[60]=0; // wtf?
+	
+	if(t>0&&u->chunked) {
+		while(u->bufp>u->nextchunkedpos) eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
+		}
 	
 	if(t<=0||(u->contentlen&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);finish(u);}
 	else u->state=S_GETREPLY;
@@ -341,6 +385,8 @@ int exitprematurely()
 	return 0;
 }
 
+/** vypise obsah vsech dosud neuzavrenych streamu
+ */
 void outputpartial()
 {
 	int t;
