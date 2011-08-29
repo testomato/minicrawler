@@ -12,7 +12,7 @@ struct surl {
 	char location[256];	// presne to co je v hlavicce Location - pro ucely redirect
 	char redirectedto[256];	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
-	int nextchunkedpos;
+	int nextchunkedpos; 
  
 	int state;
 	int lastread;		// cas posledniho uspesneho cteni
