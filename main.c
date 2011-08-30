@@ -64,6 +64,7 @@ void initurls(int argc, char *argv[])
 		//debugf("[%d] born\n",i);
 		url[i].index=i;
 		url[i].bufp=0;
+		url[i].contentlen=-1;
 		i++;
 		}
 

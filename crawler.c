@@ -221,7 +221,7 @@ void resolvelocation(struct surl *u)
 	strcpy(u->redirectedto,u->location);
 	u->location[0]=0;
 	u->headlen=0;
-	u->contentlen=0;
+	u->contentlen=-1;
 	u->bufp=0;
 }
 
@@ -250,9 +250,9 @@ void readreply(struct surl *u)
 	if(t>0) {
 		u->bufp+=t;
 		u->lastread=gettimeint();
+		if(u->headlen==0) detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
 		}
 	
-	if(u->bufp>1024&&u->headlen==0) detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
 	
 	debugf("[%d] Read %d bytes\n",u->index,t);
 	//buf[60]=0; // wtf?
@@ -261,7 +261,7 @@ void readreply(struct surl *u)
 		while(u->bufp>u->nextchunkedpos) eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
 		}
 	
-	if(t<=0||(u->contentlen&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);finish(u);}
+	if(t<=0||(u->contentlen!=-1&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);finish(u);}
 	else u->state=S_GETREPLY;
 	//debugf("%s",buf);
 	
