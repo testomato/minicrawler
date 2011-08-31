@@ -168,8 +168,8 @@ void detecthead(struct surl *u)
 	p=(char*)memmem(u->buf,u->headlen,"Content-Length: ",16);
 	if(p!=NULL) u->contentlen=atoi(p+16);
 	
-	p=(char*)memmem(u->buf,u->headlen,"Location: ",10);
-	if(p!=NULL) {strcpy_term(u->location,p+10);debugf("[%d] Location='%s'\n",u->index,u->location);}
+	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11);
+	if(p!=NULL) {strcpy_term(u->location,p+11);debugf("[%d] Location='%s'\n",u->index,u->location);}
 	
 	p=(char*)memmem(u->buf,u->headlen,"Transfer-Encoding: chunked",26);
 	if(p!=NULL) {u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);}
