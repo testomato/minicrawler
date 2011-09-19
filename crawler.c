@@ -98,7 +98,13 @@ void sendhttpget(struct surl *u)
 	UC buf[1024];
 	int t;
 	
-	sprintf(buf,"GET %s HTTP/1.1\r\nHost: %s\r\n\r\n",u->path,u->host);
+	if(!u->post[0]) // GET
+		sprintf(buf,"GET %s HTTP/1.1\r\nHost: %s\r\n\r\n",u->path,u->host);
+	else { // POST
+		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n\r\n",
+			u->path,u->host,(int)strlen(u->post),u->post);
+	}
+	 
 	//debugf(buf);
 	
 	t=write(u->sockfd,buf,strlen(buf));
@@ -209,8 +215,10 @@ void resolvelocation(struct surl *u)
 	char lpath[256]="/";
 
 	debugf("[%d] Resolve location='%s'\n",u->index,u->location);
-
-	sscanf(u->location, "http://%[^/]/%s", lhost, lpath+1);
+	
+	if(u->location[0]=='/') {strcpy(lhost,u->host);strcpy(lpath,u->location);} // relativni adresy (i kdyz by podle RFC nemely byt)
+	else sscanf(u->location, "http://%[^/]/%s", lhost, lpath+1);
+	
 	debugf("[%d] Lhost='%s' Lpath='%s'\n",u->index,lhost,lpath);
 
 	if(strcmp(u->host,lhost)) u->state=S_JUSTBORN;	// pokud je to jina domena, tak znovu resolvuj
@@ -220,6 +228,7 @@ void resolvelocation(struct surl *u)
 	strcpy(u->host,lhost);		// bez tam
 	strcpy(u->redirectedto,u->location);
 	u->location[0]=0;
+	u->post[0]=0;
 	u->headlen=0;
 	u->contentlen=-1;
 	u->bufp=0;
