@@ -2,15 +2,16 @@
 
 struct surl {
 	int index;
-	char rawurl[256];
+	char rawurl[1024];
  
 	char host[256];
 	int port;
-	char path[256];
+	char path[1024];
+	char post[4096];
 
 	// hlavicky	
-	char location[256];	// presne to co je v hlavicce Location - pro ucely redirect
-	char redirectedto[256];	// co nakonec hlasime ve vystupu v hlavicce
+	char location[1024];	// presne to co je v hlavicce Location - pro ucely redirect
+	char redirectedto[1024];	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos; 
  

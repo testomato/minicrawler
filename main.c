@@ -57,6 +57,8 @@ void initurls(int argc, char *argv[])
 		if(!strcmp(argv[t],"-i")) {settings.impatient=1;continue;}
 		if(!strcmp(argv[t],"-p")) {settings.partial=1;continue;}
 		if(!strncmp(argv[t],"-t",2)) {settings.timeout=atoi(argv[t]+2);continue;}
+
+		if(!strcmp(argv[t],"-P")) {strcpy(url[i].post,argv[t+1]);t++;debugf("[%d] POST: %s\n",i,url[i].post);continue;}
 		
 		strcpy(url[i].rawurl,argv[t]);
 		simpleparseurl(&url[i]);
