@@ -95,14 +95,22 @@ void opensocket(struct surl *u)
  */
 void sendhttpget(struct surl *u)
 {
-	UC buf[1024];
+	char buf[1024];
 	int t;
+	char cookiestring[4096];
+
+	// vytvoří si to řetězec cookies	
+	for(t=0;t<u->cookiecnt;t++) {
+		if(t==0) sprintf(cookiestring,"Cookie: %s=%s",u->cookies[t][0],u->cookies[t][1]);
+		else sprintf(cookiestring+strlen(cookiestring),"; %s=%s",u->cookies[t][0],u->cookies[t][1]);
+	}
+	if(t) sprintf(cookiestring+strlen(cookiestring),"\r\n");
 	
 	if(!u->post[0]) // GET
-		sprintf(buf,"GET %s HTTP/1.1\r\nHost: %s\r\n\r\n",u->path,u->host);
+		sprintf(buf,"GET %s HTTP/1.1\r\nHost: %s\r\n%s\r\n",u->path,u->host,cookiestring);
 	else { // POST
-		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n\r\n",
-			u->path,u->host,(int)strlen(u->post),u->post);
+		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n",
+			u->path,u->host,(int)strlen(u->post),u->post,cookiestring);
 	}
 	 
 	//debugf(buf);
@@ -180,8 +188,11 @@ void setcookie(struct surl *u,char *str)
 	for(t=0;t<u->cookiecnt;t++) if(!strcmp(name,u->cookies[t][0])) break;
 	
 	if(t<u->cookiecnt) { // už tam byla
-		strcpy(u->cookies[t][1],value);
-		debugf("[%d] Changed cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
+		if(!strcmp(u->cookies[t][1],value)) {debugf("[%d] Received same cookie #%d: '%s' = '%s'\n",u->index,t,name,value);}
+		else {
+			strcpy(u->cookies[t][1],value);
+			debugf("[%d] Changed cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
+		}
 	} else { // nová
 		strcpy(u->cookies[t][0],name);
 		strcpy(u->cookies[t][1],value);
