@@ -122,6 +122,17 @@ void strcpy_term(char *to, char *from)
 	*to=0;
 }
 
+/** strcpy, které se ukončí i konkrétním znakem
+ * vrátí délku řetězce (bez ukončovacího znaku)
+ */
+int strcpy_endchar(char *to, char *from, char endchar)
+{
+	int len=0;
+	for(;*from&&*from!=endchar;len++) *to++=*from++;
+	*to=0;
+	return len;
+}
+
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
  */
@@ -153,6 +164,32 @@ void eatchunked(struct surl *u,int first)
 	if(size==0) {debugf("[%d] Chunksize=0 (end)\n",u->index);u->contentlen=u->bufp-u->headlen;}	// a to je konec, pratele! ... taaadydaaadydaaa!
 }
 
+/** zapíše si do pole novou cookie (pokud ji tam ještě nemá; pokud má, tak ji nahradí)
+ * kašleme na cestu a na dobu platnosti cookie (to by mělo být pro účely minicrawleru v pohodě)
+ */
+void setcookie(struct surl *u,char *str)
+{
+	char name[256];
+	char value[256];
+	int t;
+
+	t=strcpy_endchar(name,str,'=');	
+	strcpy_endchar(value,str+t+1,';');
+	
+	
+	for(t=0;t<u->cookiecnt;t++) if(!strcmp(name,u->cookies[t][0])) break;
+	
+	if(t<u->cookiecnt) { // už tam byla
+		strcpy(u->cookies[t][1],value);
+		debugf("[%d] Changed cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
+	} else { // nová
+		strcpy(u->cookies[t][0],name);
+		strcpy(u->cookies[t][1],value);
+		u->cookiecnt++;
+		debugf("[%d] Added new cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
+	}
+}
+
 /** pozná status a hlavičku http požadavku
  */
 void detecthead(struct surl *u)
@@ -176,6 +213,9 @@ void detecthead(struct surl *u)
 	
 	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11);
 	if(p!=NULL) {strcpy_term(u->location,p+11);debugf("[%d] Location='%s'\n",u->index,u->location);}
+	
+	p=(char*)memmem(u->buf,u->headlen,"\nSet-Cookie: ",13);
+	if(p!=NULL) {setcookie(u,p+13);}
 	
 	p=(char*)memmem(u->buf,u->headlen,"Transfer-Encoding: chunked",26);
 	if(p!=NULL) {u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);}

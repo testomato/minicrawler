@@ -67,6 +67,7 @@ void initurls(int argc, char *argv[])
 		url[i].index=i;
 		url[i].bufp=0;
 		url[i].contentlen=-1;
+		url[i].cookies=0;
 		i++;
 		}
 
