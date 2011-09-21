@@ -244,7 +244,8 @@ void output(struct surl *u)
 	
 	sprintf(header,"URL: %s\n",u->rawurl);
 	if(u->redirectedto[0]) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
-	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n\n",u->status,u->bufp-u->headlen);
+	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
+	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
 	write(STDOUT_FILENO,header,strlen(header));
 	if(settings.writehead) write(STDOUT_FILENO,u->buf,u->headlen);
