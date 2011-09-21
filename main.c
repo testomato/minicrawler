@@ -7,6 +7,7 @@
 #include "h/global.h"
 #include "h/struct.h"
 #include "h/proto.h"
+#include "h/version.h"
 
 struct surl url[100];
 
@@ -78,13 +79,13 @@ void initurls(int argc, char *argv[])
  */
 void printusage()
 {
-	printf("\nUsage:   minicrawler [-d] [-h] [i] [-tSECONDS] url [url2] [url3] [...]\n\n"
+	printf("\nminicrawler, version %s\n\nUsage:   minicrawler [-d] [-h] [i] [-tSECONDS] url [url2] [url3] [...]\n\n"
 	         "Where:   -d        enables debug messages (to stderr)\n"
 	         "         -tSECONDS sets timeout (default is 5 seconds)\n"
 	         "         -h        enables output of headers\n"
 	         "         -i        enables impatient mode (minicrawler exits few seconds earlier if doesn't make enough progress\n"
-	         "	   -p	     outputs also partially downloaded urls\n"
-	         "\n");
+	         "         -p        outputs also partially downloaded urls\n"
+	         "\n",VERSION);
 }
 
 /** a jedeeeem...
