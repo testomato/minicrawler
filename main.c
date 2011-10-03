@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
+#include <signal.h>
 
 #include "h/global.h"
 #include "h/struct.h"
@@ -75,6 +76,15 @@ void initurls(int argc, char *argv[])
 	strcpy(url[i].rawurl,""); // ukoncovaci znacka
 }
 
+/** zpracuje signál (vypíše ho a ukončí program s -1)
+ */
+void sighandler(int signum)
+{
+	printf("Caught signal %d\n",signum);
+	exit(-1);
+}
+
+
 /** vypise napovedu
  */
 void printusage()
@@ -93,6 +103,10 @@ void printusage()
 int main(int argc, char *argv[])
 {
 	if(argc<2) {printusage();exit(-1);}
+	
+	signal(SIGUSR1,sighandler);
+	signal(SIGPIPE,sighandler);
+	signal(SIGSEGV,sighandler);
 
 	settings.timeout=5;
 	gettimeint(); // nastavi se
