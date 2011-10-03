@@ -80,7 +80,7 @@ void initurls(int argc, char *argv[])
  */
 void sighandler(int signum)
 {
-	printf("Caught signal %d\n",signum);
+	debugf("Caught signal %d\n",signum);
 	exit(-1);
 }
 
