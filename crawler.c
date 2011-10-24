@@ -150,13 +150,15 @@ void eatchunked(struct surl *u,int first)
 	UC hex[10];
 	int size;
 	int movestart;
-	
+
+	// čte velikost chunku	
 	for(t=u->nextchunkedpos,i=0;u->buf[t]!='\r'&&t<u->bufp;t++) {
 		if(i<9) hex[i++]=u->buf[t];
 		}
 	if(u->buf[t]=='\r') t++;
 	if(u->buf[t]=='\n') t++;
-		
+
+	if(i==0) debugf("[%d] Warning: empty string for chunksize\n",u->index);		
 	hex[i]=0;
 	size=strtol(hex,NULL,16);
 		
@@ -233,7 +235,7 @@ void detecthead(struct surl *u)
 	
 	debugf("[%d] status=%d, headlen=%d, content-length=%d\n",u->index,u->status,u->headlen,u->contentlen);
 	
-	if(u->chunked) eatchunked(u,1);
+	if(u->chunked&&u->bufp>u->nextchunkedpos) eatchunked(u,1);
 }
 
 /** vypise vystup na standardni vystup
@@ -319,6 +321,7 @@ void readreply(struct surl *u)
 	//buf[60]=0; // wtf?
 	
 	if(t>0&&u->chunked) {
+		//debugf("debug: bufp=%d nextchunkedpos=%d",u->bufp,u->nextchunkedpos);
 		while(u->bufp>u->nextchunkedpos) eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
 		}
 	
