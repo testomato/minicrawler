@@ -143,8 +143,9 @@ int strcpy_endchar(char *to, char *from, char endchar)
 
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
+ *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
  */
-void eatchunked(struct surl *u,int first)
+int eatchunked(struct surl *u,int first)
 {
 	int t,i;
 	UC hex[10];
@@ -155,6 +156,7 @@ void eatchunked(struct surl *u,int first)
 	for(t=u->nextchunkedpos,i=0;u->buf[t]!='\r'&&t<u->bufp;t++) {
 		if(i<9) hex[i++]=u->buf[t];
 		}
+	if(t>=u->bufp) {debugf("[%d] Incorrectly ended chunksize!",u->index);return -1;}
 	if(u->buf[t]=='\r') t++;
 	if(u->buf[t]=='\n') t++;
 
@@ -172,6 +174,8 @@ void eatchunked(struct surl *u,int first)
 	u->nextchunkedpos=movestart+size+2;			// o 2 vic kvuli odradkovani na konci chunku
 	
 	if(size==0) {debugf("[%d] Chunksize=0 (end)\n",u->index);u->contentlen=u->bufp-u->headlen;}	// a to je konec, pratele! ... taaadydaaadydaaa!
+	
+	return 0;
 }
 
 /** zapíše si do pole novou cookie (pokud ji tam ještě nemá; pokud má, tak ji nahradí)
@@ -303,7 +307,7 @@ void finish(struct surl *u)
 void readreply(struct surl *u)
 {
 	UC buf[1024];
-	int t;
+	int t,i;
 	int left;
 
 	left=BUFSIZE-u->bufp;
@@ -322,7 +326,10 @@ void readreply(struct surl *u)
 	
 	if(t>0&&u->chunked) {
 		//debugf("debug: bufp=%d nextchunkedpos=%d",u->bufp,u->nextchunkedpos);
-		while(u->bufp>u->nextchunkedpos) eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
+		while(u->bufp>u->nextchunkedpos) {
+			i=eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
+			if(i==-1) break;
+			}
 		}
 	
 	if(t<=0||(u->contentlen!=-1&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);finish(u);}
