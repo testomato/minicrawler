@@ -273,9 +273,10 @@ void resolvelocation(struct surl *u)
 	char lpath[256]="/";
 
 	debugf("[%d] Resolve location='%s'\n",u->index,u->location);
-	
-	if(u->location[0]=='/') {strcpy(lhost,u->host);strcpy(lpath,u->location);} // relativni adresy (i kdyz by podle RFC nemely byt)
-	else sscanf(u->location, "http://%[^/]/%s", lhost, lpath+1);
+
+	if(!strncmp(u->location,"http://",7)) sscanf(u->location, "http://%[^/]/%s", lhost, lpath+1);
+	else if(u->location[0]=='/') {strcpy(lhost,u->host);strcpy(lpath,u->location);} // relativni adresy (i kdyz by podle RFC nemely byt)
+	else {debugf("[%d] Weird location format, assuming filename in root\n",u->index);strcpy(lhost,u->host);lpath[0]='/';strcpy(lpath+1,u->location);}
 	
 	debugf("[%d] Lhost='%s' Lpath='%s'\n",u->index,lhost,lpath);
 
