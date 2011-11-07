@@ -14,6 +14,6 @@
 #define S_DONE		10
 #define S_ERROR		20
 
-#define BUFSIZE (200*1024)
+#define BUFSIZE (700*1024)
 
 #define debugf(...)   {if(settings.debug) fprintf(stderr, __VA_ARGS__);}
