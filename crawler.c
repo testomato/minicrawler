@@ -256,6 +256,7 @@ void output(struct surl *u)
 	write(STDOUT_FILENO,header,strlen(header));
 	if(settings.writehead) write(STDOUT_FILENO,u->buf,u->headlen);
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
+	write(STDOUT_FILENO,"\n",1); // jinak se to vývojářům v php špatně parsuje
 	
 	if(u->chunked) debugf("[%d] bufp=%d nextchunkedpos=%d\n",u->index,u->bufp,u->nextchunkedpos);
 	
