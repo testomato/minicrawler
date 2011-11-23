@@ -107,9 +107,9 @@ void sendhttpget(struct surl *u)
 	if(t) sprintf(cookiestring+strlen(cookiestring),"\r\n");
 	
 	if(!u->post[0]) // GET
-		sprintf(buf,"GET %s HTTP/1.1\r\nHost: %s\r\n%s\r\n",u->path,u->host,cookiestring);
+		sprintf(buf,"GET %s HTTP/1.1\r\nUser-Agent: minicrawler/1\r\nHost: %s\r\n%s\r\n",u->path,u->host,cookiestring);
 	else { // POST
-		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n",
+		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: minicrawler/1\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n",
 			u->path,u->host,(int)strlen(u->post),u->post,cookiestring);
 	}
 	 
