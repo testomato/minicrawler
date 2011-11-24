@@ -167,7 +167,7 @@ int eatchunked(struct surl *u,int first)
 	debugf("[%d] Chunksize at %d (now %d): '%s' (=%d)\n",u->index,u->nextchunkedpos,u->bufp,hex,size);
 
 	movestart=u->nextchunkedpos;
-	if(!first) movestart-=2;
+	if(!first&&movestart!=u->headlen) {/*debugf("eating %d %d at %d\n",u->buf[movestart-2],u->buf[movestart-1],movestart);*/movestart-=2;} // ten headlen je kvuli adventura.cz - moooc divne
 	memmove(u->buf+movestart,u->buf+t,u->bufp-t);		// cely zbytek posun
 	u->bufp-=(t-movestart);					// ukazatel taky
 	
@@ -224,6 +224,8 @@ void detecthead(struct surl *u)
 	if(p==NULL) {debugf("[%d] cannot find end of http header?\n",u->index);return;}
 	
 	u->headlen=p-u->buf;
+	//debugf("[%d] headlen=%d\n",u->index,u->headlen);
+	//debugf("'%s'\n",u->buf);
 	
 	p=(char*)memmem(u->buf,u->headlen,"Content-Length: ",16);
 	if(p!=NULL) u->contentlen=atoi(p+16);
@@ -246,7 +248,7 @@ void detecthead(struct surl *u)
  */
 void output(struct surl *u)
 {
-	UC header[1024];
+	UC header[4096];
 	
 	sprintf(header,"URL: %s\n",u->rawurl);
 	if(u->redirectedto[0]) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
@@ -254,7 +256,10 @@ void output(struct surl *u)
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
 	write(STDOUT_FILENO,header,strlen(header));
-	if(settings.writehead) write(STDOUT_FILENO,u->buf,u->headlen);
+	if(settings.writehead) {
+		debugf("[%d] outputting header %dB - %d %d %d %d\n",u->index,u->headlen,u->buf[u->headlen-4],u->buf[u->headlen-3],u->buf[u->headlen-2],u->buf[u->headlen-1]);
+		write(STDOUT_FILENO,u->buf,u->headlen);
+	}	
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
 	write(STDOUT_FILENO,"\n",1); // jinak se to vývojářům v php špatně parsuje
 	
