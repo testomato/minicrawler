@@ -99,16 +99,19 @@ void sendhttpget(struct surl *u)
 	int t;
 	char cookiestring[4096];
 
-	// vytvoří si to řetězec cookies	
+	// vytvoří si to řetězec cookies
+	cookiestring[0]=0;
 	for(t=0;t<u->cookiecnt;t++) {
 		if(t==0) sprintf(cookiestring,"Cookie: %s=%s",u->cookies[t][0],u->cookies[t][1]);
 		else sprintf(cookiestring+strlen(cookiestring),"; %s=%s",u->cookies[t][0],u->cookies[t][1]);
 	}
 	if(t) sprintf(cookiestring+strlen(cookiestring),"\r\n");
 	
-	if(!u->post[0]) // GET
+	if(!u->post[0]) {// GET
 		sprintf(buf,"GET %s HTTP/1.1\r\nUser-Agent: minicrawler/1\r\nHost: %s\r\n%s\r\n",u->path,u->host,cookiestring);
-	else { // POST
+		//debugf("GET %s HTTP/1.1\r\nUser-Agent: minicrawler/1\r\nHost: %s\r\n",u->path,u->host);
+		//debugf("%s\r\n",cookiestring);
+	} else { // POST
 		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: minicrawler/1\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n",
 			u->path,u->host,(int)strlen(u->post),u->post,cookiestring);
 	}
