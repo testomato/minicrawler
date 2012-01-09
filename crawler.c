@@ -91,6 +91,23 @@ void opensocket(struct surl *u)
 	else u->state=S_CONNECTED;
 }
 
+/** neci kod na str_replace (pod free licenci)
+ */
+char *str_replace( const char *string, const char *substr, const char *replacement ) {
+	char *tok = NULL;
+	char *newstr = NULL;
+ 
+	tok = strstr( string, substr );
+	if( tok == NULL ) return strdup( string );
+	newstr = malloc( strlen( string ) - strlen( substr ) + strlen( replacement ) + 1 );
+	if( newstr == NULL ) return NULL;
+	memcpy( newstr, string, tok - string );
+	memcpy( newstr + (tok - string), replacement, strlen( replacement ) );
+	memcpy( newstr + (tok - string) + strlen( replacement ), tok + strlen( substr ), strlen( string ) - strlen( substr ) - ( tok - string ) );
+	memset( newstr + strlen( string ) - strlen( substr ) + strlen( replacement ), 0, 1 );
+	return newstr;
+} 
+
 /** socket bezi, posli dotaz
  */
 void sendhttpget(struct surl *u)
@@ -98,13 +115,21 @@ void sendhttpget(struct surl *u)
 	char buf[1024];
 	int t;
 	char cookiestring[4096];
+	char customheader[4096];
+	char *p;
 
-	// vytvoří si to řetězec cookies
+	// vytvoří si to řetězec cookies a volitelných parametrů
 	cookiestring[0]=0;
 	for(t=0;t<u->cookiecnt;t++) {
 		if(t==0) sprintf(cookiestring,"Cookie: %s=%s",u->cookies[t][0],u->cookies[t][1]);
 		else sprintf(cookiestring+strlen(cookiestring),"; %s=%s",u->cookies[t][0],u->cookies[t][1]);
 	}
+	if(settings.customheader) {
+		sprintf(customheader,"%s\r\n",settings.customheader);
+		if(u->customparam[0]) {p=str_replace(customheader,"%",u->customparam);strcpy(customheader,p);}
+		debugf("[%d] Customheader: %s",u->index,customheader);
+		strcpy(cookiestring+strlen(cookiestring),customheader);
+	} 
 	if(t) sprintf(cookiestring+strlen(cookiestring),"\r\n");
 	
 	if(!u->post[0]) {// GET

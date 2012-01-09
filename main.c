@@ -59,14 +59,16 @@ void initurls(int argc, char *argv[])
 		if(!strcmp(argv[t],"-i")) {settings.impatient=1;continue;}
 		if(!strcmp(argv[t],"-p")) {settings.partial=1;continue;}
 		if(!strncmp(argv[t],"-t",2)) {settings.timeout=atoi(argv[t]+2);continue;}
+		if(!strncmp(argv[t],"-w",2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
 
 		if(!strcmp(argv[t],"-P")) {strcpy(url[i].post,argv[t+1]);t++;debugf("[%d] POST: %s\n",i,url[i].post);continue;}
+		if(!strncmp(argv[t],"-C",2)) {strcpy(url[i].customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,url[i].customparam);continue;}
 		
 		strcpy(url[i].rawurl,argv[t]);
+		url[i].index=i;
 		simpleparseurl(&url[i]);
 		url[i].state=S_JUSTBORN;
 		//debugf("[%d] born\n",i);
-		url[i].index=i;
 		url[i].bufp=0;
 		url[i].contentlen=-1;
 		url[i].cookiecnt=0;
@@ -90,11 +92,13 @@ void sighandler(int signum)
 void printusage()
 {
 	printf("\nminicrawler, version %s\n\nUsage:   minicrawler [-d] [-h] [i] [-tSECONDS] url [url2] [url3] [...]\n\n"
-	         "Where:   -d        enables debug messages (to stderr)\n"
-	         "         -tSECONDS sets timeout (default is 5 seconds)\n"
-	         "         -h        enables output of headers\n"
-	         "         -i        enables impatient mode (minicrawler exits few seconds earlier if doesn't make enough progress\n"
-	         "         -p        outputs also partially downloaded urls\n"
+	         "Where:   -d         enables debug messages (to stderr)\n"
+	         "         -tSECONDS  sets timeout (default is 5 seconds)\n"
+	         "         -h         enables output of headers\n"
+	         "         -i         enables impatient mode (minicrawler exits few seconds earlier if doesn't make enough progress\n"
+	         "         -p         outputs also partially downloaded urls\n"
+	         "         -w STRING  write this custom header to all requests\n"
+	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
 	         "\n",VERSION);
 }
 
