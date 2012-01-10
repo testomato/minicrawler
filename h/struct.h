@@ -16,6 +16,7 @@ struct surl {
 	int nextchunkedpos;
 	char cookies[20][2][256];	// nekolik cookie, kazda ma name ([0]) a value ([1])
 	int cookiecnt;
+	char customparam[256];		// parametr do custom headeru
  
 	int state;
 	int lastread;		// cas posledniho uspesneho cteni
@@ -42,4 +43,5 @@ struct ssettings {
 	int writehead;
 	int impatient;
 	int partial;
+	char customheader[4096];
 };
