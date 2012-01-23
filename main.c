@@ -99,6 +99,7 @@ void printusage()
 	         "         -p         outputs also partially downloaded urls\n"
 	         "         -w STRING  write this custom header to all requests\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
+	         "         -c         convert to text format [TOBEIMPLEMENTED]\n"
 	         "\n",VERSION);
 }
 

@@ -287,7 +287,11 @@ void output(struct surl *u)
 	if(settings.writehead) {
 		debugf("[%d] outputting header %dB - %d %d %d %d\n",u->index,u->headlen,u->buf[u->headlen-4],u->buf[u->headlen-3],u->buf[u->headlen-2],u->buf[u->headlen-1]);
 		write(STDOUT_FILENO,u->buf,u->headlen);
-	}	
+	}
+	
+	if(settings.convert) {
+		u->bufp=converthtml2text(u->buf+u->headlen,u->bufp-u->headlen)+u->headlen;
+	}
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
 	write(STDOUT_FILENO,"\n",1); // jinak se to vývojářům v php špatně parsuje
 	
