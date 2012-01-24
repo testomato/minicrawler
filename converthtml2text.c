@@ -15,13 +15,15 @@ enum HtmlElement {
 	BLOCKQUOTE, FORM, HR, TABLE, FIELDSET, ADDRESS,
 	TD, TH,
 	IMG,
+	SCRIPT, OPTION,
 	OTHER,
 };
 
 enum {
 	ELEMS_NEWLINE = 1<<H1 | 1<<H2 |	1<<H3 | 1<<H4 |	1<<H5 | 1 << H6 | 1<<UL | 1<< OL | 1<< PRE | 1<<P | 1<< DL | 1 << DIV | 1 << NOSCRIPT | 1 <<  BLOCKQUOTE | 1 << FORM | 1 << HR | 1 << TABLE | 1 << FIELDSET | 1 << ADDRESS,
 	ELEMS_TAB = 1 << TD | 1 << TH,
-	ELEMS_SPACE = 1<<IMG
+	ELEMS_SPACE = 1<<IMG,
+	ELEMS_SKIP_CONTENT = 1<<SCRIPT | 1<<OPTION,
 };
 
 static const char *elems_names[] = {
@@ -47,6 +49,8 @@ static const char *elems_names[] = {
 	[TD] = "TD",
 	[TH] = "TH",
 	[IMG] = "IMG",
+	[SCRIPT] = "SCRIPT",
+	[OPTION] = "OPTION",
 	[OTHER] = NULL,
 };
 
@@ -158,6 +162,7 @@ int converthtml2text(char *s, int len)
 {
 	// tady je Hagridovo :)
 
+	unsigned hints = 0U;
 	const char *end = &s[len];
 	char *p_src = s, *p_dst = s;
 	while (p_src < end) {
@@ -182,9 +187,13 @@ int converthtml2text(char *s, int len)
 					if (1<<elem_desc.id & ELEMS_SPACE)
 						*p_dst++ = ' ';
 				}
+				if (elem_desc.begin != elem_desc.end)
+					hints = elem_desc.begin ? hints | 1<<elem_desc.id : hints & ~(1<<elem_desc.id);
 				break;
 			default:
-				*p_dst++ = *p_src++;
+				if (!(hints & ELEMS_SKIP_CONTENT))
+					*p_dst++ = *p_src;
+				++p_src;
 		}
 	}
 	return p_dst - s;
