@@ -43,6 +43,6 @@ struct ssettings {
 	int writehead;
 	int impatient;
 	int partial;
-	char customheader[4096];
 	int convert;		// 1 pokud se má konvertovat do textu
+	char customheader[4096];
 };
