@@ -153,6 +153,20 @@ static char *consume_elem(char *s, const char *end, struct ElemDesc *desc)
 	return s;
 }
 
+enum {
+	CH_SPACE = 0,
+	CH_SPACE_KILLER,
+	CH_OTHER,
+};
+
+struct {
+	unsigned replace, skip;
+} ch[] = {
+	[CH_SPACE] = { 0, 1<<CH_SPACE | 1<<CH_SPACE_KILLER },
+	[CH_SPACE_KILLER] = { 1<<CH_SPACE, 0 },
+	[CH_OTHER] = { 0, 0 },
+};
+
 /** převede html na text
  * @param s vstupní řetězec (html); tamtéž se uloží i výstup (pozor, nemusí být ukončen nulou)
  * @param len velikost vstupního řetězce
@@ -165,6 +179,23 @@ int converthtml2text(char *s, int len)
 	unsigned hints = 0U;
 	const char *end = &s[len];
 	char *p_src = s, *p_dst = s;
+
+	int ending = CH_OTHER;
+	void put_char(const int c)
+	{
+		const int act = c == ' ' ? CH_SPACE : c == '\n' || c == '\r' ? CH_SPACE_KILLER : CH_OTHER;
+		if (1<<ending & ch[act].skip)
+			;
+		else if (1<<ending & ch[act].replace) {
+			p_dst[-1] = c;
+			ending = act;
+		}
+		else {
+			*p_dst++ = c;
+			ending = act;
+		}
+	}
+
 	while (p_src < end) {
 		assert(p_dst <= p_src);
 		switch (*p_src) {
@@ -173,7 +204,7 @@ int converthtml2text(char *s, int len)
 				break;
 			case '\n':
 			case '\t':
-				*p_dst++ = ' ';
+				put_char(' ');
 				++p_src;
 				break;
 			case '<':;
@@ -181,18 +212,18 @@ int converthtml2text(char *s, int len)
 				p_src = consume_elem(p_src, end, &elem_desc);
 				if (elem_desc.begin) {
 					if (1<<elem_desc.id & ELEMS_NEWLINE)
-						*p_dst++ = '\n';
+						put_char('\n');
 					if (1<<elem_desc.id & ELEMS_TAB)
-						*p_dst++ = '\t';
+						put_char('\t');
 					if (1<<elem_desc.id & ELEMS_SPACE)
-						*p_dst++ = ' ';
+						put_char(' ');
 				}
 				if (elem_desc.begin != elem_desc.end)
 					hints = elem_desc.begin ? hints | 1<<elem_desc.id : hints & ~(1<<elem_desc.id);
 				break;
 			default:
 				if (!(hints & ELEMS_SKIP_CONTENT))
-					*p_dst++ = *p_src;
+					put_char(*p_src);
 				++p_src;
 		}
 	}
