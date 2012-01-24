@@ -13,12 +13,15 @@ enum HtmlElement {
 	PRE,
 	P, DL, DIV, NOSCRIPT,
 	BLOCKQUOTE, FORM, HR, TABLE, FIELDSET, ADDRESS,
+	TD, TH,
+	IMG,
 	OTHER,
 };
 
 enum {
 	ELEMS_NEWLINE = 1<<H1 | 1<<H2 |	1<<H3 | 1<<H4 |	1<<H5 | 1 << H6 | 1<<UL | 1<< OL | 1<< PRE | 1<<P | 1<< DL | 1 << DIV | 1 << NOSCRIPT | 1 <<  BLOCKQUOTE | 1 << FORM | 1 << HR | 1 << TABLE | 1 << FIELDSET | 1 << ADDRESS,
-	ELEMS_TAB = 1 << OL | 1 << UL,
+	ELEMS_TAB = 1 << TD | 1 << TH,
+	ELEMS_SPACE = 1<<IMG
 };
 
 static const char *elems_names[] = {
@@ -41,6 +44,9 @@ static const char *elems_names[] = {
 	[TABLE] = "TABLE",
 	[FIELDSET] = "FIELDSET",
 	[ADDRESS] = "ADDRESS",
+	[TD] = "TD",
+	[TH] = "TH",
+	[IMG] = "IMG",
 	[OTHER] = NULL,
 };
 
@@ -173,6 +179,8 @@ int converthtml2text(char *s, int len)
 						*p_dst++ = '\n';
 					if (1<<elem_desc.id & ELEMS_TAB)
 						*p_dst++ = '\t';
+					if (1<<elem_desc.id & ELEMS_SPACE)
+						*p_dst++ = ' ';
 				}
 				break;
 			default:
