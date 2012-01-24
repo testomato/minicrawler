@@ -180,7 +180,7 @@ int converthtml2text(char *s, int len)
 	const char *end = &s[len];
 	char *p_src = s, *p_dst = s;
 
-	int ending = CH_OTHER;
+	int ending = CH_SPACE_KILLER;
 	void put_char(const int c)
 	{
 		const int act = c == ' ' ? CH_SPACE : c == '\n' || c == '\r' ? CH_SPACE_KILLER : CH_OTHER;
