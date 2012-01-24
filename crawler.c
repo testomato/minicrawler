@@ -1,3 +1,4 @@
+#define _GNU_SOURCE // memmem(.) needs this :-(
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -17,7 +18,7 @@
 
 /** callback funkce, kterou zavola ares
  */
-void *dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
+void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
 {
 	UC *ip;
 	struct surl *u;
