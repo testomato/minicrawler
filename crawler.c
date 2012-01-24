@@ -18,7 +18,7 @@
 
 /** callback funkce, kterou zavola ares
  */
-void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
+static void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
 {
 	UC *ip;
 	struct surl *u;
@@ -37,7 +37,7 @@ void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
 
 /** spusti preklad pres ares
  */
-void launchdns(struct surl *u)
+static void launchdns(struct surl *u)
 {
 	int t;
 	
@@ -53,7 +53,7 @@ void launchdns(struct surl *u)
 
 /** uz je ares hotovy?
  */
-void checkdns(struct surl *u)
+static void checkdns(struct surl *u)
 {
 	int t;
 	fd_set readfds;
@@ -70,7 +70,7 @@ void checkdns(struct surl *u)
 
 /** uz znam IP, otevri socket
  */
-void opensocket(struct surl *u)
+static void opensocket(struct surl *u)
 {
 	struct sockaddr_in addr;
 	int t;
@@ -94,7 +94,7 @@ void opensocket(struct surl *u)
 
 /** neci kod na str_replace (pod free licenci)
  */
-char *str_replace( const char *string, const char *substr, const char *replacement ) {
+static char *str_replace( const char *string, const char *substr, const char *replacement ) {
 	char *tok = NULL;
 	char *newstr = NULL;
  
@@ -111,7 +111,7 @@ char *str_replace( const char *string, const char *substr, const char *replaceme
 
 /** socket bezi, posli dotaz
  */
-void sendhttpget(struct surl *u)
+static void sendhttpget(struct surl *u)
 {
 	char buf[1024];
 	int t;
@@ -153,7 +153,7 @@ void sendhttpget(struct surl *u)
 
 /** strcpy, ktere se ukonci i koncem radku
  */
-void strcpy_term(char *to, char *from)
+static void strcpy_term(char *to, char *from)
 {
 	for(;*from&&*from!='\r'&&*from!='\n';) *to++=*from++;
 	*to=0;
@@ -162,7 +162,7 @@ void strcpy_term(char *to, char *from)
 /** strcpy, které se ukončí i konkrétním znakem
  * vrátí délku řetězce (bez ukončovacího znaku)
  */
-int strcpy_endchar(char *to, char *from, char endchar)
+static int strcpy_endchar(char *to, char *from, char endchar)
 {
 	int len=0;
 	for(;*from&&*from!=endchar;len++) *to++=*from++;
@@ -174,7 +174,7 @@ int strcpy_endchar(char *to, char *from, char endchar)
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
  *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
  */
-int eatchunked(struct surl *u,int first)
+static int eatchunked(struct surl *u,int first)
 {
 	int t,i;
 	UC hex[10];
@@ -210,7 +210,7 @@ int eatchunked(struct surl *u,int first)
 /** zapíše si do pole novou cookie (pokud ji tam ještě nemá; pokud má, tak ji nahradí)
  * kašleme na cestu a na dobu platnosti cookie (to by mělo být pro účely minicrawleru v pohodě)
  */
-void setcookie(struct surl *u,char *str)
+static void setcookie(struct surl *u,char *str)
 {
 	char name[256];
 	char value[256];
@@ -238,7 +238,7 @@ void setcookie(struct surl *u,char *str)
 
 /** pozná status a hlavičku http požadavku
  */
-void detecthead(struct surl *u)
+static void detecthead(struct surl *u)
 {
 	char *p;
 
@@ -275,7 +275,7 @@ void detecthead(struct surl *u)
 
 /** vypise vystup na standardni vystup
  */
-void output(struct surl *u)
+static void output(struct surl *u)
 {
 	UC header[4096];
 	
@@ -306,7 +306,7 @@ void output(struct surl *u)
 
 /** vyres presmerovani
  */
-void resolvelocation(struct surl *u)
+static void resolvelocation(struct surl *u)
 {
 	char lhost[256];
 	char lpath[256]="/";
@@ -334,7 +334,7 @@ void resolvelocation(struct surl *u)
 
 /** uz mame cely vstup - bud ho vypis nebo vyres presmerovani
  */
-void finish(struct surl *u)
+static void finish(struct surl *u)
 {
 	if(u->headlen==0) detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
 
@@ -344,7 +344,7 @@ void finish(struct surl *u)
 
 /** cti odpoved
  */
-void readreply(struct surl *u)
+static void readreply(struct surl *u)
 {
 	UC buf[1024];
 	int t,i;
@@ -382,7 +382,7 @@ void readreply(struct surl *u)
 
 /** provede systemovy select nad vsemi streamy, ktere jsou ve stavu GETREPLY (a pripadne je prehodi do READYREPLY)
  */
-void selectall()
+static void selectall(void)
 {
 	int t;
 	fd_set set;
@@ -427,7 +427,7 @@ void selectall()
 
 /** provede jeden krok pro dane url
  */
-void goone(struct surl *u)
+static void goone(struct surl *u)
 {
 	int tim,state;
 	//debugf("[%d]: %d\n",u->index,u->state);
@@ -474,7 +474,7 @@ void goone(struct surl *u)
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
  */
-int exitprematurely()
+static int exitprematurely(void)
 {
 	int tim;
 	int t;
@@ -498,7 +498,7 @@ int exitprematurely()
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-void outputpartial()
+static void outputpartial(void)
 {
 	int t;
 
@@ -510,7 +510,7 @@ void outputpartial()
 
 /** hlavni smycka
  */
-void go()
+void go(void)
 {
 	int t;
 	int done;
