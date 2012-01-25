@@ -15,7 +15,7 @@ enum HtmlElement {
 	BLOCKQUOTE, FORM, HR, TABLE, FIELDSET, ADDRESS,
 	TD, TH,
 	IMG,
-	SCRIPT, OPTION,
+	SCRIPT, OPTION, STYLE,
 	OTHER,
 };
 
@@ -23,7 +23,7 @@ enum {
 	ELEMS_NEWLINE = 1<<H1 | 1<<H2 |	1<<H3 | 1<<H4 |	1<<H5 | 1 << H6 | 1<<UL | 1<< OL | 1<< PRE | 1<<P | 1<< DL | 1 << DIV | 1 << NOSCRIPT | 1 <<  BLOCKQUOTE | 1 << FORM | 1 << HR | 1 << TABLE | 1 << FIELDSET | 1 << ADDRESS,
 	ELEMS_TAB = 1 << TD | 1 << TH,
 	ELEMS_SPACE = 1<<IMG,
-	ELEMS_SKIP_CONTENT = 1<<SCRIPT | 1<<OPTION,
+	ELEMS_SKIP_CONTENT = 1<<SCRIPT | 1<<OPTION | 1<<STYLE,
 };
 
 static const char *elems_names[] = {
@@ -51,6 +51,7 @@ static const char *elems_names[] = {
 	[IMG] = "IMG",
 	[SCRIPT] = "SCRIPT",
 	[OPTION] = "OPTION",
+	[STYLE] = "STYLE",
 	[OTHER] = NULL,
 };
 
@@ -153,13 +154,37 @@ static char *consume_elem(char *s, const char *end, struct ElemDesc *desc)
 	return s;
 }
 
+// FIXME: Added support for <!CDATA[ ... ]]> ?
+
+static char *test_comment_start(char *s, const char *end)
+{
+	static const char comment_start[] = "<!--";
+	unsigned i = 0;
+	for (; i < sizeof(comment_start) - 1 && &s[i] < end && s[i] == comment_start[i]; ++i);
+	return i == sizeof(comment_start) - 1 ? &s[sizeof(comment_start) - 1] : NULL;
+}
+
+static char *consume_comment(char *s, const char *end)
+{
+	static const char comment_end[] = "-->";
+	for (; s < end; ++s) {
+		if (*s == *comment_end) {
+			unsigned i = 1;
+			for (; i < sizeof(comment_end) - 1 && &s[i] < end && s[i] == comment_end[i]; ++i);
+			if (i == sizeof(comment_end) - 1)
+				return &s[sizeof(comment_end) - 1];
+		}
+	}
+	return s;
+}
+
 enum {
 	CH_SPACE = 0,
 	CH_SPACE_KILLER,
 	CH_OTHER,
 };
 
-struct {
+static struct {
 	unsigned replace, skip;
 } ch[] = {
 	[CH_SPACE] = { 0, 1<<CH_SPACE | 1<<CH_SPACE_KILLER },
@@ -183,6 +208,8 @@ int converthtml2text(char *s, int len)
 	int ending = CH_SPACE_KILLER;
 	void put_char(const int c)
 	{
+		if (hints & ELEMS_SKIP_CONTENT)
+			return;
 		const int act = c == ' ' ? CH_SPACE : c == '\n' || c == '\r' ? CH_SPACE_KILLER : CH_OTHER;
 		if (1<<ending & ch[act].skip)
 			;
@@ -208,22 +235,27 @@ int converthtml2text(char *s, int len)
 				++p_src;
 				break;
 			case '<':;
-				struct ElemDesc elem_desc;
-				p_src = consume_elem(p_src, end, &elem_desc);
-				if (elem_desc.begin) {
-					if (1<<elem_desc.id & ELEMS_NEWLINE)
-						put_char('\n');
-					if (1<<elem_desc.id & ELEMS_TAB)
-						put_char('\t');
-					if (1<<elem_desc.id & ELEMS_SPACE)
-						put_char(' ');
+				char *test_s;
+				if ( (test_s = test_comment_start(p_src, end)) ) {
+					p_src = consume_comment(test_s, end);
 				}
-				if (elem_desc.begin != elem_desc.end)
-					hints = elem_desc.begin ? hints | 1<<elem_desc.id : hints & ~(1<<elem_desc.id);
+				else {
+					struct ElemDesc elem_desc;
+					p_src = consume_elem(p_src, end, &elem_desc);
+					if (elem_desc.begin) {
+						if (1<<elem_desc.id & ELEMS_NEWLINE)
+							put_char('\n');
+						if (1<<elem_desc.id & ELEMS_TAB)
+							put_char('\t');
+						if (1<<elem_desc.id & ELEMS_SPACE)
+							put_char(' ');
+					}
+					if (elem_desc.begin != elem_desc.end)
+						hints = elem_desc.begin ? hints | 1<<elem_desc.id : hints & ~(1<<elem_desc.id);
+				}
 				break;
 			default:
-				if (!(hints & ELEMS_SKIP_CONTENT))
-					put_char(*p_src);
+				put_char(*p_src);
 				++p_src;
 		}
 	}
