@@ -312,6 +312,11 @@ static void output(struct surl *u)
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
 	if (*u->charset)
 		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
+	if (u->conv_errno) {
+		char err_buf[128];
+		char *err = strerror_r(u->conv_errno, err_buf, sizeof(err_buf));
+		sprintf(header+strlen(header), "Conversion error: %s\n", err);
+	}
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
 	write(STDOUT_FILENO,header,strlen(header));

@@ -35,7 +35,9 @@ struct surl {
 	int headlen;
 	int contentlen;
 	int status;		// http navratovy kod
- 
+
+	//
+ 	int conv_errno;		// set in case of wrong conversion
 };
 
 struct ssettings {
