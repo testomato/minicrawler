@@ -17,6 +17,7 @@ struct surl {
 	char cookies[20][2][256];	// nekolik cookie, kazda ma name ([0]) a value ([1])
 	int cookiecnt;
 	char customparam[256];		// parametr do custom headeru
+	char charset[32];
  
 	int state;
 	int lastread;		// cas posledniho uspesneho cteni

@@ -236,6 +236,25 @@ static void setcookie(struct surl *u,char *str)
 	}
 }
 
+static void find_content_type(struct surl *u)
+{
+	static const char content_type[] = "\nContent-Type:";
+	static const char charset[] = " charset=";
+	char *p_ct = (char*) memmem(u->buf, u->headlen, content_type, sizeof(content_type) - 1);
+	if(!p_ct)
+		return;
+	char *end;
+	for (end = &p_ct[sizeof(content_type) - 1]; end < &u->buf[u->headlen] && *end != '\n' && *end != '\r'; ++end);
+	char *p_charset = (char*) memmem(&p_ct[sizeof(content_type) - 1], end - &p_ct[sizeof(content_type) - 1], charset, sizeof(charset) - 1);
+	if (!p_charset)
+		return;
+	char *p_charset_end = &p_charset[sizeof(charset) - 1];
+	if (sizeof(u->charset) > end - p_charset_end) {
+		*(char*)mempcpy(u->charset, p_charset_end, end - p_charset_end) = 0;
+		debugf("charset='%s'\n", u->charset);
+	}
+}
+
 /** pozná status a hlavičku http požadavku
  */
 static void detecthead(struct surl *u)
@@ -267,8 +286,10 @@ static void detecthead(struct surl *u)
 	
 	p=(char*)memmem(u->buf,u->headlen,"Transfer-Encoding: chunked",26);
 	if(p!=NULL) {u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);}
-	
-	debugf("[%d] status=%d, headlen=%d, content-length=%d\n",u->index,u->status,u->headlen,u->contentlen);
+
+	find_content_type(u);
+
+	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
 	
 	if(u->chunked&&u->bufp>u->nextchunkedpos) eatchunked(u,1);
 }
@@ -278,14 +299,19 @@ static void detecthead(struct surl *u)
 static void output(struct surl *u)
 {
 	UC header[4096];
-	
+
 	if(settings.convert) {
 		u->bufp=converthtml2text(u->buf+u->headlen,u->bufp-u->headlen)+u->headlen;
 	}
-	
+	if (*u->charset) {
+		conv_charset(u);
+	}
+
 	sprintf(header,"URL: %s\n",u->rawurl);
 	if(u->redirectedto[0]) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
+	if (*u->charset)
+		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
 	write(STDOUT_FILENO,header,strlen(header));
@@ -293,14 +319,14 @@ static void output(struct surl *u)
 		debugf("[%d] outputting header %dB - %d %d %d %d\n",u->index,u->headlen,u->buf[u->headlen-4],u->buf[u->headlen-3],u->buf[u->headlen-2],u->buf[u->headlen-1]);
 		write(STDOUT_FILENO,u->buf,u->headlen);
 	}
-	
+
 	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
 	write(STDOUT_FILENO,"\n",1); // jinak se to vývojářům v php špatně parsuje
-	
+
 	if(u->chunked) debugf("[%d] bufp=%d nextchunkedpos=%d\n",u->index,u->bufp,u->nextchunkedpos);
-	
+
 	debugf("[%d] Outputed.\n",u->index);
-	
+
 	u->state=S_DONE;
 	debugf("[%d] Done.\n",u->index);
 }

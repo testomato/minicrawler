@@ -154,8 +154,6 @@ static char *consume_elem(char *s, const char *end, struct ElemDesc *desc)
 	return s;
 }
 
-// FIXME: Added support for <!CDATA[ ... ]]> ?
-
 static char *test_comment_start(char *s, const char *end)
 {
 	static const char comment_start[] = "<!--";
@@ -173,6 +171,41 @@ static char *consume_comment(char *s, const char *end)
 			for (; i < sizeof(comment_end) - 1 && &s[i] < end && s[i] == comment_end[i]; ++i);
 			if (i == sizeof(comment_end) - 1)
 				return &s[sizeof(comment_end) - 1];
+		}
+	}
+	return s;
+}
+
+static char *test_cdata_start(char *s, const char *end)
+{
+	static const char cdata_start[] = "<!CDATA[";
+	unsigned i = 0;
+	for (; i < sizeof(cdata_start) - 1 && &s[i] < end && s[i] == cdata_start[i]; ++i);
+	return i == sizeof(cdata_start) - 1 ? &s[sizeof(cdata_start) - 1] : NULL;
+}
+
+static char *consume_cdata(char *s, const char *end, void (*f)(const int c))
+{
+	static const char cdata_end[] = "]]>";
+	for (; s < end; ++s) {
+		const int c = *s;
+		if (c == '\n' || c == '\t') {
+			f(' ');
+		}
+		else if (c == '\r')
+			;
+		else if (c == cdata_end[0]) {
+			unsigned i = 1;
+			for (; i < sizeof(cdata_end) - 1 && &s[i] < end && s[i] == cdata_end[i]; ++i);
+			if (i == sizeof(cdata_end) - 1) {
+				return &s[sizeof(cdata_end) - 1];
+			}
+			else {
+				f(c);
+			}
+		}
+		else {
+			f(c);
 		}
 	}
 	return s;
@@ -238,6 +271,9 @@ int converthtml2text(char *s, int len)
 				char *test_s;
 				if ( (test_s = test_comment_start(p_src, end)) ) {
 					p_src = consume_comment(test_s, end);
+				}
+				else if ( (test_s = test_cdata_start(p_src, end)) ) {
+					p_src = consume_cdata(test_s, end, put_char);
 				}
 				else {
 					struct ElemDesc elem_desc;
