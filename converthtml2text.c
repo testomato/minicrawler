@@ -297,3 +297,147 @@ int converthtml2text(char *s, int len)
 	}
 	return p_dst - s;
 }
+
+struct tag_desc
+{
+	char *name;
+	unsigned name_len;
+	char *charset;
+	unsigned charset_len;
+	char *encoding;
+	unsigned encoding_len;
+	char *http_equiv;
+	unsigned http_equiv_len;
+	char *content;
+	unsigned content_len;
+};
+
+struct tag_desc_pointer
+{
+	char **p;
+	unsigned *l;
+};
+
+static int str_equiv_right(const char *left, const char *right, const size_t right_len)
+{
+	const char *pl = left, *pr = right;
+	while (*pl && pr < &right[right_len]) {
+		if (*pl++ != *pr++)
+			return 0;
+	}
+	return !*pl;
+}
+
+static void get_tag_desc_pointer(const char *name, const unsigned name_len, struct tag_desc *tag, struct tag_desc_pointer *pointer)
+{
+	if (str_equiv_right("charset", name, name_len)) {
+		*pointer = (struct tag_desc_pointer) { .p = &tag->charset, .l = &tag->charset_len, };
+	}
+	else if (str_equiv_right("encoding", name, name_len)) {
+		*pointer = (struct tag_desc_pointer) { .p = &tag->encoding, .l = &tag->encoding_len, };
+	}
+	else if (str_equiv_right("http-equiv", name, name_len)) {
+		*pointer = (struct tag_desc_pointer) { .p = &tag->http_equiv, .l = &tag->http_equiv_len, };
+	}
+	else if (str_equiv_right("content", name, name_len)) {
+		*pointer = (struct tag_desc_pointer) { .p = &tag->content, .l = &tag->content_len, };
+	}
+	else {
+		*pointer = (struct tag_desc_pointer) {};
+	}
+}
+
+static char *find_c(char *s, const char *end, const int c)
+{
+	for (; s < end && *s != c; ++s);
+	return s;
+}
+
+static char *next_tag(char *s, const char *end, struct tag_desc *tag)
+{
+	*tag = (struct tag_desc) {};
+	if ( (s = find_c(s, end, '<')) >= end)
+		return s;
+	if ( (tag->name = ++s) >= end || ++s >= end) // tag name is at least one char length, ! or ? can be the first char here
+		return s;
+	if ( (s = consume_elem_name(s, end)) >= end)
+		return s;
+	tag->name_len = s - tag->name;
+	for (;;) {
+		if ( (s = consume_spaces(s, end)) >= end)
+			return s;
+		if (*s == '/') {
+			if (++s >= end)
+				return s;
+		}
+		if (*s == '>') {
+			return ++s;
+		}
+		char *param_name = s;
+		if ( (s = consume_elem_name(&s[1], end)) >= end) // a bit of trick here, if senseless char at s[0], then it is supposed as attr name of length one
+			return s;
+		char *param_name_end = s;
+		if ( (s = consume_spaces(s, end)) >= end)
+			return s;
+		if (*s == '=') {
+			char *param_value = NULL;
+			char *param_value_end = NULL;
+			if ( (s = consume_spaces(&s[1], end)) >= end)
+				return s;
+			if (*s == '"' || *s == '\'') {
+				param_value = &s[1];
+				if ( (s = consume_until_c(&s[1], end, *s)) >= end)
+					return s;
+				param_value_end = &s[-1];
+			}
+			else {
+				param_value = s;
+				if ( (s = consume_elem_name(s, end)) >= end)
+					return s;
+				param_value_end = s;
+			}
+			struct tag_desc_pointer pointer;
+			get_tag_desc_pointer(param_name, param_name_end - param_name, tag, &pointer);
+			if (pointer.p) {
+				*pointer.p = param_value;
+				*pointer.l = param_value_end - param_value;
+			}
+		}
+	}
+	assert(0);
+	return s;
+}
+
+char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_len)
+{
+	const char *end = &s[len];
+	while (s < end) {
+		struct tag_desc tag;
+		s = next_tag(s, end, &tag);
+		if (str_equiv_right("?xml", tag.name, tag.name_len)) {
+			if (tag.encoding) {
+				*charset_len = tag.encoding_len;
+				return tag.encoding;
+			}
+		}
+		else if (str_equiv_right("meta", tag.name, tag.name_len)) {
+			if (tag.encoding) {
+				*charset_len = tag.encoding_len;
+				return tag.encoding;
+			}
+			else if (tag.http_equiv && str_equiv_right("Content-Type", tag.http_equiv, tag.http_equiv_len) && tag.content) {
+				const int c = tag.content[tag.content_len];
+				tag.content[tag.content_len] = 0;
+				const char charset[] = "charset=";
+				char *encoding = strstr(tag.content, charset);
+				tag.content[tag.content_len] = c;
+				if (encoding) {
+					encoding = &encoding[sizeof(charset) - 1];
+					*charset_len = &tag.content[tag.content_len] - encoding;
+					return encoding;
+				}
+			}
+		}
+	}
+	return NULL;
+}

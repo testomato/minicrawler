@@ -300,8 +300,15 @@ static void output(struct surl *u)
 {
 	UC header[4096];
 
+	if (!*u->charset) {
+		unsigned charset_len = 0;
+		char *charset = detect_charset_from_html(u->buf + u->headlen, u->bufp - u->headlen, &charset_len);
+		if (charset && charset_len < sizeof(u->charset)) {
+			*(char*)mempcpy(u->charset, charset, charset_len) = 0;
+		}
+	}
 	if(settings.convert) {
-		u->bufp=converthtml2text(u->buf+u->headlen,u->bufp-u->headlen)+u->headlen;
+		u->bufp=converthtml2text(u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
 	if (*u->charset) {
 		conv_charset(u);
