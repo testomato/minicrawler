@@ -267,6 +267,21 @@ int converthtml2text(char *s, int len)
 				put_char(' ');
 				++p_src;
 				break;
+			case '&':;
+				int code = 0;
+				char dst[8];
+				char *dst_end = NULL;
+				char *p_src_new = consume_entity(p_src, end, &code);
+				if (code && (dst_end = put_code(dst, sizeof(dst), code))) {
+					for (char *p = dst; p < dst_end; ++p)
+						put_char(*p);
+					p_src = p_src_new;
+				}
+				else {
+					put_char('&');
+					++p_src;
+				}
+				break;
 			case '<':;
 				char *test_s;
 				if ( (test_s = test_comment_start(p_src, end)) ) {
