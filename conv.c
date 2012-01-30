@@ -16,11 +16,15 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
 		return 1;  // FIXME: Some log?
 	char *dst_end = dst, *src_end = &u->buf[u->headlen];
 	size_t dst_left = dst_size, src_left = u->bufp - u->headlen;
-	const size_t iconv_ret = iconv(desc, &src_end, &src_left, &dst_end, &dst_left);
+	for (;;) {
+		const size_t iconv_ret = iconv(desc, &src_end, &src_left, &dst_end, &dst_left);
+		if (!dst_left || !src_left || iconv_ret != (size_t)-1)
+			break;
+		++src_end;
+		--src_left;
+	}
 	const int close_ret = iconv_close(desc);
 	if (close_ret == -1)
-		return 1;  // FIXME: Some log?
-	if (iconv_ret == (size_t)-1)
 		return 1;  // FIXME: Some log?
 	memcpy(&u->buf[u->headlen], dst, dst_end - dst);
 	u->bufp = dst_end - dst + u->headlen;

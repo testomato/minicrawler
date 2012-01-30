@@ -343,6 +343,25 @@ static int str_equiv_right(const char *left, const char *right, const size_t rig
 	return !*pl;
 }
 
+static int str_equiv_right_nocase(const char *left, const char *right, const size_t right_len)
+{
+	const char *pl = left, *pr = right;
+	for (; *pl && pr < &right[right_len]; ++pl, ++pr) {
+		if (*pl >= 'A' && *pl <= 'Z') {
+			if (*pl != (*pr & ~0x20))
+				return 0;
+		}
+		else if (*pl >= 'a' && *pl <= 'z') {
+			if (*pl != (*pr | 0x20))
+				return 0;
+		}
+		else if (*pl != *pr) {
+			return 0;
+		}
+	}
+	return !*pl;
+}
+
 static void get_tag_desc_pointer(const char *name, const unsigned name_len, struct tag_desc *tag, struct tag_desc_pointer *pointer)
 {
 	if (str_equiv_right("charset", name, name_len)) {
@@ -440,7 +459,7 @@ char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_le
 				*charset_len = tag.encoding_len;
 				return tag.encoding;
 			}
-			else if (tag.http_equiv && str_equiv_right("Content-Type", tag.http_equiv, tag.http_equiv_len) && tag.content) {
+			else if (tag.http_equiv && str_equiv_right_nocase("Content-Type", tag.http_equiv, tag.http_equiv_len) && tag.content) {
 				const int c = tag.content[tag.content_len];
 				tag.content[tag.content_len] = 0;
 				const char charset[] = "charset=";
