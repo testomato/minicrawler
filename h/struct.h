@@ -47,5 +47,6 @@ struct ssettings {
 	int impatient;
 	int partial;
 	int convert;		// 1 pokud se má konvertovat do textu
+	int convert_to_utf;     // 1 pokud se ma konvertovat do utf8
 	char customheader[4096];
 };

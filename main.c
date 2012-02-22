@@ -59,6 +59,7 @@ void initurls(int argc, char *argv[])
 		if(!strcmp(argv[t],"-i")) {settings.impatient=1;continue;}
 		if(!strcmp(argv[t],"-p")) {settings.partial=1;continue;}
 		if(!strcmp(argv[t],"-c")) {settings.convert=1;continue;}
+		if(!strcmp(argv[t],"-8")) {settings.convert_to_utf=1;continue;}
 		if(!strncmp(argv[t],"-t",2)) {settings.timeout=atoi(argv[t]+2);continue;}
 		if(!strncmp(argv[t],"-w",2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
 

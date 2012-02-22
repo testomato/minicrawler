@@ -310,7 +310,7 @@ static void output(struct surl *u)
 	if(settings.convert) {
 		u->bufp=converthtml2text(u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
-	if (*u->charset) {
+	if (*u->charset && settings.convert_to_utf) {
 		conv_charset(u);
 	}
 
