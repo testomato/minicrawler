@@ -16,6 +16,17 @@
 #include "h/struct.h"
 #include "h/proto.h"
 
+static void set_atomic_int(int *ptr, const int val)
+{
+	*(volatile int*)ptr = val;
+	asm volatile ("" : : : "memory");  // memory barrier
+}
+
+static int get_atomic_int(int *ptr)
+{
+	return *(volatile int*)ptr;
+}
+
 /** callback funkce, kterou zavola ares
  */
 static void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
@@ -24,14 +35,15 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	struct surl *u;
 	
 	u=(struct surl *)arg;
-	if(status!=0) {debugf("[%d] error: dnscallback with non zero status! - status=%d\n",u->index,status);u->state=S_ERROR;return;}
+	if(status!=0) {debugf("[%d] error: dnscallback with non zero status! - status=%d\n",u->index,status);set_atomic_int(&u->state, S_ERROR);return;}
 	
 	ip=(UC*)(hostent->h_addr);
 	u->ip=*(int *)ip;
 	
 	debugf("[%d] Resolving %s ended => %d.%d.%d.%d\n",u->index,u->host,ip[0],ip[1],ip[2],ip[3]);
-	
-	u->state=S_GOTIP;
+	debugf("[%d] raw url => %s\n", u->index, u->rawurl);
+
+	set_atomic_int(&u->state, S_GOTIP);
 }
 
 
@@ -46,9 +58,8 @@ static void launchdns(struct surl *u)
 	t=ares_init(&(u->aresch));
 	if(t) {debugf("ares_init failed\n");exit(-1);}
 
+	set_atomic_int(&u->state, S_INDNS);
 	ares_gethostbyname(u->aresch,u->host,AF_INET,(ares_host_callback)&dnscallback,u);
-
-	u->state=S_INDNS;
 }
 
 /** uz je ares hotovy?
@@ -86,10 +97,16 @@ static void opensocket(struct surl *u)
 	
 	t=connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
 	if(t) {
-		if(errno==115) u->state=S_CONNECTING; // 115 je v pohode (operation in progress)
-		else {debugf("%d: connect failed (%d, %s)\n",u->index,errno,strerror(errno));u->state=S_ERROR;}
+		if(errno==115) {
+			set_atomic_int(&u->state, S_CONNECTING); // 115 je v pohode (operation in progress)
 		}
-	else u->state=S_CONNECTED;
+		else {
+			debugf("%d: connect failed (%d, %s)\n",u->index,errno,strerror(errno));
+			set_atomic_int(&u->state, S_ERROR);}
+		}
+	else {
+		set_atomic_int(&u->state, S_CONNECTED);
+	}
 }
 
 /** neci kod na str_replace (pod free licenci)
@@ -148,7 +165,7 @@ static void sendhttpget(struct surl *u)
 	if(t<strlen(buf)) {debugf("[%d] Error - written %d bytes, wanted %d bytes\n",u->index,t,(int)strlen(buf));}
 	else debugf("[%d] Written %d bytes\n",u->index,t);
 	
-	u->state=S_GETREPLY;
+	set_atomic_int(&u->state, S_GETREPLY);
 }
 
 /** strcpy, ktere se ukonci i koncem radku
@@ -339,7 +356,7 @@ static void output(struct surl *u)
 
 	debugf("[%d] Outputed.\n",u->index);
 
-	u->state=S_DONE;
+	set_atomic_int(&u->state, S_DONE);
 	debugf("[%d] Done.\n",u->index);
 }
 
@@ -358,8 +375,8 @@ static void resolvelocation(struct surl *u)
 	
 	debugf("[%d] Lhost='%s' Lpath='%s'\n",u->index,lhost,lpath);
 
-	if(strcmp(u->host,lhost)) u->state=S_JUSTBORN;	// pokud je to jina domena, tak znovu resolvuj
-	else u->state=S_GOTIP;		// jinak se muzes pripojit na tu puvodni IP
+	if(strcmp(u->host,lhost)) set_atomic_int(&u->state, S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
+	else set_atomic_int(&u->state, S_GOTIP);	// jinak se muzes pripojit na tu puvodni IP
 	
 	strcpy(u->path,lpath);		// bez tam
 	strcpy(u->host,lhost);		// bez tam
@@ -412,7 +429,7 @@ static void readreply(struct surl *u)
 		}
 	
 	if(t<=0||(u->contentlen!=-1&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);finish(u);}
-	else u->state=S_GETREPLY;
+	else set_atomic_int(&u->state, S_GETREPLY);
 	//debugf("%s",buf);
 	
 }
@@ -434,33 +451,34 @@ static void selectall(void)
 	timeout.tv_usec = 20000;	
 	
 	for(t=0;url[t].rawurl[0];t++) {
-		if(url[t].state==S_GETREPLY) {
+		const int url_state = get_atomic_int(&url[t].state);
+		if(url_state==S_GETREPLY) {
 			//debugf("[%d] into read select...\n",t);
 			FD_SET (url[t].sockfd, &set);
 			}
 		
-		if(url[t].state==S_CONNECTING) {
+		if(url_state==S_CONNECTING) {
 			//debugf("[%d] into read write select...\n",t);
 			FD_SET (url[t].sockfd, &writeset);
 			}
 	}
 	
-	t=select (FD_SETSIZE,&set, &writeset, NULL, &timeout);
+	t=select(FD_SETSIZE, &set, &writeset, NULL, &timeout);
 	if(!t) return; // nic
 	//debugf("select status: %d\n",t);
 	
 	for(t=0;url[t].rawurl[0];t++) {
-		if(FD_ISSET(url[t].sockfd,&set)&&url[t].state==S_GETREPLY) {
+		const int url_state = get_atomic_int(&url[t].state);
+		if(FD_ISSET(url[t].sockfd,&set)&&url_state==S_GETREPLY) {
 			//debugf("[%d] is ready for reading\n",t);
-			url[t].state=S_READYREPLY;
+			set_atomic_int(&url[t].state, S_READYREPLY);
 			}
-		if(FD_ISSET(url[t].sockfd,&writeset)&&url[t].state==S_CONNECTING) {
+		if(FD_ISSET(url[t].sockfd,&writeset)&&url_state==S_CONNECTING) {
 			//debugf("[%d] is ready for writing\n",t);
-			url[t].state=S_CONNECTED;
+			set_atomic_int(&url[t].state, S_CONNECTED);
 			}
 		
 	}
-	
 }
 
 
@@ -468,12 +486,12 @@ static void selectall(void)
  */
 static void goone(struct surl *u)
 {
-	int tim,state;
+	int tim, state;
 	//debugf("[%d]: %d\n",u->index,u->state);
 
 	tim=gettimeint();
 
-	state=u->state;
+	state=get_atomic_int(&u->state);
 	switch(state) {
   
 	case S_JUSTBORN:
@@ -507,7 +525,7 @@ static void goone(struct surl *u)
 	}
 	
 	tim=gettimeint()-tim;
-	if(tim>200) debugf("[%d] State %d (->%d) took too long (%d ms)\n",u->index,state,u->state,tim);
+	if(tim>200) debugf("[%d] State %d (->%d) took too long (%d ms)\n",u->index,state,get_atomic_int(&u->state),tim);
   
 }
 
@@ -523,7 +541,8 @@ static int exitprematurely(void)
 	if(tim<settings.timeout*1000-1000) return 0; // jeste je brzy
 	
 	for(t=0;url[t].rawurl[0];t++) {
-		if(url[t].state<S_DONE) notdone++;
+		const int url_state = get_atomic_int(&url[t].state);
+		if(url_state<S_DONE) notdone++;
 		if(url[t].lastread>lastread) lastread=url[t].lastread;
 	}
 	
@@ -542,7 +561,8 @@ static void outputpartial(void)
 	int t;
 
 	for(t=0;url[t].rawurl[0];t++) {
-		if(url[t].state==S_GETREPLY) output(&url[t]);
+		const int url_state = get_atomic_int(&url[t].state);
+		if(url_state==S_GETREPLY) output(&url[t]);
 	
 	}
 }
@@ -563,9 +583,9 @@ void go(void)
 		selectall();
 		for(t=0;url[t].rawurl[0];t++) {
 			//debugf("%d: %d\n",t,url[t].state);
-			state=url[t].state;
-			if(url[t].state<S_DONE) {goone(&url[t]);done=0;}
-			if(state!=url[t].state) change=1;
+			state=get_atomic_int(&url[t].state);
+			if(state<S_DONE) {goone(&url[t]);done=0;} // url[t].state can change inside goone
+			if(state!=get_atomic_int(&url[t].state)) change=1;
 		}
 		
 		t=gettimeint();
