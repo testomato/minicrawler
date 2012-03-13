@@ -21,13 +21,14 @@ struct surl {
  
 	int state;
 	int lastread;		// cas posledniho uspesneho cteni
- 
+	int downstart;		// time downloading start
 	// ares
 	struct ares_channeldata *aresch;
 	
 	// network
 	int sockfd;
 	int ip;
+	int prev_ip;
 	
 	// obsah
 	char buf[BUFSIZE];
@@ -36,7 +37,7 @@ struct surl {
 	int contentlen;
 	int status;		// http navratovy kod
 
-	//
+	// errno
  	int conv_errno;		// set in case of wrong conversion
 };
 
@@ -48,5 +49,6 @@ struct ssettings {
 	int partial;
 	int convert;		// 1 pokud se má konvertovat do textu
 	int convert_to_utf;     // 1 pokud se ma konvertovat do utf8
+	int delay;		// zpozdeni pri stahovani ze stejne ip, default je 100ms
 	char customheader[4096];
 };

@@ -14,20 +14,6 @@ struct surl url[100];
 
 struct ssettings settings;
 
-/** vrati pocet milisekund od spusteni programu (resp. prvniho zavolani teto funkce)
- */
-int gettimeint()
-{
-	long long static starttime=0;
-	struct timeval tim;
-	
-        gettimeofday(&tim, NULL);
-        
-        if(starttime==0) {starttime=tim.tv_sec*1000+tim.tv_usec/1000;return 0;}
-        
-        return (int)((tim.tv_sec*1000+tim.tv_usec/1000)-starttime);
-}
-
 /** primitivni parsovatko url
  */
 void simpleparseurl(struct surl *u)
@@ -61,6 +47,7 @@ void initurls(int argc, char *argv[])
 		if(!strcmp(argv[t],"-c")) {settings.convert=1;continue;}
 		if(!strcmp(argv[t],"-8")) {settings.convert_to_utf=1;continue;}
 		if(!strncmp(argv[t],"-t",2)) {settings.timeout=atoi(argv[t]+2);continue;}
+		if(!strncmp(argv[t],"-D",2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
 		if(!strncmp(argv[t],"-w",2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
 
 		if(!strcmp(argv[t],"-P")) {strcpy(url[i].post,argv[t+1]);t++;debugf("[%d] POST: %s\n",i,url[i].post);continue;}
@@ -101,7 +88,9 @@ void printusage()
 	         "         -p         outputs also partially downloaded urls\n"
 	         "         -w STRING  write this custom header to all requests\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
-	         "         -c         convert to text format [TOBEIMPLEMENTED]\n"
+	         "         -c         convert to text format\n"
+	         "         -8         convert from page encoding to utf-8\n"
+	         "         -DMILIS    set delay time in mileseconds when downloading more pages from same ip\n"
 	         "\n",VERSION);
 }
 
@@ -116,7 +105,7 @@ int main(int argc, char *argv[])
 	signal(SIGSEGV,sighandler);
 
 	settings.timeout=5;
-	gettimeint(); // nastavi se
+	settings.delay=100;
 	
 	initurls(argc,argv);
 	go();

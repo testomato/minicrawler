@@ -22,9 +22,9 @@ static void set_atomic_int(int *ptr, const int val)
 	asm volatile ("" : : : "memory");  // memory barrier
 }
 
-static int get_atomic_int(int *ptr)
+static int get_atomic_int(const int* const ptr)
 {
-	return *(volatile int*)ptr;
+	return *(volatile const int* const)ptr;
 }
 
 /** callback funkce, kterou zavola ares
@@ -38,6 +38,7 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	if(status!=0) {debugf("[%d] error: dnscallback with non zero status! - status=%d\n",u->index,status);set_atomic_int(&u->state, S_ERROR);return;}
 	
 	ip=(UC*)(hostent->h_addr);
+	u->prev_ip = u->ip;
 	u->ip=*(int *)ip;
 	
 	debugf("[%d] Resolving %s ended => %d.%d.%d.%d\n",u->index,u->host,ip[0],ip[1],ip[2],ip[3]);
@@ -182,7 +183,8 @@ static void strcpy_term(char *to, char *from)
 static int strcpy_endchar(char *to, char *from, char endchar)
 {
 	int len=0;
-	for(;*from&&*from!=endchar;len++) *to++=*from++;
+	for(;*from&&*from!=endchar;len++)
+		*to++ = *from++;
 	*to=0;
 	return len;
 }
@@ -341,6 +343,7 @@ static void output(struct surl *u)
 		char *err = strerror_r(u->conv_errno, err_buf, sizeof(err_buf));
 		sprintf(header+strlen(header), "Conversion error: %s\n", err);
 	}
+	sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=0x%x; %u)\n",u->lastread - u->downstart, u->downstart, u->ip, get_time_slot(u->ip));
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
 	write(STDOUT_FILENO,header,strlen(header));
@@ -412,7 +415,7 @@ static void readreply(struct surl *u)
 	t=read(u->sockfd,u->buf+u->bufp,left);
 	if(t>0) {
 		u->bufp+=t;
-		u->lastread=gettimeint();
+		u->lastread=get_time_int();
 		if(u->headlen==0) detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
 		}
 	
@@ -455,28 +458,26 @@ static void selectall(void)
 		if(url_state==S_GETREPLY) {
 			//debugf("[%d] into read select...\n",t);
 			FD_SET (url[t].sockfd, &set);
-			}
+		}
 		
 		if(url_state==S_CONNECTING) {
 			//debugf("[%d] into read write select...\n",t);
 			FD_SET (url[t].sockfd, &writeset);
-			}
+		}
 	}
 	
 	t=select(FD_SETSIZE, &set, &writeset, NULL, &timeout);
-	if(!t) return; // nic
-	//debugf("select status: %d\n",t);
-	
+	if(!t) {
+		return; // nic
+	}
 	for(t=0;url[t].rawurl[0];t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(FD_ISSET(url[t].sockfd,&set)&&url_state==S_GETREPLY) {
-			//debugf("[%d] is ready for reading\n",t);
+		if(FD_ISSET(url[t].sockfd, &set) && url_state==S_GETREPLY) {
 			set_atomic_int(&url[t].state, S_READYREPLY);
-			}
-		if(FD_ISSET(url[t].sockfd,&writeset)&&url_state==S_CONNECTING) {
-			//debugf("[%d] is ready for writing\n",t);
+		}
+		if(FD_ISSET(url[t].sockfd,&writeset) && url_state==S_CONNECTING) {
 			set_atomic_int(&url[t].state, S_CONNECTED);
-			}
+		}
 		
 	}
 }
@@ -486,14 +487,10 @@ static void selectall(void)
  */
 static void goone(struct surl *u)
 {
-	int tim, state;
-	//debugf("[%d]: %d\n",u->index,u->state);
+	const int tim=get_time_int();
+	const int state=get_atomic_int(&u->state);
 
-	tim=gettimeint();
-
-	state=get_atomic_int(&u->state);
-	switch(state) {
-  
+	switch(state) {  
 	case S_JUSTBORN:
 		launchdns(u);
 		break;
@@ -503,7 +500,8 @@ static void goone(struct surl *u)
 		break;
 
 	case S_GOTIP:
-		opensocket(u);
+		if ( (u->downstart = test_free_channel(u->ip, settings.delay, u->ip == u->prev_ip)) )
+			opensocket(u);
 		break;
   
 	case S_CONNECTING:
@@ -523,10 +521,12 @@ static void goone(struct surl *u)
 		readreply(u);
 		break;
 	}
-	
-	tim=gettimeint()-tim;
-	if(tim>200) debugf("[%d] State %d (->%d) took too long (%d ms)\n",u->index,state,get_atomic_int(&u->state),tim);
-  
+
+	if (settings.debug) {	
+		const int duration = get_time_int() - tim;
+		if(duration > 200)
+			debugf("[%d] State %d (->%d) took too long (%d ms)\n",u->index,state,get_atomic_int(&u->state), duration);
+	}
 }
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
@@ -537,7 +537,7 @@ static int exitprematurely(void)
 	int t;
 	int notdone=0, lastread=0;
 	
-	tim=gettimeint();
+	tim=get_time_int();
 	if(tim<settings.timeout*1000-1000) return 0; // jeste je brzy
 	
 	for(t=0;url[t].rawurl[0];t++) {
@@ -567,7 +567,8 @@ static void outputpartial(void)
 	}
 }
 
-/** hlavni smycka
+/**
+ * hlavni smycka
  */
 void go(void)
 {
@@ -588,15 +589,15 @@ void go(void)
 			if(state!=get_atomic_int(&url[t].state)) change=1;
 		}
 		
-		t=gettimeint();
+		t=get_time_int();
 		if(t>settings.timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);if(settings.partial) outputpartial();break;}
 		
 		if(!change&&!done) {
 			if(settings.impatient) done=exitprematurely();
 			usleep(20000);
-			}
+		}
 	} while(!done);
 	
-	if(done) debugf("All successful. Took %d ms.\n",gettimeint());
+	if(done) debugf("All successful. Took %d ms.\n",get_time_int());
 }
 
