@@ -74,10 +74,10 @@ static void checkdns(struct surl *u)
 	FD_ZERO(&readfds);
 	FD_ZERO(&writefds);
 
-	t=ares_fds(u->aresch,&readfds,&writefds);
+	t = ares_fds(u->aresch, &readfds, &writefds);
 	if(!t) return;
 
-	ares_process(u->aresch,&readfds,&writefds); // pri uspechu zavola callback sama
+	ares_process(u->aresch, &readfds, &writefds); // pri uspechu zavola callback sama
 }       
 
 /** uz znam IP, otevri socket
@@ -98,11 +98,11 @@ static void opensocket(struct surl *u)
 	
 	t=connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
 	if(t) {
-		if(errno==115) {
+		if(errno == EINPROGRESS) {
 			set_atomic_int(&u->state, S_CONNECTING); // 115 je v pohode (operation in progress)
 		}
 		else {
-			debugf("%d: connect failed (%d, %s)\n",u->index,errno,strerror(errno));
+			debugf("%d: connect failed (%d, %s)\n", u->index, errno, strerror(errno));
 			set_atomic_int(&u->state, S_ERROR);}
 		}
 	else {
@@ -340,7 +340,11 @@ static void output(struct surl *u)
 		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
 	if (u->conv_errno) {
 		char err_buf[128];
+#		ifdef __APPLE__
+		char *err = !strerror_r(u->conv_errno, err_buf, sizeof(err_buf)) ? err_buf : "Unknown error";
+#		else
 		char *err = strerror_r(u->conv_errno, err_buf, sizeof(err_buf));
+#		endif
 		sprintf(header+strlen(header), "Conversion error: %s\n", err);
 	}
 	sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=0x%x; %u)\n",u->lastread - u->downstart, u->downstart, u->ip, get_time_slot(u->ip));

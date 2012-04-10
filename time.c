@@ -2,10 +2,23 @@
 #include "h/struct.h"
 #include "h/proto.h"
 
+#ifdef __APPLE__
+#	include<sys/time.h>
+#endif 
 #include <stdio.h>
 #include <limits.h>
 #include <assert.h>
 
+#ifdef __APPLE__
+static long long get_uptime(void)
+{
+	struct timeval tmval;
+	if (gettimeofday(&tmval, NULL) == -1) {
+		return 0LL;
+	}
+	return (long long)(tmval.tv_sec*1000LL + tmval.tv_usec/1000);
+}
+#else
 static long long get_uptime(void)
 {
 	static const char file_name[] = "/proc/uptime";
@@ -19,6 +32,7 @@ static long long get_uptime(void)
 		return 0ULL;
 	return (long long)(fuptime * 1000.0);
 }
+#endif
 
 static long long birth;
 static void init_birth(void) __attribute__ ((constructor));
@@ -41,17 +55,6 @@ int get_time_int(void)
 static unsigned hash_uns(const unsigned key)
 {
 	return 13*(key >> 16 | key << 16) ^ 113*(key >> 20 | key << 10) ^ key;
-/*
-	// See: http://www.concentric.net/~ttwang/tech/inthash.htm
-	unsigned key = input_key;
-	key = ~key + (key << 15); // key = (key << 15) - key - 1;
-	key = key ^ (key >> 12);
-	key = key + (key << 2);
-	key = key ^ (key >> 4);
-	key = key * 2057; // key = (key + (key << 3)) + (key << 11);
-	key = key ^ (key >> 16);
-	return key;
-*/
 }
 
 #define HASH_SIZE 64
