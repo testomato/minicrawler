@@ -84,13 +84,13 @@ void printusage()
 	         "Where:   -d         enables debug messages (to stderr)\n"
 	         "         -tSECONDS  sets timeout (default is 5 seconds)\n"
 	         "         -h         enables output of headers\n"
-	         "         -i         enables impatient mode (minicrawler exits few seconds earlier if doesn't make enough progress\n"
+	         "         -i         enables impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress\n"
 	         "         -p         outputs also partially downloaded urls\n"
 	         "         -w STRING  write this custom header to all requests\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
 	         "         -c         convert to text format\n"
 	         "         -8         convert from page encoding to utf-8\n"
-	         "         -DMILIS    set delay time in mileseconds when downloading more pages from same ip\n"
+	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP\n"
 	         "\n",VERSION);
 }
 
