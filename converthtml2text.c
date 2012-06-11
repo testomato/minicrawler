@@ -14,13 +14,14 @@ enum HtmlElement {
 	P, DL, DIV, NOSCRIPT,
 	BLOCKQUOTE, FORM, HR, TABLE, FIELDSET, ADDRESS,
 	TD, TH,
+	TR,
 	IMG,
 	SCRIPT, OPTION, STYLE,
 	OTHER,
 };
 
 enum {
-	ELEMS_NEWLINE = 1<<H1 | 1<<H2 |	1<<H3 | 1<<H4 |	1<<H5 | 1 << H6 | 1<<UL | 1<< OL | 1<< PRE | 1<<P | 1<< DL | 1 << DIV | 1 << NOSCRIPT | 1 <<  BLOCKQUOTE | 1 << FORM | 1 << HR | 1 << TABLE | 1 << FIELDSET | 1 << ADDRESS,
+	ELEMS_NEWLINE = 1<<H1 | 1<<H2 |	1<<H3 | 1<<H4 |	1<<H5 | 1 << H6 | 1<<UL | 1<< OL | 1<< PRE | 1<<P | 1<< DL | 1 << DIV | 1 << NOSCRIPT | 1 <<  BLOCKQUOTE | 1 << FORM | 1 << HR | 1 << TABLE | 1 << FIELDSET | 1 << ADDRESS | 1<<TR,
 	ELEMS_TAB = 1 << TD | 1 << TH,
 	ELEMS_SPACE = 1<<IMG,
 	ELEMS_SKIP_CONTENT = 1<<SCRIPT | 1<<OPTION | 1<<STYLE,
@@ -48,6 +49,7 @@ static const char *elems_names[] = {
 	[ADDRESS] = "ADDRESS",
 	[TD] = "TD",
 	[TH] = "TH",
+	[TR] = "TR",
 	[IMG] = "IMG",
 	[SCRIPT] = "SCRIPT",
 	[OPTION] = "OPTION",
