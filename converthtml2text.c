@@ -215,15 +215,17 @@ static char *consume_cdata(char *s, const char *end, void (*f)(const int c))
 
 enum {
 	CH_SPACE = 0,
-	CH_SPACE_KILLER,
+	CH_TAB,
+	CH_NEWLINE,
 	CH_OTHER,
 };
 
 static struct {
 	unsigned replace, skip;
 } ch[] = {
-	[CH_SPACE] = { 0, 1<<CH_SPACE | 1<<CH_SPACE_KILLER },
-	[CH_SPACE_KILLER] = { 1<<CH_SPACE, 0 },
+	[CH_SPACE] = { 0, 1<<CH_SPACE | 1<<CH_TAB | 1<<CH_NEWLINE },
+	[CH_TAB] = { 1<<CH_SPACE, 1<<CH_NEWLINE },
+	[CH_NEWLINE] = { 1<<CH_SPACE | 1<<CH_TAB, 0 },
 	[CH_OTHER] = { 0, 0 },
 };
 
@@ -240,12 +242,12 @@ int converthtml2text(char *s, int len)
 	const char *end = &s[len];
 	char *p_src = s, *p_dst = s;
 
-	int ending = CH_SPACE_KILLER;
+	int ending = CH_NEWLINE;
 	void put_char(const int c)
 	{
 		if (hints & ELEMS_SKIP_CONTENT)
 			return;
-		const int act = c == ' ' ? CH_SPACE : c == '\n' || c == '\r' ? CH_SPACE_KILLER : CH_OTHER;
+		const int act = c == ' ' ? CH_SPACE : c == '\n' ? CH_NEWLINE : c == '\t' ? CH_TAB : CH_OTHER;
 		if (1<<ending & ch[act].skip)
 			;
 		else if (1<<ending & ch[act].replace) {
