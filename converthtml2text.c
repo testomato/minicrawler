@@ -298,12 +298,18 @@ int converthtml2text(char *s, int len)
 					struct ElemDesc elem_desc;
 					p_src = consume_elem(p_src, end, &elem_desc);
 					if (elem_desc.begin) {
-						if (1<<elem_desc.id & ELEMS_NEWLINE)
-							put_char('\n');
-						if (1<<elem_desc.id & ELEMS_TAB)
+						if (1<<elem_desc.id & ELEMS_NEWLINE) {
+							if (hints & ELEMS_TAB)
+								put_char(' ');
+							else
+								put_char('\n');
+						}
+						if (1<<elem_desc.id & ELEMS_TAB) {
 							put_char('\t');
-						if (1<<elem_desc.id & ELEMS_SPACE)
+						}
+						if (1<<elem_desc.id & ELEMS_SPACE) {
 							put_char(' ');
+						}
 					}
 					if (elem_desc.begin != elem_desc.end)
 						hints = elem_desc.begin ? hints | 1<<elem_desc.id : hints & ~(1<<elem_desc.id);
