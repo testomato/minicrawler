@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "h/global.h"
 #include "h/struct.h"
@@ -205,8 +206,8 @@ static int eatchunked(struct surl *u,int first)
 		if(i<9) hex[i++]=u->buf[t];
 		}
 	if(t>=u->bufp) {debugf("[%d] Incorrectly ended chunksize!",u->index);return -1;}
-	if(u->buf[t]=='\r') t++;
-	if(u->buf[t]=='\n') t++;
+	if(t < u->bufp && u->buf[t]=='\r') t++;
+	if(t < u->bufp && u->buf[t]=='\n') t++;
 
 	if(i==0) debugf("[%d] Warning: empty string for chunksize\n",u->index);		
 	hex[i]=0;
@@ -216,6 +217,7 @@ static int eatchunked(struct surl *u,int first)
 
 	movestart=u->nextchunkedpos;
 	if(!first&&movestart!=u->headlen) {/*debugf("eating %d %d at %d\n",u->buf[movestart-2],u->buf[movestart-1],movestart);*/movestart-=2;} // ten headlen je kvuli adventura.cz - moooc divne
+	assert(t <= u->bufp);
 	memmove(u->buf+movestart,u->buf+t,u->bufp-t);		// cely zbytek posun
 	u->bufp-=(t-movestart);					// ukazatel taky
 	
