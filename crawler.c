@@ -141,8 +141,8 @@ static void sendhttpget(struct surl *u)
 	// vytvoří si to řetězec cookies a volitelných parametrů
 	cookiestring[0]=0;
 	for(t=0;t<u->cookiecnt;t++) {
-		if(t==0) sprintf(cookiestring,"Cookie: %s=%s",u->cookies[t][0],u->cookies[t][1]);
-		else sprintf(cookiestring+strlen(cookiestring),"; %s=%s",u->cookies[t][0],u->cookies[t][1]);
+		if(t==0) sprintf(cookiestring,"Cookie: %s=%s",u->cookies[t].name,u->cookies[t].value);
+		else sprintf(cookiestring+strlen(cookiestring),"; %s=%s",u->cookies[t].name,u->cookies[t].value);
 	}
 	if(settings.customheader) {
 		sprintf(customheader,"%s\r\n",settings.customheader);
@@ -178,17 +178,25 @@ static void strcpy_term(char *to, char *from)
 	*to=0;
 }
 
+#if 0
 /** strcpy, které se ukončí i konkrétním znakem
  * vrátí délku řetězce (bez ukončovacího znaku)
  */
-static int strcpy_endchar(char *to, char *from, char endchar)
+static int strcpy_endchar(char *to, char *from, const int endchar)
 {
-	int len=0;
-	for(;*from&&*from!=endchar;len++)
-		*to++ = *from++;
-	*to=0;
+	int len = 0;
+	for(; *from && *from != endchar; len++) {
+		if (to) {
+			*to++ = *from;
+		}
+		++from;
+        }
+	if (to) {
+		*to = 0;
+	}
 	return len;
 }
+#endif
 
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
@@ -233,25 +241,30 @@ static int eatchunked(struct surl *u,int first)
  */
 static void setcookie(struct surl *u,char *str)
 {
-	char name[256];
-	char value[256];
-	int t;
+        const int name_len = strchrnul(str, '=') - str; //strcpy_endchar(NULL, str, '=');
+        const int value_len = str[name_len] ? strchrnul(&str[name_len + 1], ';') - &str[name_len + 1] : 0; //strcpy_endchar(NULL, str + name_len + 1, ';');
+	char name[name_len + 1];
+	char value[value_len + 1];
+	*(char*)mempcpy(name, str, name_len) = 0;
+	*(char*)mempcpy(value, &str[name_len + 1], value_len) = 0;
 
-	t=strcpy_endchar(name,str,'=');	
-	strcpy_endchar(value,str+t+1,';');
-	
-	
-	for(t=0;t<u->cookiecnt;t++) if(!strcmp(name,u->cookies[t][0])) break;
-	
+	int t;
+	for(t=0;t<u->cookiecnt;t++) if(!strcmp(name,u->cookies[t].name)) break;
+
 	if(t<u->cookiecnt) { // už tam byla
-		if(!strcmp(u->cookies[t][1],value)) {debugf("[%d] Received same cookie #%d: '%s' = '%s'\n",u->index,t,name,value);}
+		if(!strcmp(u->cookies[t].value,value)) {debugf("[%d] Received same cookie #%d: '%s' = '%s'\n",u->index,t,name,value);}
 		else {
-			strcpy(u->cookies[t][1],value);
+			strcpy(u->cookies[t].value,value);
 			debugf("[%d] Changed cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
 		}
-	} else { // nová
-		strcpy(u->cookies[t][0],name);
-		strcpy(u->cookies[t][1],value);
+	} else if (u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies)) { // nová
+/*                assert(u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies));
+                assert(name_len < sizeof(u->cookies[t][0]) - 1);
+                assert(value_len < sizeof(u->cookies[t][1]) - 1);*/
+		u->cookies[t].name = malloc(name_len + 1);
+		u->cookies[t].value = malloc(value_len + 1);
+		*(char*)mempcpy(u->cookies[t].name, name, name_len) = 0;
+		*(char*)mempcpy(u->cookies[t].value, value, value_len) = 0;
 		u->cookiecnt++;
 		debugf("[%d] Added new cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
 	}

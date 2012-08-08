@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 	
 	signal(SIGUSR1,sighandler);
 	signal(SIGPIPE,sighandler);
-	signal(SIGSEGV,sighandler);
+//	signal(SIGSEGV,sighandler);
 
 	settings.timeout=5;
 	settings.delay=100;
