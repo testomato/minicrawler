@@ -1,5 +1,9 @@
 
 
+struct nv {
+    char *name, *value;
+};
+
 struct surl {
 	int index;
 	char rawurl[1024];
@@ -14,7 +18,7 @@ struct surl {
 	char redirectedto[1024];	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos;
-	char cookies[20][2][256];	// nekolik cookie, kazda ma name ([0]) a value ([1])
+	struct nv cookies[20];	// nekolik cookie, kazda ma name ([0]) a value ([1])
 	int cookiecnt;
 	char customparam[256];		// parametr do custom headeru
 	char charset[32];
