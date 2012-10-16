@@ -22,15 +22,15 @@ static long long get_uptime(void)
 static long long get_uptime(void)
 {
 	static const char file_name[] = "/proc/uptime";
-	float fuptime;
+	double duptime;
 	FILE *f = fopen(file_name, "r");
 	if (!f)
 		return 0ULL;
-	const int ret = fscanf(f, "%f", &fuptime);
+	const int ret = fscanf(f, "%lf", &duptime);
         fclose(f);
         if (ret != 1)
 		return 0ULL;
-	return (long long)(fuptime * 1000.0);
+	return (long long)(duptime * 1000.0);
 }
 #endif
 
