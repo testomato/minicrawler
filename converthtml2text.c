@@ -464,7 +464,7 @@ char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_le
 				return tag.encoding;
 			}
 		}
-		else if (str_equiv_right("meta", tag.name, tag.name_len)) {
+		else if (str_equiv_right_nocase("meta", tag.name, tag.name_len)) {
 			if (tag.encoding) {
 				*charset_len = tag.encoding_len;
 				return tag.encoding;
