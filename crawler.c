@@ -341,13 +341,15 @@ static void output(struct surl *u)
 			*(char*)mempcpy(u->charset, charset, charset_len) = 0;
 		}
 	}
+	if (!*u->charset) {
+		strcpy(u->charset, "unknown");
+	}
 	if(settings.convert) {
 		u->bufp=converthtml2text(u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
 	if (*u->charset && settings.convert_to_utf) {
 		conv_charset(u);
 	}
-
 	sprintf(header,"URL: %s\n",u->rawurl);
 	if(u->redirectedto[0]) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);

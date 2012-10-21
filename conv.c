@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <errno.h>
 
 #include "h/global.h"
@@ -11,7 +12,9 @@
 
 static int convertor(struct surl *u, char *dst, const size_t dst_size)
 {
-	const iconv_t desc = iconv_open("utf-8", u->charset);
+	const char *from_charset = !strcasecmp(u->charset, "unknown") ? "utf-8" : u->charset;
+
+	const iconv_t desc = iconv_open("utf-8//IGNORE", from_charset);
 	if (desc == (iconv_t)-1)
 		return 1;  // FIXME: Some log?
 	char *dst_end = dst, *src_end = &u->buf[u->headlen];
@@ -33,8 +36,7 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
 
 void conv_charset(struct surl *u)
 {
-	if (!*u->charset || !strcasecmp(u->charset, "utf8") || !strcasecmp(u->charset, "utf-8"))
-		return;
+	assert(u->charset && *u->charset);
 	const size_t dst_size = BUFSIZE - u->headlen;
 	char *dst = malloc(dst_size);
 	if (!dst || convertor(u, dst, dst_size)) {
