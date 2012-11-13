@@ -133,10 +133,17 @@ static char *str_replace( const char *string, const char *substr, const char *re
 static void sendhttpget(struct surl *u)
 {
 	char buf[1024];
+	char agent[256];
 	int t;
 	char cookiestring[4096];
 	char customheader[4096];
 	char *p;
+
+        if (*settings.customagent) {
+            strcpy(agent, settings.customagent);
+        } else {
+            strcpy(agent, "minicrawler/1");
+        }
 
 	// vytvoří si to řetězec cookies a volitelných parametrů
 	cookiestring[0]=0;
@@ -153,12 +160,10 @@ static void sendhttpget(struct surl *u)
 	if(t) sprintf(cookiestring+strlen(cookiestring),"\r\n");
 	
 	if(!u->post[0]) {// GET
-		sprintf(buf,"GET %s HTTP/1.1\r\nUser-Agent: minicrawler/1\r\nHost: %s\r\n%s\r\n",u->path,u->host,cookiestring);
-		//debugf("GET %s HTTP/1.1\r\nUser-Agent: minicrawler/1\r\nHost: %s\r\n",u->path,u->host);
-		//debugf("%s\r\n",cookiestring);
+		sprintf(buf,"GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n",u->path,agent,u->host,cookiestring);
 	} else { // POST
-		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: minicrawler/1\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n",
-			u->path,u->host,(int)strlen(u->post),u->post,cookiestring);
+		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n",
+			u->path,u->host,agent,(int)strlen(u->post),u->post,cookiestring);
 	}
 	 
 	//debugf(buf);

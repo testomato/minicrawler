@@ -54,5 +54,6 @@ struct ssettings {
 	int convert;		// 1 pokud se má konvertovat do textu
 	int convert_to_utf;     // 1 pokud se ma konvertovat do utf8
 	int delay;		// zpozdeni pri stahovani ze stejne ip, default je 100ms
+	char customagent[256];
 	char customheader[4096];
 };

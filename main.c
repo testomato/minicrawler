@@ -49,7 +49,7 @@ void initurls(int argc, char *argv[])
 		if(!strncmp(argv[t],"-t",2)) {settings.timeout=atoi(argv[t]+2);continue;}
 		if(!strncmp(argv[t],"-D",2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
 		if(!strncmp(argv[t],"-w",2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
-
+		if(!strncmp(argv[t],"-A",2)) {sprintf(settings.customagent,"%.*s",sizeof(settings.customagent)-1, argv[t+1]);t++;debugf("Custom agent: %s\n",settings.customagent);continue;}
 		if(!strcmp(argv[t],"-P")) {strcpy(url[i].post,argv[t+1]);t++;debugf("[%d] POST: %s\n",i,url[i].post);continue;}
 		if(!strncmp(argv[t],"-C",2)) {strcpy(url[i].customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,url[i].customparam);continue;}
 		
@@ -86,6 +86,7 @@ void printusage()
 	         "         -h         enables output of headers\n"
 	         "         -i         enables impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress\n"
 	         "         -p         outputs also partially downloaded urls\n"
+	         "         -A STRING  custom user agent\n"
 	         "         -w STRING  write this custom header to all requests\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
 	         "         -c         convert to text format\n"
