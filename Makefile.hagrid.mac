@@ -3,7 +3,15 @@ objs=$(patsubst %.c,o/%.o,$(wildcard *.c))
 name=minicrawler
 
 $(name): $(objs)
-	gcc -g -o $(name) $(objs) -L/Users/danfiala/opt/lib -lcares -liconv
+	gcc -g -o $(name) $(objs) -L$(HOME)/opt/lib -lcares -liconv
 
-$(objs): o/%.o: %.c h/struct.h h/proto.h h/global.h h/version.h
-	gcc -g -c -std=gnu99 -fnested-functions -I/Users/danfiala/opt/include -o $@ $<
+.odir.stamp:
+	mkdir -p o
+	touch .odir.stamp
+
+$(objs): o/%.o: %.c .odir.stamp h/struct.h h/proto.h h/global.h h/version.h
+	gcc -g -c -std=gnu99 -fnested-functions -I$(HOME)/opt/include -o $@ $<
+
+clean:
+	rm -f $(objs)
+	rm -f .odir.stamp

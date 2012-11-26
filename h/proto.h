@@ -14,7 +14,9 @@ char *consume_entity(char *s, const char *end, int *code);
 char *put_code(char *dst, const unsigned dst_len, const int code);
 
 #ifdef __APPLE__
+
 #include <stddef.h>
+
 static inline void *mempcpy(void *dest, const void *src, size_t n)
 {
 	if (!n)
@@ -26,4 +28,14 @@ static inline void *mempcpy(void *dest, const void *src, size_t n)
 	} while (--n);
 	return d;
 }
+
+static inline const char *strchrnul(const char *s, int c)
+{
+	for (;; ++s) {
+		if (0 == c || c == *s) {
+			return s;
+		}
+	}
+}
+
 #endif
