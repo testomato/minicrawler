@@ -15,7 +15,7 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
 	const char *from_charset = !strcasecmp(u->charset, "unknown") ? "utf-8" : u->charset;
 
         char unibuf[(u->bufp - u->headlen)*4]; // FIXME: Really *4 ?
-        const iconv_t uni_desc = iconv_open("UNICODE//IGNORE", from_charset);
+        const iconv_t uni_desc = iconv_open("UCS4//IGNORE", from_charset);
         if (uni_desc == (iconv_t)-1)
             return 1;  // FIXME: Some log?
         char *uni_dst = unibuf;
@@ -32,7 +32,7 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
 	const int uni_close_ret = iconv_close(uni_desc);
 	if (uni_close_ret == -1)
 		return 1;  // FIXME: Some log?
-	const iconv_t desc = iconv_open("utf-8", "UNICODE");
+	const iconv_t desc = iconv_open("utf-8//IGNORE", "UCS4");
 	if (desc == (iconv_t)-1)
 		return 1;  // FIXME: Some log?
 	char *dst_end = dst, *uni_src = unibuf;
@@ -41,6 +41,8 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
 		const size_t iconv_ret = iconv(desc, &uni_src, &uni_src_left, &dst_end, &dst_left);
 		if (!dst_left || !uni_src_left || iconv_ret != (size_t)-1)
 			break;
+//		uni_src+=4;
+//		uni_src_left-=4;
 		++uni_src;
 		--uni_src_left;
 	}
