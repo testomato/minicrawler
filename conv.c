@@ -14,17 +14,35 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
 {
 	const char *from_charset = !strcasecmp(u->charset, "unknown") ? "utf-8" : u->charset;
 
-	const iconv_t desc = iconv_open("utf-8//IGNORE", from_charset);
-	if (desc == (iconv_t)-1)
-		return 1;  // FIXME: Some log?
-	char *dst_end = dst, *src_end = &u->buf[u->headlen];
-	size_t dst_left = dst_size, src_left = u->bufp - u->headlen;
+        char unibuf[(u->bufp - u->headlen)*4]; // FIXME: Really *4 ?
+        const iconv_t uni_desc = iconv_open("UNICODE//IGNORE", from_charset);
+        if (uni_desc == (iconv_t)-1)
+            return 1;  // FIXME: Some log?
+        char *uni_dst = unibuf;
+        size_t uni_dst_left = sizeof(unibuf);
+	char *src_end = &u->buf[u->headlen];
+	size_t src_left = u->bufp - u->headlen;
 	for (;;) {
-		const size_t iconv_ret = iconv(desc, &src_end, &src_left, &dst_end, &dst_left);
-		if (!dst_left || !src_left || iconv_ret != (size_t)-1)
+		const size_t iconv_ret = iconv(uni_desc, &src_end, &src_left, &uni_dst, &uni_dst_left);
+		if (!uni_dst_left || !src_left || iconv_ret != (size_t)-1)
 			break;
 		++src_end;
 		--src_left;
+	}
+	const int uni_close_ret = iconv_close(uni_desc);
+	if (uni_close_ret == -1)
+		return 1;  // FIXME: Some log?
+	const iconv_t desc = iconv_open("utf-8", "UNICODE");
+	if (desc == (iconv_t)-1)
+		return 1;  // FIXME: Some log?
+	char *dst_end = dst, *uni_src = unibuf;
+	size_t dst_left = dst_size, uni_src_left = sizeof(unibuf) - uni_dst_left;
+	for (;;) {
+		const size_t iconv_ret = iconv(desc, &uni_src, &uni_src_left, &dst_end, &dst_left);
+		if (!dst_left || !uni_src_left || iconv_ret != (size_t)-1)
+			break;
+		++uni_src;
+		--uni_src_left;
 	}
 	const int close_ret = iconv_close(desc);
 	if (close_ret == -1)
