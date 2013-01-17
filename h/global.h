@@ -11,6 +11,7 @@
 #define S_CONNECTED	5
 #define S_GETREPLY	6
 #define S_READYREPLY	7
+#define S_INTERNAL_ERROR	8
 #define S_DONE		10
 #define S_ERROR		20
 

@@ -8,6 +8,7 @@ struct surl {
 	int index;
 	char rawurl[1024];
  
+	char proto[32];
 	char host[256];
 	int port;
 	char path[1024];
@@ -40,6 +41,7 @@ struct surl {
 	int headlen;
 	int contentlen;
 	int status;		// http navratovy kod
+	char error_msg[256];
 
 	// errno
  	int conv_errno;		// set in case of wrong conversion

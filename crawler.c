@@ -42,7 +42,7 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	u->prev_ip = u->ip;
 	u->ip=*(int *)ip;
 	
-	debugf("[%d] Resolving %s ended => %d.%d.%d.%d\n",u->index,u->host,ip[0],ip[1],ip[2],ip[3]);
+	debugf("[%d] Resolving %s ended => %d.%d.%d.%d\n", u->index, u->host, ip[0], ip[1], ip[2], ip[3]);
 	debugf("[%d] raw url => %s\n", u->index, u->rawurl);
 
 	set_atomic_int(&u->state, S_GOTIP);
@@ -53,11 +53,17 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
  */
 static void launchdns(struct surl *u)
 {
+	if (strcmp(u->proto, "http")) {
+		debugf("Unsupported protocol: [%s]\n", u->proto);
+		u->status = 999;
+		sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
+		set_atomic_int(&u->state, S_INTERNAL_ERROR);
+		return;
+	}
 	int t;
-	
+
 	debugf("[%d] Resolving %s starts\n",u->index,u->host);
-	
-	t=ares_init(&(u->aresch));
+	t = ares_init(&(u->aresch));
 	if(t) {debugf("ares_init failed\n");exit(-1);}
 
 	set_atomic_int(&u->state, S_INDNS);
@@ -91,11 +97,11 @@ static void opensocket(struct surl *u)
 
 	addr.sin_family=AF_INET;
 	addr.sin_port=htons(u->port);
-	memcpy(&(addr.sin_addr),&(u->ip),4);
+	memcpy(&(addr.sin_addr), &(u->ip), 4);
 
-	u->sockfd=socket(AF_INET,SOCK_STREAM,0);
-	flags=fcntl(u->sockfd,F_GETFL,0);              // Get socket flags
-	fcntl(u->sockfd,F_SETFL,flags | O_NONBLOCK);   // Add non-blocking flag	
+	u->sockfd=socket(AF_INET, SOCK_STREAM, 0);
+	flags=fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
+	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
 	
 	t=connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
 	if(t) {
@@ -162,8 +168,7 @@ static void sendhttpget(struct surl *u)
 	if(!u->post[0]) {// GET
 		sprintf(buf,"GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n",u->path,agent,u->host,cookiestring);
 	} else { // POST
-		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n",
-			u->path,u->host,agent,(int)strlen(u->post),u->post,cookiestring);
+		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n", u->path,u->host,agent,(int)strlen(u->post),u->post,cookiestring);
 	}
 	 
 	//debugf(buf);
@@ -182,26 +187,6 @@ static void strcpy_term(char *to, char *from)
 	for(;*from&&*from!='\r'&&*from!='\n';) *to++=*from++;
 	*to=0;
 }
-
-#if 0
-/** strcpy, které se ukončí i konkrétním znakem
- * vrátí délku řetězce (bez ukončovacího znaku)
- */
-static int strcpy_endchar(char *to, char *from, const int endchar)
-{
-	int len = 0;
-	for(; *from && *from != endchar; len++) {
-		if (to) {
-			*to++ = *from;
-		}
-		++from;
-        }
-	if (to) {
-		*to = 0;
-	}
-	return len;
-}
-#endif
 
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
@@ -300,6 +285,7 @@ static void detecthead(struct surl *u)
 {
 	char *p;
 
+fprintf(stderr, "detecthead: host=[%s]; path=[%s]; location=[%s]; redirectedto=[%s]\n", u->host, u->path, u->location, u->redirectedto);
 	u->status=atoi(u->buf+9);
 	u->buf[u->bufp]=0;
 	
@@ -358,6 +344,9 @@ static void output(struct surl *u)
 	sprintf(header,"URL: %s\n",u->rawurl);
 	if(u->redirectedto[0]) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
+	if (u->error_msg) {
+		sprintf(header+strlen(header), "Error-msg: %s\n", u->error_msg);
+	}
 	if (*u->charset)
 		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
 	if (u->conv_errno) {
@@ -393,38 +382,58 @@ static void output(struct surl *u)
  */
 static void resolvelocation(struct surl *u)
 {
+fprintf(stderr, "resolvelocation: location=[%s]\n", u->location);
+        char lproto[32]="http";
 	char lhost[256];
 	char lpath[256]="/";
 
-	debugf("[%d] Resolve location='%s'\n",u->index,u->location);
+	debugf("[%d] Resolve location='%s'\n",u->index, u->location);
 
-	if(!strncmp(u->location,"http://",7)) sscanf(u->location, "http://%[^/]/%s", lhost, lpath+1);
-	else if(u->location[0]=='/') {strcpy(lhost,u->host);strcpy(lpath,u->location);} // relativni adresy (i kdyz by podle RFC nemely byt)
-	else {debugf("[%d] Weird location format, assuming filename in root\n",u->index);strcpy(lhost,u->host);lpath[0]='/';strcpy(lpath+1,u->location);}
+	if(2 <= sscanf(u->location, "%[^:]://%[^/]/%s", lproto, lhost, lpath+1)) {
+ 	} else if(u->location[0] == '/') {
+		strcpy(lhost, u->host);
+		strcpy(lpath, u->location);
+		// relativni adresy (i kdyz by podle RFC nemely byt)
+	} else {
+		debugf("[%d] Weird location format, assuming filename in root\n", u->index);
+		strcpy(lhost, u->host);
+		lpath[0]='/';
+		strcpy(lpath+1, u->location);
+	}
 	
-	debugf("[%d] Lhost='%s' Lpath='%s'\n",u->index,lhost,lpath);
+	debugf("[%d] Lproto = '%s' Lhost='%s' Lpath='%s'\n",u->index,lproto,lhost,lpath);
 
-	if(strcmp(u->host,lhost)) set_atomic_int(&u->state, S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
-	else set_atomic_int(&u->state, S_GOTIP);	// jinak se muzes pripojit na tu puvodni IP
-	
-	strcpy(u->path,lpath);		// bez tam
-	strcpy(u->host,lhost);		// bez tam
-	strcpy(u->redirectedto,u->location);
-	u->location[0]=0;
-	u->post[0]=0;
-	u->headlen=0;
-	u->contentlen=-1;
-	u->bufp=0;
+       	if(strcmp(u->host,lhost)) {
+		set_atomic_int(&u->state, S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
+	}
+	else {
+		set_atomic_int(&u->state, S_GOTIP);	// jinak se muzes pripojit na tu puvodni IP
+	}
+
+	strcpy(u->proto, lproto);
+	strcpy(u->path, lpath);		// bez tam
+	strcpy(u->host, lhost);		// bez tam
+	strcpy(u->redirectedto, u->location);
+	u->location[0] = 0;
+	u->post[0] = 0;
+	u->headlen = 0;
+	u->contentlen = -1;
+	u->bufp = 0;
 }
 
 /** uz mame cely vstup - bud ho vypis nebo vyres presmerovani
  */
 static void finish(struct surl *u)
 {
-	if(u->headlen==0) detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
+	if(u->headlen==0) {
+		detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
+	}
 
-	if(u->location[0]) resolvelocation(u);
-	else output(u);
+	if(u->location[0]) {
+		resolvelocation(u);
+	} else {
+		output(u);
+	}
 }
 
 /** cti odpoved
@@ -446,7 +455,7 @@ static void readreply(struct surl *u)
 		}
 	
 	
-	debugf("[%d] Read %d bytes\n",u->index,t);
+	debugf("[%d] Read %d bytes\n", u->index, t);
 	//buf[60]=0; // wtf?
 	
 	if(t>0&&u->chunked) {
@@ -457,7 +466,7 @@ static void readreply(struct surl *u)
 			}
 		}
 	
-	if(t<=0||(u->contentlen!=-1&&u->bufp>=u->headlen+u->contentlen)) {close(u->sockfd);finish(u);}
+	if(t<=0 || (u->contentlen!=-1 && u->bufp >= u->headlen + u->contentlen)) {close(u->sockfd);finish(u);}
 	else set_atomic_int(&u->state, S_GETREPLY);
 	//debugf("%s",buf);
 	
@@ -541,17 +550,21 @@ static void goone(struct surl *u)
 	case S_GETREPLY:
 		// nic, z tohohle stavu mne dostane select
 		break;
-  
 
 	case S_READYREPLY:
 		readreply(u);
+		break;
+
+	case S_INTERNAL_ERROR:
+		output(u);
 		break;
 	}
 
 	if (settings.debug) {	
 		const int duration = get_time_int() - tim;
-		if(duration > 200)
-			debugf("[%d] State %d (->%d) took too long (%d ms)\n",u->index,state,get_atomic_int(&u->state), duration);
+		if(duration > 200) {
+			debugf("[%d] State %d (->%d) took too long (%d ms)\n", u->index, state, get_atomic_int(&u->state), duration);
+		}
 	}
 }
 
