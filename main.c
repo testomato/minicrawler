@@ -18,13 +18,20 @@ struct ssettings settings;
  */
 void simpleparseurl(struct surl *u)
 {
-	u->port=0;
-	u->proto[0]=0;
-	u->path[0]='/';
+	u->port = 0;
+	u->proto[0] = 0;
+	u->path[0] = '/';
 
 	sscanf(u->rawurl, "%31[^:]://%99[^:]:%99d%99[^\n]", u->proto, u->host, &(u->port), u->path);
 
-	if(u->port==0) {sscanf(u->rawurl, "%31[^:]://%[^/]/%s", u->proto, u->host, u->path+1);u->port=80;}
+	if(u->port == 0) {
+		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
+		char buf[256];
+		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host), I_LENGTHOF(u->path) - 1);
+		// FIXME: sscanf may not be succesfull
+		const int ret = sscanf(u->rawurl, buf, u->proto, u->host, u->path + 1);
+		u->port = 80;
+	}
 
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 }
@@ -47,7 +54,7 @@ void initurls(int argc, char *argv[])
 		if(!strncmp(argv[t],"-t",2)) {settings.timeout=atoi(argv[t]+2);continue;}
 		if(!strncmp(argv[t],"-D",2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
 		if(!strncmp(argv[t],"-w",2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
-		if(!strncmp(argv[t],"-A",2)) {sprintf(settings.customagent,"%.*s",(int)sizeof(settings.customagent)-1, argv[t+1]);t++;debugf("Custom agent: %s\n",settings.customagent);continue;}
+		if(!strncmp(argv[t],"-A",2)) {sprintf(settings.customagent,"%.*s", I_LENGTHOF(settings.customagent), argv[t+1]); t++; debugf("Custom agent: %s\n",settings.customagent); continue;}
 		if(!strcmp(argv[t],"-P")) {strcpy(url[i].post,argv[t+1]);t++;debugf("[%d] POST: %s\n",i,url[i].post);continue;}
 		if(!strncmp(argv[t],"-C",2)) {strcpy(url[i].customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,url[i].customparam);continue;}
 		

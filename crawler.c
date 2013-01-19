@@ -285,7 +285,6 @@ static void detecthead(struct surl *u)
 {
 	char *p;
 
-fprintf(stderr, "detecthead: host=[%s]; path=[%s]; location=[%s]; redirectedto=[%s]\n", u->host, u->path, u->location, u->redirectedto);
 	u->status=atoi(u->buf+9);
 	u->buf[u->bufp]=0;
 	
@@ -343,6 +342,9 @@ static void output(struct surl *u)
 	}
 	sprintf(header,"URL: %s\n",u->rawurl);
 	if(u->redirectedto[0]) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
+	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
+		sprintf(header+strlen(header), "Redirect-info: %s %d\n", rinfo->url, rinfo->status);
+	}
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
 	if (u->error_msg) {
 		sprintf(header+strlen(header), "Error-msg: %s\n", u->error_msg);
@@ -382,14 +384,18 @@ static void output(struct surl *u)
  */
 static void resolvelocation(struct surl *u)
 {
-fprintf(stderr, "resolvelocation: location=[%s]\n", u->location);
-        char lproto[32]="http";
-	char lhost[256];
-	char lpath[256]="/";
+	char lproto[ sizeof(u->proto) ] = "http";
+	char lhost[ sizeof(u->host) ];
+	char lpath[ sizeof(u->path) ] = "/";
 
 	debugf("[%d] Resolve location='%s'\n",u->index, u->location);
 
-	if(2 <= sscanf(u->location, "%[^:]://%[^/]/%s", lproto, lhost, lpath+1)) {
+	// FIXME: simpleparseurl(...) should be used here
+	const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
+	char buf[256];
+	sprintf(buf, fmt, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath) - 1);
+
+	if(2 <= sscanf(u->location, buf, lproto, lhost, lpath + 1)) {
  	} else if(u->location[0] == '/') {
 		strcpy(lhost, u->host);
 		strcpy(lpath, u->location);
@@ -409,6 +415,13 @@ fprintf(stderr, "resolvelocation: location=[%s]\n", u->location);
 	else {
 		set_atomic_int(&u->state, S_GOTIP);	// jinak se muzes pripojit na tu puvodni IP
 	}
+
+	struct redirect_info *rinfo = malloc(sizeof(*rinfo));
+	bzero(rinfo, sizeof(*rinfo));
+	strcpy(rinfo->url, u->location);
+	rinfo->status = u->status;
+	rinfo->next = u->redirect_info;
+	u->redirect_info = rinfo;
 
 	strcpy(u->proto, lproto);
 	strcpy(u->path, lpath);		// bez tam
@@ -445,14 +458,20 @@ static void readreply(struct surl *u)
 	int left;
 
 	left=BUFSIZE-u->bufp;
-	if(left<=0) return;
-	if(left>4096) left=4096;
+	if(left<=0) {
+		return;
+	}
+	if(left>4096) {
+		left=4096;
+	}
+
 	t=read(u->sockfd,u->buf+u->bufp,left);
+
 	if(t>0) {
 		u->bufp+=t;
 		u->lastread=get_time_int();
 		if(u->headlen==0) detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
-		}
+	}
 	
 	
 	debugf("[%d] Read %d bytes\n", u->index, t);
@@ -463,11 +482,15 @@ static void readreply(struct surl *u)
 		while(u->bufp>u->nextchunkedpos) {
 			i=eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
 			if(i==-1) break;
-			}
 		}
+	}
 	
-	if(t<=0 || (u->contentlen!=-1 && u->bufp >= u->headlen + u->contentlen)) {close(u->sockfd);finish(u);}
-	else set_atomic_int(&u->state, S_GETREPLY);
+	if(t<=0 || (u->contentlen!=-1 && u->bufp >= u->headlen + u->contentlen)) {
+		close(u->sockfd);
+		finish(u);
+	} else {
+		set_atomic_int(&u->state, S_GETREPLY);
+	}
 	//debugf("%s",buf);
 	
 }

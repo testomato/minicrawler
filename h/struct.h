@@ -4,6 +4,12 @@ struct nv {
     char *name, *value;
 };
 
+struct redirect_info {
+	char url[1024];
+	int status;
+	struct redirect_info *next;
+};
+
 struct surl {
 	int index;
 	char rawurl[1024];
@@ -23,6 +29,8 @@ struct surl {
 	int cookiecnt;
 	char customparam[256];		// parametr do custom headeru
 	char charset[32];
+
+	struct redirect_info *redirect_info;
  
 	int state;
 	int lastread;		// cas posledniho uspesneho cteni
