@@ -49,17 +49,26 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 }
 
 
-/** spusti preklad pres ares
- */
-static void launchdns(struct surl *u)
+static int check_proto(struct surl *u)
 {
-	if (strcmp(u->proto, "http")) {
+	if (0 != strcmp(u->proto, "http")) {
 		debugf("Unsupported protocol: [%s]\n", u->proto);
 		u->status = 999;
 		sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
 		set_atomic_int(&u->state, S_INTERNAL_ERROR);
+		return -1;
+	}
+	return 80;
+}
+
+/** spusti preklad pres ares
+ */
+static void launchdns(struct surl *u)
+{
+	if (check_proto(u) == -1) {
 		return;
 	}
+
 	int t;
 
 	debugf("[%d] Resolving %s starts\n",u->index,u->host);
@@ -346,7 +355,7 @@ static void output(struct surl *u)
 		sprintf(header+strlen(header), "Redirect-info: %s %d\n", rinfo->url, rinfo->status);
 	}
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
-	if (u->error_msg) {
+	if (*u->error_msg) {
 		sprintf(header+strlen(header), "Error-msg: %s\n", u->error_msg);
 	}
 	if (*u->charset)
@@ -403,13 +412,13 @@ static void resolvelocation(struct surl *u)
 	} else {
 		debugf("[%d] Weird location format, assuming filename in root\n", u->index);
 		strcpy(lhost, u->host);
-		lpath[0]='/';
+		lpath[0] = '/';
 		strcpy(lpath+1, u->location);
 	}
 	
-	debugf("[%d] Lproto = '%s' Lhost='%s' Lpath='%s'\n",u->index,lproto,lhost,lpath);
+	debugf("[%d] Lproto = '%s' Lhost='%s' Lpath='%s'\n", u->index, lproto, lhost, lpath);
 
-       	if(strcmp(u->host,lhost)) {
+       	if (strcmp(u->host,lhost)) {
 		set_atomic_int(&u->state, S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
 	}
 	else {
@@ -432,6 +441,10 @@ static void resolvelocation(struct surl *u)
 	u->headlen = 0;
 	u->contentlen = -1;
 	u->bufp = 0;
+
+	if (check_proto(u) == -1) {
+		return;
+	}
 }
 
 /** uz mame cely vstup - bud ho vypis nebo vyres presmerovani
