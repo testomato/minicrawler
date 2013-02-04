@@ -311,7 +311,7 @@ static void detecthead(struct surl *u)
 	p=(char*)memmem(u->buf,u->headlen,"Content-Length: ",16);
 	if(p!=NULL) u->contentlen=atoi(p+16);
 	
-	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11);
+	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11); // FIXME: handle http headers case-insensitive!!
 	if(p!=NULL) {strcpy_term(u->location,p+11);debugf("[%d] Location='%s'\n",u->index,u->location);}
 	
 	p=(char*)memmem(u->buf,u->headlen,"\nSet-Cookie: ",13);
@@ -358,8 +358,9 @@ static void output(struct surl *u)
 	if (*u->error_msg) {
 		sprintf(header+strlen(header), "Error-msg: %s\n", u->error_msg);
 	}
-	if (*u->charset)
+	if (*u->charset) {
 		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
+	}
 	if (u->conv_errno) {
 		char err_buf[128];
 #		ifdef __APPLE__
@@ -393,6 +394,43 @@ static void output(struct surl *u)
 	debugf("[%d] Done.\n",u->index);
 }
 
+
+static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lhost, char *lpath_plus1, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size)
+{
+	const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
+	char buf[256];
+	sprintf(buf, fmt, i_lproto_size, i_lhost_size, i_lpath_size);
+
+	switch (sscanf(u->location, buf, lproto, lhost, lpath_plus1)) {
+		case 2:
+			strcpy(lpath_plus1, "/");
+		case 3:
+			return 1;
+		default:
+			return 0;
+	}
+}
+
+
+static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhost, char *lpath_plus1, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size)
+{
+	const char fmt[] = "%%%d[^/]/%%%ds";
+	char buf[256];
+	sprintf(buf, fmt, i_lhost_size, i_lpath_size);
+
+	switch ( sscanf(u->location, buf, lhost, lpath_plus1)) {
+		case 1:
+			strcpy(lpath_plus1, "/");
+		case 2:
+			strcpy(lproto, u->proto);
+			return 1;
+		default:
+			return 0;
+	}
+}
+
+
+
 /** vyres presmerovani
  */
 static void resolvelocation(struct surl *u)
@@ -410,6 +448,7 @@ static void resolvelocation(struct surl *u)
 
 	if(2 <= sscanf(u->location, buf, lproto, lhost, lpath + 1)) {
  	} else if(u->location[0] == '/') {
+		strcpy(lproto, u->proto);
 		strcpy(lhost, u->host);
 		strcpy(lpath, u->location);
 		// relativni adresy (i kdyz by podle RFC nemely byt)
