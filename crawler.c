@@ -395,15 +395,16 @@ static void output(struct surl *u)
 }
 
 
-static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lhost, char *lpath_plus1, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size)
+static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size)
 {
+	assert(0 == strcmp(lpath, "/"));
+
 	const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
 	char buf[256];
-	sprintf(buf, fmt, i_lproto_size, i_lhost_size, i_lpath_size);
+	sprintf(buf, fmt, i_lproto_size, i_lhost_size, i_lpath_size - 1);
 
-	switch (sscanf(u->location, buf, lproto, lhost, lpath_plus1)) {
+	switch (sscanf(u->location, buf, lproto, lhost, &lpath[1])) {
 		case 2:
-			strcpy(lpath_plus1, "/");
 		case 3:
 			return 1;
 		default:
@@ -412,15 +413,16 @@ static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lh
 }
 
 
-static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhost, char *lpath_plus1, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size)
+static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size)
 {
+	assert(0 == strcmp(lpath, "/"));
+
 	const char fmt[] = "%%%d[^/]/%%%ds";
 	char buf[256];
-	sprintf(buf, fmt, i_lhost_size, i_lpath_size);
+	sprintf(buf, fmt, i_lhost_size, i_lpath_size - 1);
 
-	switch ( sscanf(u->location, buf, lhost, lpath_plus1)) {
+	switch ( sscanf(u->location, buf, lhost, &lpath[1])) {
 		case 1:
-			strcpy(lpath_plus1, "/");
 		case 2:
 			strcpy(lproto, u->proto);
 			return 1;
@@ -446,7 +448,9 @@ static void resolvelocation(struct surl *u)
 	char buf[256];
 	sprintf(buf, fmt, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath) - 1);
 
-	if(2 <= sscanf(u->location, buf, lproto, lhost, lpath + 1)) {
+//	if(2 <= sscanf(u->location, buf, lproto, lhost, lpath + 1)) {
+	if (resolvelocation_url_with_proto(u, lproto, lhost, lpath, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath))) {
+//	} else if (resolvelocation_url_no_proto(u, lproto, lhost, lpath, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath))) {
  	} else if(u->location[0] == '/') {
 		strcpy(lproto, u->proto);
 		strcpy(lhost, u->host);
@@ -454,8 +458,9 @@ static void resolvelocation(struct surl *u)
 		// relativni adresy (i kdyz by podle RFC nemely byt)
 	} else {
 		debugf("[%d] Weird location format, assuming filename in root\n", u->index);
+		strcpy(lproto, u->proto);
 		strcpy(lhost, u->host);
-		lpath[0] = '/';
+		strcpy(lpath, "/");
 		strcpy(lpath+1, u->location);
 	}
 	
