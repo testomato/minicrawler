@@ -166,6 +166,9 @@ static void sendhttpget(struct surl *u)
 		if(t==0) sprintf(cookiestring,"Cookie: %s=%s",u->cookies[t].name,u->cookies[t].value);
 		else sprintf(cookiestring+strlen(cookiestring),"; %s=%s",u->cookies[t].name,u->cookies[t].value);
 	}
+	if (strlen(cookiestring)) {
+		sprintf(cookiestring + strlen(cookiestring), "\r\n");
+	}
 	if(settings.customheader) {
 		sprintf(customheader,"%s\r\n",settings.customheader);
 		if(u->customparam[0]) {p=str_replace(customheader,"%",u->customparam);strcpy(customheader,p);}
@@ -179,13 +182,13 @@ static void sendhttpget(struct surl *u)
 	} else { // POST
 		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n", u->path,u->host,agent,(int)strlen(u->post),u->post,cookiestring);
 	}
-	 
+
 	//debugf(buf);
 	
 	t=write(u->sockfd,buf,strlen(buf));
 	if(t<strlen(buf)) {debugf("[%d] Error - written %d bytes, wanted %d bytes\n",u->index,t,(int)strlen(buf));}
 	else debugf("[%d] Written %d bytes\n",u->index,t);
-	
+
 	set_atomic_int(&u->state, S_GETREPLY);
 }
 
@@ -310,6 +313,7 @@ static void detecthead(struct surl *u)
 	
 	p=(char*)memmem(u->buf,u->headlen,"Content-Length: ",16);
 	if(p!=NULL) u->contentlen=atoi(p+16);
+	debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
 	
 	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11); // FIXME: handle http headers case-insensitive!!
 	if(p!=NULL) {strcpy_term(u->location,p+11);debugf("[%d] Location='%s'\n",u->index,u->location);}
@@ -317,7 +321,7 @@ static void detecthead(struct surl *u)
 	p=(char*)memmem(u->buf,u->headlen,"\nSet-Cookie: ",13);
 	if(p!=NULL) {setcookie(u,p+13);}
 	
-	p=(char*)memmem(u->buf,u->headlen,"Transfer-Encoding: chunked",26);
+	p=(char*)memmem(u->buf,u->headlen,"Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26);
 	if(p!=NULL) {u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);}
 
 	find_content_type(u);
@@ -535,18 +539,18 @@ static void readreply(struct surl *u)
 	}
 	
 	
-	debugf("[%d] Read %d bytes\n", u->index, t);
+	debugf("[%d] Read %d bytes; chunked=%d\n", u->index, t, !!u->chunked);
 	//buf[60]=0; // wtf?
 	
-	if(t>0&&u->chunked) {
+	if(t>0 && u->chunked) {
 		//debugf("debug: bufp=%d nextchunkedpos=%d",u->bufp,u->nextchunkedpos);
-		while(u->bufp>u->nextchunkedpos) {
-			i=eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
-			if(i==-1) break;
+		while(u->bufp > u->nextchunkedpos) {
+			i = eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
+			if(i == -1) break;
 		}
 	}
 	
-	if(t<=0 || (u->contentlen!=-1 && u->bufp >= u->headlen + u->contentlen)) {
+	if(t <= 0 || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
 		close(u->sockfd);
 		finish(u);
 	} else {
@@ -569,32 +573,33 @@ static void selectall(void)
 	
 	FD_ZERO (&set);
 	FD_ZERO (&writeset);
+	
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 20000;	
 	
-	for(t=0;url[t].rawurl[0];t++) {
+	for(t=0; url[t].rawurl[0]; t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(url_state==S_GETREPLY) {
-			//debugf("[%d] into read select...\n",t);
+		if(url_state == S_GETREPLY) {
+//			debugf("Adding %d into read select...\n", url[t].sockfd);
 			FD_SET (url[t].sockfd, &set);
 		}
 		
-		if(url_state==S_CONNECTING) {
-			//debugf("[%d] into read write select...\n",t);
+		if(url_state == S_CONNECTING) {
+//			debugf("Adding %d into write select...\n", url[t].sockfd);
 			FD_SET (url[t].sockfd, &writeset);
 		}
 	}
 	
-	t=select(FD_SETSIZE, &set, &writeset, NULL, &timeout);
+	t = select(FD_SETSIZE, &set, &writeset, NULL, &timeout);
 	if(!t) {
 		return; // nic
 	}
 	for(t=0;url[t].rawurl[0];t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(FD_ISSET(url[t].sockfd, &set) && url_state==S_GETREPLY) {
+		if(FD_ISSET(url[t].sockfd, &set) && url_state == S_GETREPLY) {
 			set_atomic_int(&url[t].state, S_READYREPLY);
 		}
-		if(FD_ISSET(url[t].sockfd,&writeset) && url_state==S_CONNECTING) {
+		if(FD_ISSET(url[t].sockfd, &writeset) && url_state == S_CONNECTING) {
 			set_atomic_int(&url[t].state, S_CONNECTED);
 		}
 		
