@@ -1,14 +1,14 @@
-#include <iconv.h>
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <errno.h>
+#include <iconv.h>
 
 #include "h/global.h"
 #include "h/struct.h"
 #include "h/proto.h"
+
 
 static int convertor(struct surl *u, char *dst, const size_t dst_size)
 {

@@ -1,4 +1,4 @@
-
+#include <openssl/ssl.h>
 
 struct nv {
     char *name, *value;
@@ -10,7 +10,34 @@ struct redirect_info {
 	struct redirect_info *next;
 };
 
+enum surl_s {
+	SURL_S_JUSTBORN,
+	SURL_S_INDNS,
+	SURL_S_GOTIP,
+	SURL_S_CONNECTING,
+	SURL_S_CONNECTED,
+	SURL_S_GETREPLY,
+	SURL_S_READYREPLY,
+	SURL_S_INTERNAL_ERROR,
+	SURL_S_DONE,
+	SURL_S_ERROR,
+};
+
+enum {
+	SURL_STATES_IO = 1<<SURL_S_CONNECTING | 1<<SURL_S_GETREPLY,
+};
+
+enum surl_rw {
+	SURL_RW_WANT_READ,
+	SURL_RW_WANT_WRITE,
+	SURL_RW_READY_READ,
+	SURL_RW_READY_WRITE,
+};
+
 struct surl {
+//	SURL_STATE rw;
+
+        // ...
 	int index;
 	char rawurl[1024];
  
@@ -53,6 +80,9 @@ struct surl {
 
 	// errno
  	int conv_errno;		// set in case of wrong conversion
+
+	// SSL support
+	SSL *ssl;
 };
 
 struct ssettings {

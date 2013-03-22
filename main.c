@@ -61,7 +61,7 @@ void initurls(int argc, char *argv[])
 		strcpy(url[i].rawurl,argv[t]);
 		url[i].index=i;
 		simpleparseurl(&url[i]);
-		url[i].state=S_JUSTBORN;
+		url[i].state=SURL_S_JUSTBORN;
 		//debugf("[%d] born\n",i);
 		url[i].bufp=0;
 		url[i].contentlen=-1;

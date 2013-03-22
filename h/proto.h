@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <assert.h>
+#include <unistd.h>
 
 extern struct surl url[];
 extern struct ssettings settings;
@@ -22,12 +23,24 @@ static inline int safe_size_to_int(const size_t sz) {
 #define I_SIZEOF(__X) ( safe_size_to_int(sizeof(__X)) )
 #define I_LENGTHOF(__X) ( sizeof(__X) > 0 ? safe_size_to_int(sizeof(__X)) - 1 : 0 )
 
+static inline size_t write_all(const int fd, const char *buf, const size_t len) {
+	size_t written = 0;
+	do {
+		const ssize_t r = write(fd, &buf[written], len - written);
+		if (r <= 0) {
+			return written;
+		}
+		written += (size_t)r;
+	} while(written < len);
+
+	return written;
+}
+
 #ifdef __APPLE__
 
 #include <stddef.h>
 
-static inline void *mempcpy(void *dest, const void *src, size_t n)
-{
+static inline void *mempcpy(void *dest, const void *src, size_t n) {
 	if (!n)
 		return dest;
 	char *d = (char*)dest;
@@ -38,8 +51,7 @@ static inline void *mempcpy(void *dest, const void *src, size_t n)
 	return d;
 }
 
-static inline const char *strchrnul(const char *s, int c)
-{
+static inline const char *strchrnul(const char *s, int c) {
 	for (;; ++s) {
 		if (0 == c || c == *s) {
 			return s;

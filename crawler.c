@@ -32,33 +32,38 @@ static int get_atomic_int(const int* const ptr)
  */
 static void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
 {
-	UC *ip;
+	unsigned char *ip;
 	struct surl *u;
 	
 	u=(struct surl *)arg;
-	if(status!=0) {debugf("[%d] error: dnscallback with non zero status! - status=%d\n",u->index,status);set_atomic_int(&u->state, S_ERROR);return;}
+	if(status!=0) {debugf("[%d] error: dnscallback with non zero status! - status=%d\n",u->index,status);set_atomic_int(&u->state, SURL_S_ERROR);return;}
 	
-	ip=(UC*)(hostent->h_addr);
+	ip=(unsigned char*)(hostent->h_addr);
 	u->prev_ip = u->ip;
 	u->ip=*(int *)ip;
 	
 	debugf("[%d] Resolving %s ended => %d.%d.%d.%d\n", u->index, u->host, ip[0], ip[1], ip[2], ip[3]);
 	debugf("[%d] raw url => %s\n", u->index, u->rawurl);
 
-	set_atomic_int(&u->state, S_GOTIP);
+	set_atomic_int(&u->state, SURL_S_GOTIP);
 }
 
 
 static int check_proto(struct surl *u)
 {
-	if (0 != strcmp(u->proto, "http")) {
-		debugf("Unsupported protocol: [%s]\n", u->proto);
-		u->status = 999;
-		sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
-		set_atomic_int(&u->state, S_INTERNAL_ERROR);
-		return -1;
+	if (0 == strcmp(u->proto, "https")) {
+		return 443;
 	}
-	return 80;
+	if (0 == strcmp(u->proto, "http")) {
+		return 80;
+	}
+
+	debugf("Unsupported protocol: [%s]\n", u->proto);
+	u->status = 999;
+	sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
+	set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
+
+	return -1;
 }
 
 /** spusti preklad pres ares
@@ -75,7 +80,7 @@ static void launchdns(struct surl *u)
 	t = ares_init(&(u->aresch));
 	if(t) {debugf("ares_init failed\n");exit(-1);}
 
-	set_atomic_int(&u->state, S_INDNS);
+	set_atomic_int(&u->state, SURL_S_INDNS);
 	ares_gethostbyname(u->aresch,u->host,AF_INET,(ares_host_callback)&dnscallback,u);
 }
 
@@ -91,7 +96,9 @@ static void checkdns(struct surl *u)
 	FD_ZERO(&writefds);
 
 	t = ares_fds(u->aresch, &readfds, &writefds);
-	if(!t) return;
+	if(!t) {
+		return;
+	}
 
 	ares_process(u->aresch, &readfds, &writefds); // pri uspechu zavola callback sama
 }       
@@ -115,14 +122,14 @@ static void opensocket(struct surl *u)
 	t=connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
 	if(t) {
 		if(errno == EINPROGRESS) {
-			set_atomic_int(&u->state, S_CONNECTING); // 115 je v pohode (operation in progress)
+			set_atomic_int(&u->state, SURL_S_CONNECTING); // 115 je v pohode (operation in progress)
 		}
 		else {
 			debugf("%d: connect failed (%d, %s)\n", u->index, errno, strerror(errno));
-			set_atomic_int(&u->state, S_ERROR);}
+			set_atomic_int(&u->state, SURL_S_ERROR);}
 		}
 	else {
-		set_atomic_int(&u->state, S_CONNECTED);
+		set_atomic_int(&u->state, SURL_S_CONNECTED);
 	}
 }
 
@@ -185,11 +192,11 @@ static void sendhttpget(struct surl *u)
 
 	//debugf(buf);
 	
-	t=write(u->sockfd,buf,strlen(buf));
+	t = write_all(u->sockfd,buf,strlen(buf));
 	if(t<strlen(buf)) {debugf("[%d] Error - written %d bytes, wanted %d bytes\n",u->index,t,(int)strlen(buf));}
 	else debugf("[%d] Written %d bytes\n",u->index,t);
 
-	set_atomic_int(&u->state, S_GETREPLY);
+	set_atomic_int(&u->state, SURL_S_GETREPLY);
 }
 
 /** strcpy, ktere se ukonci i koncem radku
@@ -207,7 +214,7 @@ static void strcpy_term(char *to, char *from)
 static int eatchunked(struct surl *u,int first)
 {
 	int t,i;
-	UC hex[10];
+	unsigned char hex[10];
 	int size;
 	int movestart;
 
@@ -335,7 +342,7 @@ static void detecthead(struct surl *u)
  */
 static void output(struct surl *u)
 {
-	UC header[4096];
+	unsigned char header[4096];
 
 	if (!*u->charset) {
 		unsigned charset_len = 0;
@@ -377,24 +384,24 @@ static void output(struct surl *u)
 	sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=0x%x; %u)\n",u->lastread - u->downstart, u->downstart, u->ip, get_time_slot(u->ip));
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
-	write(STDOUT_FILENO,header,strlen(header));
+	write_all(STDOUT_FILENO, header, strlen(header));
 	if(settings.writehead) {
 		debugf("[%d] outputting header %dB - %d %d %d %d\n",u->index,u->headlen,u->buf[u->headlen-4],u->buf[u->headlen-3],u->buf[u->headlen-2],u->buf[u->headlen-1]);
-		write(STDOUT_FILENO,u->buf,u->headlen);
+		write_all(STDOUT_FILENO, u->buf, u->headlen);
 		if (0 == u->headlen) {
-			write(STDOUT_FILENO,"\n", 1); // PHP library expects one empty line at the end of headers, in normal circumstances it is contained
+			write_all(STDOUT_FILENO, "\n", 1); // PHP library expects one empty line at the end of headers, in normal circumstances it is contained
 						      // within u->buf[0 .. u->headlen] .
 		}
 	}
 
-	write(STDOUT_FILENO,u->buf+u->headlen,u->bufp-u->headlen);
-	write(STDOUT_FILENO,"\n",1); // jinak se to vývojářům v php špatně parsuje
+	write_all(STDOUT_FILENO, u->buf+u->headlen, u->bufp-u->headlen);
+	write_all(STDOUT_FILENO, "\n", 1); // jinak se to vývojářům v php špatně parsuje
 
 	if(u->chunked) debugf("[%d] bufp=%d nextchunkedpos=%d\n",u->index,u->bufp,u->nextchunkedpos);
 
 	debugf("[%d] Outputed.\n",u->index);
 
-	set_atomic_int(&u->state, S_DONE);
+	set_atomic_int(&u->state, SURL_S_DONE);
 	debugf("[%d] Done.\n",u->index);
 }
 
@@ -471,10 +478,10 @@ static void resolvelocation(struct surl *u)
 	debugf("[%d] Lproto = '%s' Lhost='%s' Lpath='%s'\n", u->index, lproto, lhost, lpath);
 
        	if (strcmp(u->host,lhost)) {
-		set_atomic_int(&u->state, S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
+		set_atomic_int(&u->state, SURL_S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
 	}
 	else {
-		set_atomic_int(&u->state, S_GOTIP);	// jinak se muzes pripojit na tu puvodni IP
+		set_atomic_int(&u->state, SURL_S_GOTIP);	// jinak se muzes pripojit na tu puvodni IP
 	}
 
 	struct redirect_info *rinfo = malloc(sizeof(*rinfo));
@@ -518,7 +525,7 @@ static void finish(struct surl *u)
  */
 static void readreply(struct surl *u)
 {
-	UC buf[1024];
+	unsigned char buf[1024];
 	int t,i;
 	int left;
 
@@ -554,7 +561,7 @@ static void readreply(struct surl *u)
 		close(u->sockfd);
 		finish(u);
 	} else {
-		set_atomic_int(&u->state, S_GETREPLY);
+		set_atomic_int(&u->state, SURL_S_GETREPLY);
 	}
 	//debugf("%s",buf);
 	
@@ -579,12 +586,12 @@ static void selectall(void)
 	
 	for(t=0; url[t].rawurl[0]; t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(url_state == S_GETREPLY) {
+		if(url_state == SURL_S_GETREPLY) {
 //			debugf("Adding %d into read select...\n", url[t].sockfd);
 			FD_SET (url[t].sockfd, &set);
 		}
 		
-		if(url_state == S_CONNECTING) {
+		if(url_state == SURL_S_CONNECTING) {
 //			debugf("Adding %d into write select...\n", url[t].sockfd);
 			FD_SET (url[t].sockfd, &writeset);
 		}
@@ -596,11 +603,11 @@ static void selectall(void)
 	}
 	for(t=0;url[t].rawurl[0];t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(FD_ISSET(url[t].sockfd, &set) && url_state == S_GETREPLY) {
-			set_atomic_int(&url[t].state, S_READYREPLY);
+		if(FD_ISSET(url[t].sockfd, &set) && url_state == SURL_S_GETREPLY) {
+			set_atomic_int(&url[t].state, SURL_S_READYREPLY);
 		}
-		if(FD_ISSET(url[t].sockfd, &writeset) && url_state == S_CONNECTING) {
-			set_atomic_int(&url[t].state, S_CONNECTED);
+		if(FD_ISSET(url[t].sockfd, &writeset) && url_state == SURL_S_CONNECTING) {
+			set_atomic_int(&url[t].state, SURL_S_CONNECTED);
 		}
 		
 	}
@@ -615,36 +622,37 @@ static void goone(struct surl *u)
 	const int state=get_atomic_int(&u->state);
 
 	switch(state) {  
-	case S_JUSTBORN:
+	case SURL_S_JUSTBORN:
 		launchdns(u);
 		break;
   
-	case S_INDNS:
+	case SURL_S_INDNS:
 		checkdns(u);
 		break;
 
-	case S_GOTIP:
-		if ( (u->downstart = test_free_channel(u->ip, settings.delay, u->ip == u->prev_ip)) )
+	case SURL_S_GOTIP:
+		if ( (u->downstart = test_free_channel(u->ip, settings.delay, u->ip == u->prev_ip)) ) {
 			opensocket(u);
+		}
 		break;
   
-	case S_CONNECTING:
+	case SURL_S_CONNECTING:
 		// nic, z tohohle stavu mne dostane select
 		break;
 		
-	case S_CONNECTED:
+	case SURL_S_CONNECTED:
 		sendhttpget(u);
 		break;
   
-	case S_GETREPLY:
+	case SURL_S_GETREPLY:
 		// nic, z tohohle stavu mne dostane select
 		break;
 
-	case S_READYREPLY:
+	case SURL_S_READYREPLY:
 		readreply(u);
 		break;
 
-	case S_INTERNAL_ERROR:
+	case SURL_S_INTERNAL_ERROR:
 		output(u);
 		break;
 	}
@@ -666,18 +674,30 @@ static int exitprematurely(void)
 	int notdone=0, lastread=0;
 	
 	tim=get_time_int();
-	if(tim<settings.timeout*1000-1000) return 0; // jeste je brzy
+	if(tim<settings.timeout*1000-1000) {
+		return 0; // jeste je brzy
+	}
 	
 	for(t=0;url[t].rawurl[0];t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(url_state<S_DONE) notdone++;
-		if(url[t].lastread>lastread) lastread=url[t].lastread;
+		if(url_state<SURL_S_DONE) {
+			notdone++;
+		}
+		if(url[t].lastread>lastread) {
+			lastread=url[t].lastread;
+		}
 	}
 	
 	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,tim);
 	
-	if(t>=5&&notdone==1&&(tim-lastread)>400) {debugf("[-] Forcing premature end 1!\n");return 1;}
-	if(t>=20&&notdone<=2&&(tim-lastread)>400) {debugf("[-] Forcing premature end 2!\n");return 1;}
+	if(t>=5 && notdone==1 && (tim-lastread) > 400) {
+		debugf("[-] Forcing premature end 1!\n");
+		return 1;
+	}
+	if(t>=20 && notdone<=2 && (tim-lastread) > 400) {
+		debugf("[-] Forcing premature end 2!\n");
+		return 1;
+	}
 	
 	return 0;
 }
@@ -688,10 +708,11 @@ static void outputpartial(void)
 {
 	int t;
 
-	for(t=0;url[t].rawurl[0];t++) {
+	for(t=0; url[t].rawurl[0]; t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(url_state==S_GETREPLY) output(&url[t]);
-	
+		if(url_state==SURL_S_GETREPLY) {
+			output(&url[t]);
+		}
 	}
 }
 
@@ -713,15 +734,26 @@ void go(void)
 		for(t=0;url[t].rawurl[0];t++) {
 			//debugf("%d: %d\n",t,url[t].state);
 			state=get_atomic_int(&url[t].state);
-			if(state<S_DONE) {goone(&url[t]);done=0;} // url[t].state can change inside goone
-			if(state!=get_atomic_int(&url[t].state)) change=1;
+			if(state < SURL_S_DONE) {
+				goone(&url[t]);
+				done=0;
+			}
+			// url[t].state can change inside goone
+			if(state != get_atomic_int(&url[t].state)) {
+				change = 1;
+			}
 		}
-		
+
 		t=get_time_int();
-		if(t>settings.timeout*1000) {debugf("Timeout (%d ms elapsed). The end.\n",t);if(settings.partial) outputpartial();break;}
-		
-		if(!change&&!done) {
-			if(settings.impatient) done=exitprematurely();
+		if(t>settings.timeout*1000) {
+			debugf("Timeout (%d ms elapsed). The end.\n",t);
+			if(settings.partial) outputpartial();
+			break;
+		}
+		if(!change && !done) {
+			if(settings.impatient) {
+				done=exitprematurely();
+			}
 			usleep(20000);
 		}
 	} while(!done);
