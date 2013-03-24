@@ -119,7 +119,7 @@ static void opensocket(struct surl *u)
 	flags=fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
 	
-	t=connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
+	t = connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
 	if(t) {
 		if(errno == EINPROGRESS) {
 			set_atomic_int(&u->state, SURL_S_CONNECTING); // 115 je v pohode (operation in progress)
@@ -154,12 +154,10 @@ static char *str_replace( const char *string, const char *substr, const char *re
  */
 static void sendhttpget(struct surl *u)
 {
-	char buf[1024];
 	char agent[256];
-	int t;
 	char cookiestring[4096];
 	char customheader[4096];
-	char *p;
+//	char *p;
 
         if (*settings.customagent) {
             strcpy(agent, settings.customagent);
@@ -168,33 +166,44 @@ static void sendhttpget(struct surl *u)
         }
 
 	// vytvoří si to řetězec cookies a volitelných parametrů
-	cookiestring[0]=0;
-	for(t=0;t<u->cookiecnt;t++) {
-		if(t==0) sprintf(cookiestring,"Cookie: %s=%s",u->cookies[t].name,u->cookies[t].value);
-		else sprintf(cookiestring+strlen(cookiestring),"; %s=%s",u->cookies[t].name,u->cookies[t].value);
+	cookiestring[0] = 0;
+	for(int t = 0; t < u->cookiecnt; t++) {
+		if(0 == t) {
+			sprintf(cookiestring, "Cookie: %s=%s", u->cookies[t].name, u->cookies[t].value);
+		}
+		else {
+			sprintf(cookiestring+strlen(cookiestring), "; %s=%s", u->cookies[t].name, u->cookies[t].value);
+		}
 	}
 	if (strlen(cookiestring)) {
 		sprintf(cookiestring + strlen(cookiestring), "\r\n");
 	}
 	if(settings.customheader) {
 		sprintf(customheader,"%s\r\n",settings.customheader);
-		if(u->customparam[0]) {p=str_replace(customheader,"%",u->customparam);strcpy(customheader,p);}
-		debugf("[%d] Customheader: %s",u->index,customheader);
-		strcpy(cookiestring+strlen(cookiestring),customheader);
+		if(u->customparam[0]) {
+			char *p = str_replace(customheader, "%", u->customparam);
+			strcpy(customheader,p);
+		}
+		debugf("[%d] Customheader: %s", u->index, customheader);
+		strcpy(cookiestring+strlen(cookiestring), customheader);
 	} 
-	if(t) sprintf(cookiestring+strlen(cookiestring),"\r\n");
+	if(u->cookiecnt) {
+		sprintf(cookiestring+strlen(cookiestring), "\r\n");
+	}
 	
 	if(!u->post[0]) {// GET
-		sprintf(buf,"GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n",u->path,agent,u->host,cookiestring);
+		sprintf(u->request, "GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n", u->path, agent, u->host, cookiestring);
 	} else { // POST
-		sprintf(buf,"POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n", u->path,u->host,agent,(int)strlen(u->post),u->post,cookiestring);
+		sprintf(u->request, "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n", u->path, u->host, agent, (int)strlen(u->post), u->post, cookiestring);
 	}
 
-	//debugf(buf);
-	
-	t = write_all(u->sockfd,buf,strlen(buf));
-	if(t<strlen(buf)) {debugf("[%d] Error - written %d bytes, wanted %d bytes\n",u->index,t,(int)strlen(buf));}
-	else debugf("[%d] Written %d bytes\n",u->index,t);
+	const size_t t = write_all(u->sockfd, u->request, strlen(u->request));
+	if(t < strlen(u->request)) {
+		debugf("[%d] Error - written %d bytes, wanted %d bytes\n",u->index,(int)t,(int)strlen(u->request));
+	}
+	else {
+		debugf("[%d] Written %d bytes\n",u->index,(int)t);
+	}
 
 	set_atomic_int(&u->state, SURL_S_GETREPLY);
 }

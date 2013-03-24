@@ -1,5 +1,9 @@
 #include <openssl/ssl.h>
 
+enum { BUFSIZE = 700*1024, };
+
+#define debugf(...)   {if(settings.debug) fprintf(stderr, __VA_ARGS__);}
+
 struct nv {
     char *name, *value;
 };
@@ -56,6 +60,9 @@ struct surl {
 	int cookiecnt;
 	char customparam[256];		// parametr do custom headeru
 	char charset[32];
+
+	// request
+	char request[8*1024];
 
 	struct redirect_info *redirect_info;
  
