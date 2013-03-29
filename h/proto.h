@@ -5,6 +5,8 @@
 extern struct surl url[];
 extern struct ssettings settings;
 
+#define debugf(...)   {if(settings.debug) fprintf(stderr, __VA_ARGS__);}
+
 int get_time_int(void);
 unsigned get_time_slot(const unsigned key);
 int test_free_channel(const unsigned u_ip, const unsigned milis, const int force);
@@ -19,7 +21,6 @@ static inline int safe_size_to_int(const size_t sz) {
 	assert((int)sz == sz && (int)sz >= 0);
 	return (int)sz;
 }
-
 #define I_SIZEOF(__X) ( safe_size_to_int(sizeof(__X)) )
 #define I_LENGTHOF(__X) ( sizeof(__X) > 0 ? safe_size_to_int(sizeof(__X)) - 1 : 0 )
 

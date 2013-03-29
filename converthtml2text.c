@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <errno.h>
-#include "h/global.h"
+
 #include "h/struct.h"
 #include "h/proto.h"
 

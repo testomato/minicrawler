@@ -2,8 +2,6 @@
 
 enum { BUFSIZE = 700*1024, };
 
-#define debugf(...)   {if(settings.debug) fprintf(stderr, __VA_ARGS__);}
-
 struct nv {
     char *name, *value;
 };
@@ -18,17 +16,21 @@ enum surl_s {
 	SURL_S_JUSTBORN,
 	SURL_S_INDNS,
 	SURL_S_GOTIP,
-	SURL_S_CONNECTING,
-	SURL_S_CONNECTED,
-	SURL_S_GETREPLY,
-	SURL_S_READYREPLY,
+//	SURL_S_CONNECTING,
+//	SURL_S_CONNECTED,
+	SURL_S_CONNECT,
+	SURL_S_GENREQUEST,
+	SURL_S_SENDREQUEST,
+//	SURL_S_GETREPLY,
+//	SURL_S_READYREPLY,
+	SURL_S_RECVREPLY,
 	SURL_S_INTERNAL_ERROR,
 	SURL_S_DONE,
 	SURL_S_ERROR,
 };
 
 enum {
-	SURL_STATES_IO = 1<<SURL_S_CONNECTING | 1<<SURL_S_GETREPLY,
+	SURL_STATES_IO = 1<<SURL_S_CONNECT | 1<<SURL_S_SENDREQUEST | 1<<SURL_S_RECVREPLY,
 };
 
 enum surl_rw {
@@ -38,8 +40,22 @@ enum surl_rw {
 	SURL_RW_READY_WRITE,
 };
 
+struct surl;
+
+typedef void (*surl_callback)(struct surl*);
+
+struct surl_func {
+	surl_callback launch_dns;
+	surl_callback check_dns;
+	surl_callback open_socket;
+	surl_callback connect_socket;
+	surl_callback gen_request;
+	surl_callback send_request;
+	surl_callback recv_reply;
+};
+
 struct surl {
-//	SURL_STATE rw;
+	struct surl_func f;
 
         // ...
 	int index;
@@ -63,12 +79,16 @@ struct surl {
 
 	// request
 	char request[8*1024];
+	size_t request_len;
+	size_t request_it;
 
 	struct redirect_info *redirect_info;
  
 	int state;
+	int rw;
 	int lastread;		// cas posledniho uspesneho cteni
 	int downstart;		// time downloading start
+
 	// ares
 	struct ares_channeldata *aresch;
 	

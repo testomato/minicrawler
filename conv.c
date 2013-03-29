@@ -5,7 +5,6 @@
 #include <errno.h>
 #include <iconv.h>
 
-#include "h/global.h"
 #include "h/struct.h"
 #include "h/proto.h"
 

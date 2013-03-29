@@ -13,7 +13,6 @@
 #include <errno.h>
 #include <assert.h>
 
-#include "h/global.h"
 #include "h/struct.h"
 #include "h/proto.h"
 
@@ -26,6 +25,10 @@ static void set_atomic_int(int *ptr, const int val)
 static int get_atomic_int(const int* const ptr)
 {
 	return *(volatile const int* const)ptr;
+}
+
+static int want_io(const int state, const int rw) {
+	return ((1 << state) & SURL_STATES_IO) && (rw & (1 << SURL_RW_WANT_READ | 1 << SURL_RW_WANT_WRITE));
 }
 
 /** callback funkce, kterou zavola ares
@@ -76,9 +79,12 @@ static void launchdns(struct surl *u)
 
 	int t;
 
-	debugf("[%d] Resolving %s starts\n",u->index,u->host);
+	debugf("[%d] Resolving %s starts\n", u->index, u->host);
 	t = ares_init(&(u->aresch));
-	if(t) {debugf("ares_init failed\n");exit(-1);}
+	if(t) {
+		debugf("ares_init failed\n");
+		exit(-1);
+	}
 
 	set_atomic_int(&u->state, SURL_S_INDNS);
 	ares_gethostbyname(u->aresch,u->host,AF_INET,(ares_host_callback)&dnscallback,u);
@@ -103,12 +109,28 @@ static void checkdns(struct surl *u)
 	ares_process(u->aresch, &readfds, &writefds); // pri uspechu zavola callback sama
 }       
 
+static void connectsocket(struct surl *u) {
+	int result;
+	socklen_t result_len = sizeof(result);
+	if (getsockopt(u->sockfd, SOL_SOCKET, SO_ERROR, &result, &result_len) < 0) {
+		// error, fail somehow, close socket
+		close(u->sockfd);
+		return;
+	}
+
+	if (result != 0) {
+		close(u->sockfd);
+		return;
+	}
+
+	set_atomic_int(&u->state, SURL_S_GENREQUEST);
+}
+
 /** uz znam IP, otevri socket
  */
 static void opensocket(struct surl *u)
 {
 	struct sockaddr_in addr;
-	int t;
 	int flags;
 
 	addr.sin_family=AF_INET;
@@ -116,20 +138,21 @@ static void opensocket(struct surl *u)
 	memcpy(&(addr.sin_addr), &(u->ip), 4);
 
 	u->sockfd=socket(AF_INET, SOCK_STREAM, 0);
-	flags=fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
+	flags = fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
-	
-	t = connect(u->sockfd,(struct sockaddr *)&addr,sizeof(addr));
+
+	const int t = connect(u->sockfd, (struct sockaddr *)&addr, sizeof(addr));
 	if(t) {
 		if(errno == EINPROGRESS) {
-			set_atomic_int(&u->state, SURL_S_CONNECTING); // 115 je v pohode (operation in progress)
+			set_atomic_int(&u->state, SURL_S_CONNECT);
+			set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
 		}
 		else {
 			debugf("%d: connect failed (%d, %s)\n", u->index, errno, strerror(errno));
 			set_atomic_int(&u->state, SURL_S_ERROR);}
 		}
 	else {
-		set_atomic_int(&u->state, SURL_S_CONNECTED);
+		set_atomic_int(&u->state, SURL_S_GENREQUEST);
 	}
 }
 
@@ -152,7 +175,7 @@ static char *str_replace( const char *string, const char *substr, const char *re
 
 /** socket bezi, posli dotaz
  */
-static void sendhttpget(struct surl *u)
+static void genrequest(struct surl *u)
 {
 	char agent[256];
 	char cookiestring[4096];
@@ -197,30 +220,40 @@ static void sendhttpget(struct surl *u)
 		sprintf(u->request, "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n", u->path, u->host, agent, (int)strlen(u->post), u->post, cookiestring);
 	}
 
-	const size_t t = write_all(u->sockfd, u->request, strlen(u->request));
-	if(t < strlen(u->request)) {
-		debugf("[%d] Error - written %d bytes, wanted %d bytes\n",u->index,(int)t,(int)strlen(u->request));
-	}
-	else {
-		debugf("[%d] Written %d bytes\n",u->index,(int)t);
-	}
+	u->request_len = strlen(u->request);
+	u->request_it = 0;
 
-	set_atomic_int(&u->state, SURL_S_GETREPLY);
+	set_atomic_int(&u->state, SURL_S_SENDREQUEST);
+	set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+}
+
+static void sendrequest(struct surl *u) {
+	if (u->request_it < u->request_len) {
+		const ssize_t ret = write(u->sockfd, &u->request[u->request_it], u->request_len - u->request_it);
+		if (ret < 0) {
+			debugf("[%d] Error when writing to socket: %m\n", u->index);
+		}
+		u->request_it += (size_t)ret;
+	}
+	if (u->request_it == u->request_len) {
+		set_atomic_int(&u->state, SURL_S_RECVREPLY);
+		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+	}
 }
 
 /** strcpy, ktere se ukonci i koncem radku
  */
 static void strcpy_term(char *to, char *from)
 {
-	for(;*from&&*from!='\r'&&*from!='\n';) *to++=*from++;
-	*to=0;
+	for(;*from && *from != '\r' && *from != '\n';) *to++ = *from++;
+	*to = 0;
 }
 
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
  *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
  */
-static int eatchunked(struct surl *u,int first)
+static int eatchunked(struct surl *u, int first)
 {
 	int t,i;
 	unsigned char hex[10];
@@ -313,17 +346,27 @@ static void detecthead(struct surl *u)
 {
 	char *p;
 
-	u->status=atoi(u->buf+9);
-	u->buf[u->bufp]=0;
+	u->status = atoi(u->buf + 9);
+	u->buf[u->bufp] = 0;
 	
-	p=strstr(u->buf,"\r\n\r\n");
-	if(p) p+=4;
+	p = strstr(u->buf, "\r\n\r\n");
+	if(p) {
+		p += 4;
+	}
 	
-	if(p==NULL) {p=strstr(u->buf,"\n\n");if(p) p+=2;}
+	if(p == NULL) {
+		p = strstr(u->buf, "\n\n");
+		if(p) {
+			p += 2;
+		}
+	}
 	
-	if(p==NULL) {debugf("[%d] cannot find end of http header?\n",u->index);return;}
+	if(p == NULL) {
+		debugf("[%d] cannot find end of http header?\n",u->index);
+		return;
+	}
 	
-	u->headlen=p-u->buf;
+	u->headlen = p-u->buf;
 	//debugf("[%d] headlen=%d\n",u->index,u->headlen);
 	//debugf("'%s'\n",u->buf);
 	
@@ -337,14 +380,14 @@ static void detecthead(struct surl *u)
 	p=(char*)memmem(u->buf,u->headlen,"\nSet-Cookie: ",13);
 	if(p!=NULL) {setcookie(u,p+13);}
 	
-	p=(char*)memmem(u->buf,u->headlen,"Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26);
+	p=(char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26);
 	if(p!=NULL) {u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);}
 
 	find_content_type(u);
 
 	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
 	
-	if(u->chunked&&u->bufp>u->nextchunkedpos) eatchunked(u,1);
+	if(u->chunked && u->bufp>u->nextchunkedpos) eatchunked(u,1);
 }
 
 /** vypise vystup na standardni vystup
@@ -538,7 +581,7 @@ static void readreply(struct surl *u)
 	int t,i;
 	int left;
 
-	left=BUFSIZE-u->bufp;
+	left = BUFSIZE-u->bufp;
 	if(left<=0) {
 		return;
 	}
@@ -558,7 +601,7 @@ static void readreply(struct surl *u)
 	debugf("[%d] Read %d bytes; chunked=%d\n", u->index, t, !!u->chunked);
 	//buf[60]=0; // wtf?
 	
-	if(t>0 && u->chunked) {
+	if(t > 0 && u->chunked) {
 		//debugf("debug: bufp=%d nextchunkedpos=%d",u->bufp,u->nextchunkedpos);
 		while(u->bufp > u->nextchunkedpos) {
 			i = eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
@@ -570,7 +613,7 @@ static void readreply(struct surl *u)
 		close(u->sockfd);
 		finish(u);
 	} else {
-		set_atomic_int(&u->state, SURL_S_GETREPLY);
+		set_atomic_int(&u->state, SURL_S_RECVREPLY);
 	}
 	//debugf("%s",buf);
 	
@@ -578,11 +621,10 @@ static void readreply(struct surl *u)
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 
-/** provede systemovy select nad vsemi streamy, ktere jsou ve stavu GETREPLY (a pripadne je prehodi do READYREPLY)
+/** provede systemovy select nad vsemi streamy
  */
 static void selectall(void)
 {
-	int t;
 	fd_set set;
 	fd_set writeset;
 	struct timeval timeout;	
@@ -591,34 +633,34 @@ static void selectall(void)
 	FD_ZERO (&writeset);
 	
 	timeout.tv_sec = 0;
-	timeout.tv_usec = 20000;	
+	timeout.tv_usec = 20000;
 	
-	for(t=0; url[t].rawurl[0]; t++) {
-		const int url_state = get_atomic_int(&url[t].state);
-		if(url_state == SURL_S_GETREPLY) {
+	for(int i = 0; url[i].rawurl[0]; i++) {
+		const int state = get_atomic_int(&url[i].state);
+		const int rw = get_atomic_int(&url[i].rw);
+		if (!want_io(state, rw)) {
+			continue;
+		}
+		if(rw & SURL_RW_WANT_READ) {
 //			debugf("Adding %d into read select...\n", url[t].sockfd);
-			FD_SET (url[t].sockfd, &set);
+			FD_SET(url[i].sockfd, &set);
 		}
 		
-		if(url_state == SURL_S_CONNECTING) {
+		if(rw & SURL_RW_WANT_WRITE) {
 //			debugf("Adding %d into write select...\n", url[t].sockfd);
-			FD_SET (url[t].sockfd, &writeset);
+			FD_SET(url[i].sockfd, &writeset);
 		}
 	}
-	
-	t = select(FD_SETSIZE, &set, &writeset, NULL, &timeout);
-	if(!t) {
-		return; // nic
+	switch (select(FD_SETSIZE, &set, &writeset, NULL, &timeout)) {
+		case -1:
+			fprintf(stderr, "select failed: %m");
+			return;
+		case 0:
+			return; // nothing
 	}
-	for(t=0;url[t].rawurl[0];t++) {
-		const int url_state = get_atomic_int(&url[t].state);
-		if(FD_ISSET(url[t].sockfd, &set) && url_state == SURL_S_GETREPLY) {
-			set_atomic_int(&url[t].state, SURL_S_READYREPLY);
-		}
-		if(FD_ISSET(url[t].sockfd, &writeset) && url_state == SURL_S_CONNECTING) {
-			set_atomic_int(&url[t].state, SURL_S_CONNECTED);
-		}
-		
+	for(int i = 0; url[i].rawurl[0]; i++) {
+		const int rw = !!FD_ISSET(url[i].sockfd, &set) << SURL_RW_READY_READ | !!FD_ISSET(url[i].sockfd, &writeset) << SURL_RW_READY_WRITE;
+		set_atomic_int(&url[i].rw, rw);
 	}
 }
 
@@ -627,40 +669,46 @@ static void selectall(void)
  */
 static void goone(struct surl *u)
 {
-	const int tim=get_time_int();
-	const int state=get_atomic_int(&u->state);
+	const int state = get_atomic_int(&u->state);
+	const int rw = get_atomic_int(&u->rw);
+
+	if (want_io(state, rw)) {
+		return;  // select will look after this state
+	}
+
+	const int tim = get_time_int();
 
 	switch(state) {  
 	case SURL_S_JUSTBORN:
-		launchdns(u);
+		u->f.launch_dns(u);
 		break;
   
 	case SURL_S_INDNS:
-		checkdns(u);
+		u->f.check_dns(u);
 		break;
 
 	case SURL_S_GOTIP:
 		if ( (u->downstart = test_free_channel(u->ip, settings.delay, u->ip == u->prev_ip)) ) {
-			opensocket(u);
+			u->f.open_socket(u);
 		}
 		break;
   
-	case SURL_S_CONNECTING:
-		// nic, z tohohle stavu mne dostane select
+	case SURL_S_CONNECT:
+		u->f.connect_socket(u);
 		break;
-		
-	case SURL_S_CONNECTED:
-		sendhttpget(u);
+
+	case SURL_S_GENREQUEST:
+		u->f.gen_request(u);
+		break;
+
+	case SURL_S_SENDREQUEST:
+		u->f.send_request(u);
+		break;
+
+	case SURL_S_RECVREPLY:
+		u->f.recv_reply(u);
 		break;
   
-	case SURL_S_GETREPLY:
-		// nic, z tohohle stavu mne dostane select
-		break;
-
-	case SURL_S_READYREPLY:
-		readreply(u);
-		break;
-
 	case SURL_S_INTERNAL_ERROR:
 		output(u);
 		break;
@@ -680,14 +728,14 @@ static int exitprematurely(void)
 {
 	int tim;
 	int t;
-	int notdone=0, lastread=0;
+	int notdone = 0, lastread = 0;
 	
 	tim=get_time_int();
 	if(tim<settings.timeout*1000-1000) {
 		return 0; // jeste je brzy
 	}
 	
-	for(t=0;url[t].rawurl[0];t++) {
+	for(t = 0; url[t].rawurl[0]; t++) {
 		const int url_state = get_atomic_int(&url[t].state);
 		if(url_state<SURL_S_DONE) {
 			notdone++;
@@ -699,11 +747,11 @@ static int exitprematurely(void)
 	
 	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,tim);
 	
-	if(t>=5 && notdone==1 && (tim-lastread) > 400) {
+	if(t >= 5 && notdone == 1 && (tim-lastread) > 400) {
 		debugf("[-] Forcing premature end 1!\n");
 		return 1;
 	}
-	if(t>=20 && notdone<=2 && (tim-lastread) > 400) {
+	if(t >= 20 && notdone <= 2 && (tim-lastread) > 400) {
 		debugf("[-] Forcing premature end 2!\n");
 		return 1;
 	}
@@ -719,9 +767,68 @@ static void outputpartial(void)
 
 	for(t=0; url[t].rawurl[0]; t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(url_state==SURL_S_GETREPLY) {
+		if(url_state==SURL_S_RECVREPLY) {
 			output(&url[t]);
 		}
+	}
+}
+
+/** primitivni parsovatko url
+ */
+void simpleparseurl(struct surl *u)
+{
+	u->port = 0;
+	u->proto[0] = 0;
+	u->path[0] = '/';
+
+	sscanf(u->rawurl, "%31[^:]://%99[^:]:%99d%99[^\n]", u->proto, u->host, &(u->port), u->path);
+
+	if(u->port == 0) {
+		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
+		char buf[256];
+		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host), I_LENGTHOF(u->path) - 1);
+		// FIXME: sscanf may not be succesfull
+		const int ret = sscanf(u->rawurl, buf, u->proto, u->host, u->path + 1);
+		u->port = 80;
+	}
+
+	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
+}
+
+
+/**
+ * Init URL struct
+ */
+
+void init_url(struct surl *u, const char *url, const int index) {
+	// Init the url
+	strcpy(u->rawurl, url);
+	u->index = index;
+	simpleparseurl(u);
+	u->state = SURL_S_JUSTBORN;
+	//debugf("[%d] born\n",i);
+	u->bufp = 0;
+	u->contentlen = -1;
+	u->cookiecnt = 0;
+
+	switch (check_proto(u)) {
+		case 80:
+			u->f = (struct surl_func) {
+				launch_dns:launchdns,
+				check_dns:checkdns,
+				open_socket:opensocket,
+				connect_socket:connectsocket,
+				gen_request:genrequest,
+				send_request:sendrequest,
+				recv_reply:readreply,
+			};
+			break;
+
+		case 443:
+			break;
+
+		default:
+			break;
 	}
 }
 
@@ -730,22 +837,19 @@ static void outputpartial(void)
  */
 void go(void)
 {
-	int t;
 	int done;
 	int change;
-	int state;
-
 	do {
-		done=1;
-		change=0;
+		done = 1;
+		change = 0;
 		
 		selectall();
-		for(t=0;url[t].rawurl[0];t++) {
+		for(int t=0; url[t].rawurl[0]; t++) {
 			//debugf("%d: %d\n",t,url[t].state);
-			state=get_atomic_int(&url[t].state);
+			const int state = get_atomic_int(&url[t].state);
 			if(state < SURL_S_DONE) {
 				goone(&url[t]);
-				done=0;
+				done = 0;
 			}
 			// url[t].state can change inside goone
 			if(state != get_atomic_int(&url[t].state)) {
@@ -753,20 +857,24 @@ void go(void)
 			}
 		}
 
-		t=get_time_int();
-		if(t>settings.timeout*1000) {
-			debugf("Timeout (%d ms elapsed). The end.\n",t);
-			if(settings.partial) outputpartial();
+		const int t = get_time_int();
+		if(t > settings.timeout*1000) {
+			debugf("Timeout (%d ms elapsed). The end.\n", t);
+			if(settings.partial) {
+				outputpartial();
+			}
 			break;
 		}
 		if(!change && !done) {
 			if(settings.impatient) {
-				done=exitprematurely();
+				done = exitprematurely();
 			}
 			usleep(20000);
 		}
 	} while(!done);
 	
-	if(done) debugf("All successful. Took %d ms.\n",get_time_int());
+	if(done) {
+		debugf("All successful. Took %d ms.\n", get_time_int());
+	}
 }
 
