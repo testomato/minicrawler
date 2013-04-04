@@ -243,26 +243,35 @@ static int eatchunked(struct surl *u,int first)
  */
 static void setcookie(struct surl *u,char *str)
 {
-        const int name_len = strchrnul(str, '=') - str; //strcpy_endchar(NULL, str, '=');
-        const int value_len = str[name_len] ? strchrnul(&str[name_len + 1], ';') - &str[name_len + 1] : 0; //strcpy_endchar(NULL, str + name_len + 1, ';');
+	for (; *str == ' ' || *str == '\t'; ++str);
+	// FIXME: Whitespaces are permited between tokens, must be skipped event between name, '=', value!!!
+    const int name_len = strchrnul(str, '=') - str; //strcpy_endchar(NULL, str, '=');
+    if (0 == name_len) {
+    	return;
+    }
+    const int value_len = str[name_len] ? strchrnul(&str[name_len + 1], ';') - &str[name_len + 1] : 0; //strcpy_endchar(NULL, str + name_len + 1, ';');
 	char name[name_len + 1];
 	char value[value_len + 1];
 	*(char*)mempcpy(name, str, name_len) = 0;
 	*(char*)mempcpy(value, &str[name_len + 1], value_len) = 0;
 
 	int t;
-	for(t=0;t<u->cookiecnt;t++) if(!strcmp(name,u->cookies[t].name)) break;
+	for(t = 0; t<u->cookiecnt; ++t) {
+		if(!strcmp(name,u->cookies[t].name)) {
+			break;
+		}
+	}
 
 	if(t<u->cookiecnt) { // už tam byla
-		if(!strcmp(u->cookies[t].value,value)) {debugf("[%d] Received same cookie #%d: '%s' = '%s'\n",u->index,t,name,value);}
-		else {
-			strcpy(u->cookies[t].value,value);
+		if(!strcmp(u->cookies[t].value,value)) {
+			debugf("[%d] Received same cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
+		} else {
+			free(u->cookies[t].value);
+			u->cookies[t].value = malloc(value_len + 1);
+			*(char*)mempcpy(u->cookies[t].value, value, value_len) = 0;
 			debugf("[%d] Changed cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
 		}
 	} else if (u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies)) { // nová
-/*                assert(u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies));
-                assert(name_len < sizeof(u->cookies[t][0]) - 1);
-                assert(value_len < sizeof(u->cookies[t][1]) - 1);*/
 		u->cookies[t].name = malloc(name_len + 1);
 		u->cookies[t].value = malloc(value_len + 1);
 		*(char*)mempcpy(u->cookies[t].name, name, name_len) = 0;
@@ -297,17 +306,27 @@ static void detecthead(struct surl *u)
 {
 	char *p;
 
-	u->status=atoi(u->buf+9);
-	u->buf[u->bufp]=0;
+	u->status = atoi(u->buf + 9);
+	u->buf[u->bufp] = 0;
 	
-	p=strstr(u->buf,"\r\n\r\n");
-	if(p) p+=4;
+	p = strstr(u->buf, "\r\n\r\n");
+	if(p) {
+		p += 4;
+	}
 	
-	if(p==NULL) {p=strstr(u->buf,"\n\n");if(p) p+=2;}
+	if(p == NULL) {
+		p = strstr(u->buf, "\n\n");
+		if(p) {
+			p += 2;
+		}
+	}
 	
-	if(p==NULL) {debugf("[%d] cannot find end of http header?\n",u->index);return;}
+	if(p == NULL) {
+		debugf("[%d] cannot find end of http header?\n",u->index);
+		return;
+	}
 	
-	u->headlen=p-u->buf;
+	u->headlen = p-u->buf;
 	//debugf("[%d] headlen=%d\n",u->index,u->headlen);
 	//debugf("'%s'\n",u->buf);
 	
@@ -318,17 +337,28 @@ static void detecthead(struct surl *u)
 	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11); // FIXME: handle http headers case-insensitive!!
 	if(p!=NULL) {strcpy_term(u->location,p+11);debugf("[%d] Location='%s'\n",u->index,u->location);}
 	
-	p=(char*)memmem(u->buf,u->headlen,"\nSet-Cookie: ",13);
-	if(p!=NULL) {setcookie(u,p+13);}
+	for (char *q = u->buf; q < &u->buf[u->headlen];) {
+		q = (char*)memmem(q, u->headlen - (q - u->buf), "\nSet-Cookie: ", 13);
+		if (q != NULL) {
+			q += 13;
+			setcookie(u, q);
+		} else {
+			break;
+		}
+	}
 	
-	p=(char*)memmem(u->buf,u->headlen,"Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26);
-	if(p!=NULL) {u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);}
+	p=(char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26);
+	if(p!=NULL) {
+		u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);
+	}
 
 	find_content_type(u);
 
 	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
 	
-	if(u->chunked&&u->bufp>u->nextchunkedpos) eatchunked(u,1);
+	if(u->chunked && u->bufp>u->nextchunkedpos) {
+		eatchunked(u,1);
+	}
 }
 
 /** vypise vystup na standardni vystup
