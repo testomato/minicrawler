@@ -370,8 +370,8 @@ static void find_content_type(struct surl *u)
 	}
 }
 
-//   Tries to find the end of a head in a reply's buf.
-//      It works in a way that it finds a sequence of characters of the form: m{\r*\n\r*\n}
+/**  Tries to find the end of a head in the server's reply.
+        It works in a way that it finds a sequence of characters of the form: m{\r*\n\r*\n} */
 static char *find_head_end(struct surl *u) {
 	char *s = u->buf;
 	const size_t len = u->bufp > 0 ? (size_t)u->bufp : 0;
@@ -424,8 +424,10 @@ static void detecthead(struct surl *u)
 	}
 	
 	p=(char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26);
-	if(p!=NULL) {
-		u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);
+	if(p != NULL) {
+		u->chunked = 1;
+		u->nextchunkedpos=u->headlen;
+		debugf("[%d] Chunked!\n",u->index);
 	}
 
 	find_content_type(u);
@@ -433,7 +435,7 @@ static void detecthead(struct surl *u)
 	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
 	
 	if(u->chunked && u->bufp>u->nextchunkedpos) {
-		eatchunked(u,1);
+		eatchunked(u, 1);
 	}
 }
 
@@ -556,9 +558,7 @@ static void resolvelocation(struct surl *u)
 	char buf[256];
 	sprintf(buf, fmt, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath) - 1);
 
-//	if(2 <= sscanf(u->location, buf, lproto, lhost, lpath + 1)) {
 	if (resolvelocation_url_with_proto(u, lproto, lhost, lpath, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath))) {
-//	} else if (resolvelocation_url_no_proto(u, lproto, lhost, lpath, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath))) {
  	} else if(u->location[0] == '/') {
 		strcpy(lproto, u->proto);
 		strcpy(lhost, u->host);
@@ -699,12 +699,10 @@ static void selectall(void)
 			continue;
 		}
 		if(rw & 1<<SURL_RW_WANT_READ) {
-//			debugf("Adding %d into read select...\n", url[t].sockfd);
 			FD_SET(url[i].sockfd, &set);
 		}
 		
 		if(rw & 1<<SURL_RW_WANT_WRITE) {
-//			debugf("Adding %d into write select...\n", url[t].sockfd);
 			FD_SET(url[i].sockfd, &writeset);
 		}
 	}
@@ -720,7 +718,7 @@ static void selectall(void)
 		if (rw) {
 			set_atomic_int(&url[i].rw, rw);
 		} else {
-			// Do nothing, this way you preservers the original value !!
+			// Do nothing, this way you preserver the original value !!
 		}
 	}
 }
