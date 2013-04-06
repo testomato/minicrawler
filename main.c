@@ -9,8 +9,6 @@
 #include "h/proto.h"
 #include "h/version.h"
 
-#warning Reinit funcs for every time proto is checking...
-
 struct surl url[100];
 
 struct ssettings settings;

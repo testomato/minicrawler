@@ -16,6 +16,7 @@ void conv_charset(struct surl *u);
 char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_len);
 char *consume_entity(char *s, const char *end, int *code);
 char *put_code(char *dst, const unsigned dst_len, const int code);
+void init_url(struct surl *u, const char *url, const int index);
 
 static inline int safe_size_to_int(const size_t sz) {
 	assert((int)sz == sz && (int)sz >= 0);

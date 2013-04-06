@@ -29,6 +29,31 @@ enum surl_s {
 	SURL_S_ERROR,
 };
 
+static inline const char *state_to_s(const enum surl_s x) {
+	switch (x) {
+		case SURL_S_JUSTBORN:
+			return "SURL_S_JUSTBORN";
+		case SURL_S_INDNS:
+			return "SURL_S_INDNS";
+		case SURL_S_GOTIP:
+			return "SURL_S_GOTIP";
+		case SURL_S_CONNECT:
+			return "SURL_S_CONNECT";
+		case SURL_S_GENREQUEST:
+			return "SURL_S_GENREQUEST";
+		case SURL_S_SENDREQUEST:
+			return "SURL_S_SENDREQUEST";
+		case SURL_S_RECVREPLY:
+			return "SURL_S_RECVREPLY";
+		case SURL_S_INTERNAL_ERROR:
+			return "SURL_S_INTERNAL_ERROR";
+		case SURL_S_DONE:
+			return "SURL_S_DONE";
+		case SURL_S_ERROR:
+			return "SURL_S_ERROR";
+	}
+}
+
 enum {
 	SURL_STATES_IO = 1<<SURL_S_CONNECT | 1<<SURL_S_SENDREQUEST | 1<<SURL_S_RECVREPLY,
 };

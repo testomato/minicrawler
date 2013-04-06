@@ -16,14 +16,12 @@
 #include "h/struct.h"
 #include "h/proto.h"
 
-static void set_atomic_int(int *ptr, const int val)
-{
+static void set_atomic_int(int *ptr, const int val) {
 	*(volatile int*)ptr = val;
 	asm volatile ("" : : : "memory");  // memory barrier
 }
 
-static int get_atomic_int(const int* const ptr)
-{
+static int get_atomic_int(const int* const ptr) {
 	return *(volatile const int* const)ptr;
 }
 
@@ -31,10 +29,15 @@ static int want_io(const int state, const int rw) {
 	return ((1 << state) & SURL_STATES_IO) && (rw & (1 << SURL_RW_WANT_READ | 1 << SURL_RW_WANT_WRITE));
 }
 
+static int check_io(const int state, const int rw) {
+	if ( ((1 << state) & SURL_STATES_IO) && !(rw & (1 << SURL_RW_READY_READ | 1 << SURL_RW_READY_WRITE)) ) {
+		abort();
+	}
+}
+
 /** callback funkce, kterou zavola ares
  */
-static void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent)
-{
+static void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent) {
 	unsigned char *ip;
 	struct surl *u;
 	
@@ -52,22 +55,17 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 }
 
 
-static int check_proto(struct surl *u)
-{
-	if (0 == strcmp(u->proto, "https")) {
+static int parse_proto(const char *s) {
+	if (0 == strcmp(s, "https")) {
 		return 443;
 	}
-	if (0 == strcmp(u->proto, "http")) {
+	if (0 == strcmp(s, "http")) {
 		return 80;
 	}
-
-	debugf("Unsupported protocol: [%s]\n", u->proto);
-	u->status = 999;
-	sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
-	set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
-
 	return -1;
 }
+
+static int check_proto(struct surl *u);
 
 /** spusti preklad pres ares
  */
@@ -107,18 +105,22 @@ static void checkdns(struct surl *u)
 	}
 
 	ares_process(u->aresch, &readfds, &writefds); // pri uspechu zavola callback sama
-}       
+}
 
 static void connectsocket(struct surl *u) {
 	int result;
 	socklen_t result_len = sizeof(result);
 	if (getsockopt(u->sockfd, SOL_SOCKET, SO_ERROR, &result, &result_len) < 0) {
 		// error, fail somehow, close socket
+		debugf("%d: Cannot connect, getsoskopt(.) returned error status: %m", u->index);
+		set_atomic_int(&u->state, SURL_S_ERROR);
 		close(u->sockfd);
 		return;
 	}
 
 	if (result != 0) {
+		debugf("%d: Cannot connect, attempt to connect failed", u->index);
+		set_atomic_int(&u->state, SURL_S_ERROR);
 		close(u->sockfd);
 		return;
 	}
@@ -209,11 +211,12 @@ static void genrequest(struct surl *u)
 		}
 		debugf("[%d] Customheader: %s", u->index, customheader);
 		strcpy(cookiestring+strlen(cookiestring), customheader);
-	} 
+	}
 	if(u->cookiecnt) {
 		sprintf(cookiestring+strlen(cookiestring), "\r\n");
 	}
-	
+
+	// FIXME: Check beffers length and vice verse
 	if(!u->post[0]) {// GET
 		sprintf(u->request, "GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n", u->path, agent, u->host, cookiestring);
 	} else { // POST
@@ -232,12 +235,15 @@ static void sendrequest(struct surl *u) {
 		const ssize_t ret = write(u->sockfd, &u->request[u->request_it], u->request_len - u->request_it);
 		if (ret < 0) {
 			debugf("[%d] Error when writing to socket: %m\n", u->index);
+			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
 		u->request_it += (size_t)ret;
 	}
 	if (u->request_it == u->request_len) {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+	} else {
+		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
 	}
 }
 
@@ -260,18 +266,31 @@ static int eatchunked(struct surl *u, int first)
 	int size;
 	int movestart;
 
-	// čte velikost chunku	
-	for(t=u->nextchunkedpos,i=0;u->buf[t]!='\r'&&t<u->bufp;t++) {
-		if(i<9) hex[i++]=u->buf[t];
+	//if (!memchr(u->nextchunkedpos, '\n', ))
+	// čte velikost chunku
+	debugf("nextchunkedpos = %d; bufp = %d\n", u->nextchunkedpos, u->bufp);
+	for(t=u->nextchunkedpos, i=0; u->buf[t] != '\r' && u->buf[t] != '\n' && t < u->bufp; t++) {
+		if(i < 9) {
+			hex[i++] = u->buf[t];
 		}
-	if(t>=u->bufp) {debugf("[%d] Incorrectly ended chunksize!",u->index);return -1;}
-	if(t < u->bufp && u->buf[t]=='\r') t++;
-	if(t < u->bufp && u->buf[t]=='\n') t++;
+	}
+	if(t >= u->bufp) {
+		debugf("[%d] Incorrectly ended chunksize!", u->index);
+		return -1;
+	}
+	if(t < u->bufp && u->buf[t] == '\r') {
+		t++;
+	}
+	if(t < u->bufp && u->buf[t] == '\n') {
+		t++;
+	}
 
-	if(i==0) debugf("[%d] Warning: empty string for chunksize\n",u->index);		
-	hex[i]=0;
-	size=strtol(hex,NULL,16);
-		
+	if(i == 0) {
+		debugf("[%d] Warning: empty string for chunksize\n",u->index);
+	}
+	hex[i] = 0;
+	size = strtol(hex, NULL, 16);
+
 	debugf("[%d] Chunksize at %d (now %d): '%s' (=%d)\n",u->index,u->nextchunkedpos,u->bufp,hex,size);
 
 	movestart=u->nextchunkedpos;
@@ -282,7 +301,9 @@ static int eatchunked(struct surl *u, int first)
 	
 	u->nextchunkedpos=movestart+size+2;			// o 2 vic kvuli odradkovani na konci chunku
 	
-	if(size==0) {debugf("[%d] Chunksize=0 (end)\n",u->index);u->contentlen=u->bufp-u->headlen;}	// a to je konec, pratele! ... taaadydaaadydaaa!
+	if(size == 0) {
+		debugf("[%d] Chunksize=0 (end)\n",u->index);u->contentlen=u->bufp-u->headlen; 	// a to je konec, pratele! ... taaadydaaadydaaa!
+	}
 	
 	return 0;
 }
@@ -292,26 +313,35 @@ static int eatchunked(struct surl *u, int first)
  */
 static void setcookie(struct surl *u,char *str)
 {
-        const int name_len = strchrnul(str, '=') - str; //strcpy_endchar(NULL, str, '=');
-        const int value_len = str[name_len] ? strchrnul(&str[name_len + 1], ';') - &str[name_len + 1] : 0; //strcpy_endchar(NULL, str + name_len + 1, ';');
+	for (; *str == ' ' || *str == '\t'; ++str);
+	// FIXME: Whitespaces are permited between tokens, must be skipped event between name, '=', value!!!
+    const int name_len = strchrnul(str, '=') - str; //strcpy_endchar(NULL, str, '=');
+    if (0 == name_len) {
+    	return;
+    }
+    const int value_len = str[name_len] ? strchrnul(&str[name_len + 1], ';') - &str[name_len + 1] : 0; //strcpy_endchar(NULL, str + name_len + 1, ';');
 	char name[name_len + 1];
 	char value[value_len + 1];
 	*(char*)mempcpy(name, str, name_len) = 0;
 	*(char*)mempcpy(value, &str[name_len + 1], value_len) = 0;
 
 	int t;
-	for(t=0;t<u->cookiecnt;t++) if(!strcmp(name,u->cookies[t].name)) break;
+	for(t = 0; t<u->cookiecnt; ++t) {
+		if(!strcmp(name,u->cookies[t].name)) {
+			break;
+		}
+	}
 
 	if(t<u->cookiecnt) { // už tam byla
-		if(!strcmp(u->cookies[t].value,value)) {debugf("[%d] Received same cookie #%d: '%s' = '%s'\n",u->index,t,name,value);}
-		else {
-			strcpy(u->cookies[t].value,value);
+		if(!strcmp(u->cookies[t].value,value)) {
+			debugf("[%d] Received same cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
+		} else {
+			free(u->cookies[t].value);
+			u->cookies[t].value = malloc(value_len + 1);
+			*(char*)mempcpy(u->cookies[t].value, value, value_len) = 0;
 			debugf("[%d] Changed cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
 		}
 	} else if (u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies)) { // nová
-/*                assert(u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies));
-                assert(name_len < sizeof(u->cookies[t][0]) - 1);
-                assert(value_len < sizeof(u->cookies[t][1]) - 1);*/
 		u->cookies[t].name = malloc(name_len + 1);
 		u->cookies[t].value = malloc(value_len + 1);
 		*(char*)mempcpy(u->cookies[t].name, name, name_len) = 0;
@@ -340,35 +370,41 @@ static void find_content_type(struct surl *u)
 	}
 }
 
+//   Tries to find the end of a head in a reply's buf.
+//      It works in a way that it finds a sequence of characters of the form: m{\r*\n\r*\n}
+static char *find_head_end(struct surl *u) {
+	char *s = u->buf;
+	const size_t len = u->bufp > 0 ? (size_t)u->bufp : 0;
+	unsigned nn = 0;
+	size_t i;
+	for (i = 0; i < len && nn < 2; ++i) {
+		if (s[i] == '\r') {
+			;
+		} else if (s[i] == '\n') {
+			++nn;
+		} else {
+			nn = 0;
+		}
+	}
+	return nn == 2 ? &s[i] : NULL;
+}
+
 /** pozná status a hlavičku http požadavku
  */
 static void detecthead(struct surl *u)
 {
-	char *p;
-
 	u->status = atoi(u->buf + 9);
 	u->buf[u->bufp] = 0;
 	
-	p = strstr(u->buf, "\r\n\r\n");
-	if(p) {
-		p += 4;
-	}
-	
+	char *p = find_head_end(u);
+
 	if(p == NULL) {
-		p = strstr(u->buf, "\n\n");
-		if(p) {
-			p += 2;
-		}
-	}
-	
-	if(p == NULL) {
-		debugf("[%d] cannot find end of http header?\n",u->index);
+		debugf("[%d] cannot find end of http header?\n", u->index);
 		return;
 	}
 	
 	u->headlen = p-u->buf;
-	//debugf("[%d] headlen=%d\n",u->index,u->headlen);
-	//debugf("'%s'\n",u->buf);
+	debugf("[%d] buf='%s'\n", u->index, u->buf);
 	
 	p=(char*)memmem(u->buf,u->headlen,"Content-Length: ",16);
 	if(p!=NULL) u->contentlen=atoi(p+16);
@@ -377,17 +413,28 @@ static void detecthead(struct surl *u)
 	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11); // FIXME: handle http headers case-insensitive!!
 	if(p!=NULL) {strcpy_term(u->location,p+11);debugf("[%d] Location='%s'\n",u->index,u->location);}
 	
-	p=(char*)memmem(u->buf,u->headlen,"\nSet-Cookie: ",13);
-	if(p!=NULL) {setcookie(u,p+13);}
+	for (char *q = u->buf; q < &u->buf[u->headlen];) {
+		q = (char*)memmem(q, u->headlen - (q - u->buf), "\nSet-Cookie: ", 13);
+		if (q != NULL) {
+			q += 13;
+			setcookie(u, q);
+		} else {
+			break;
+		}
+	}
 	
 	p=(char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26);
-	if(p!=NULL) {u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);}
+	if(p!=NULL) {
+		u->chunked=1;u->nextchunkedpos=u->headlen;debugf("[%d] Chunked!\n",u->index);
+	}
 
 	find_content_type(u);
 
 	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
 	
-	if(u->chunked && u->bufp>u->nextchunkedpos) eatchunked(u,1);
+	if(u->chunked && u->bufp>u->nextchunkedpos) {
+		eatchunked(u,1);
+	}
 }
 
 /** vypise vystup na standardni vystup
@@ -427,7 +474,7 @@ static void output(struct surl *u)
 	if (u->conv_errno) {
 		char err_buf[128];
 #		ifdef __APPLE__
-		char *err = !strerror_r(u->conv_errno, err_buf, sizeof(err_buf)) ? err_buf : "Unknown error";
+		char *err = !strerror_r(u->conv_errno, err_buf, sizeof(err_buf)) ? err_b/uf : "Unknown error";
 #		else
 		char *err = strerror_r(u->conv_errno, err_buf, sizeof(err_buf));
 #		endif
@@ -484,7 +531,7 @@ static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhos
 	char buf[256];
 	sprintf(buf, fmt, i_lhost_size, i_lpath_size - 1);
 
-	switch ( sscanf(u->location, buf, lhost, &lpath[1])) {
+	switch (sscanf(u->location, buf, lhost, &lpath[1])) {
 		case 1:
 		case 2:
 			strcpy(lproto, u->proto);
@@ -493,8 +540,6 @@ static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhos
 			return 0;
 	}
 }
-
-
 
 /** vyres presmerovani
  */
@@ -573,50 +618,61 @@ static void finish(struct surl *u)
 	}
 }
 
+static ssize_t try_read(struct surl *u) {
+	ssize_t left = BUFSIZE - u->bufp;
+	if(left <= 0) {
+		return 0;
+	}
+	if(left > 4096) {
+		left = 4096;
+	}
+
+	return read(u->sockfd, u->buf + u->bufp, left);
+}
+
 /** cti odpoved
  */
 static void readreply(struct surl *u)
 {
+	debugf("} bufp = %d\n", u->bufp);
+
 	unsigned char buf[1024];
-	int t,i;
-	int left;
-
-	left = BUFSIZE-u->bufp;
-	if(left<=0) {
-		return;
-	}
-	if(left>4096) {
-		left=4096;
-	}
-
-	t=read(u->sockfd,u->buf+u->bufp,left);
-
-	if(t>0) {
-		u->bufp+=t;
-		u->lastread=get_time_int();
-		if(u->headlen==0) detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
-	}
 	
+	const ssize_t t = try_read(u);
+	if (t < 0) {
+		debugf("read failed: %m");
+	}
+	if(t > 0) {
+		u->bufp += t;
+		u->lastread = get_time_int();
+	}
+
+	debugf("}1 bufp = %d; buf = [%.*s]\n", u->bufp, u->bufp, u->buf);
+		if (u->headlen == 0 && find_head_end(u)) {
+		detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
+	}
+	debugf("}2 bufp = %d\n", u->bufp);
+
+	debugf("[%d] Read %zd bytes; bufp = %d; chunked=%d\n", u->index, t, u->bufp, !!u->chunked);
 	
-	debugf("[%d] Read %d bytes; chunked=%d\n", u->index, t, !!u->chunked);
-	//buf[60]=0; // wtf?
-	
+	// u->chunked is set in detecthead()
 	if(t > 0 && u->chunked) {
 		//debugf("debug: bufp=%d nextchunkedpos=%d",u->bufp,u->nextchunkedpos);
 		while(u->bufp > u->nextchunkedpos) {
-			i = eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
-			if(i == -1) break;
+			const int i = eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
+			if(i == -1) {
+				break;
+			}
 		}
 	}
 	
 	if(t <= 0 || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
-		close(u->sockfd);
+		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server
 		finish(u);
 	} else {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
+		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
 	}
-	//debugf("%s",buf);
-	
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
@@ -638,15 +694,16 @@ static void selectall(void)
 	for(int i = 0; url[i].rawurl[0]; i++) {
 		const int state = get_atomic_int(&url[i].state);
 		const int rw = get_atomic_int(&url[i].rw);
+		debugf("[%d] select.state = [%s][%d]\n", url[i].index, state_to_s(state), want_io(state, rw));
 		if (!want_io(state, rw)) {
 			continue;
 		}
-		if(rw & SURL_RW_WANT_READ) {
+		if(rw & 1<<SURL_RW_WANT_READ) {
 //			debugf("Adding %d into read select...\n", url[t].sockfd);
 			FD_SET(url[i].sockfd, &set);
 		}
 		
-		if(rw & SURL_RW_WANT_WRITE) {
+		if(rw & 1<<SURL_RW_WANT_WRITE) {
 //			debugf("Adding %d into write select...\n", url[t].sockfd);
 			FD_SET(url[i].sockfd, &writeset);
 		}
@@ -660,7 +717,11 @@ static void selectall(void)
 	}
 	for(int i = 0; url[i].rawurl[0]; i++) {
 		const int rw = !!FD_ISSET(url[i].sockfd, &set) << SURL_RW_READY_READ | !!FD_ISSET(url[i].sockfd, &writeset) << SURL_RW_READY_WRITE;
-		set_atomic_int(&url[i].rw, rw);
+		if (rw) {
+			set_atomic_int(&url[i].rw, rw);
+		} else {
+			// Do nothing, this way you preservers the original value !!
+		}
 	}
 }
 
@@ -672,9 +733,12 @@ static void goone(struct surl *u)
 	const int state = get_atomic_int(&u->state);
 	const int rw = get_atomic_int(&u->rw);
 
+	debugf("[%d] state = [%s][%d]\n", u->index, state_to_s(state), want_io(state, rw));
+
 	if (want_io(state, rw)) {
 		return;  // select will look after this state
 	}
+    check_io(state, rw); // Checks that when we need some io, then the socket is in readable/writeable state
 
 	const int tim = get_time_int();
 
@@ -761,13 +825,12 @@ static int exitprematurely(void)
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-static void outputpartial(void)
-{
+static void outputpartial(void) {
 	int t;
 
 	for(t=0; url[t].rawurl[0]; t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(url_state==SURL_S_RECVREPLY) {
+		if(url_state == SURL_S_RECVREPLY) {
 			output(&url[t]);
 		}
 	}
@@ -775,8 +838,7 @@ static void outputpartial(void)
 
 /** primitivni parsovatko url
  */
-void simpleparseurl(struct surl *u)
-{
+void simpleparseurl(struct surl *u) {
 	u->port = 0;
 	u->proto[0] = 0;
 	u->path[0] = '/';
@@ -796,22 +858,9 @@ void simpleparseurl(struct surl *u)
 }
 
 
-/**
- * Init URL struct
- */
-
-void init_url(struct surl *u, const char *url, const int index) {
-	// Init the url
-	strcpy(u->rawurl, url);
-	u->index = index;
-	simpleparseurl(u);
-	u->state = SURL_S_JUSTBORN;
-	//debugf("[%d] born\n",i);
-	u->bufp = 0;
-	u->contentlen = -1;
-	u->cookiecnt = 0;
-
-	switch (check_proto(u)) {
+static int check_proto(struct surl *u) {
+	const int port = parse_proto(u->proto);
+	switch (port) {
 		case 80:
 			u->f = (struct surl_func) {
 				launch_dns:launchdns,
@@ -828,8 +877,31 @@ void init_url(struct surl *u, const char *url, const int index) {
 			break;
 
 		default:
+			debugf("Unsupported protocol: [%s]\n", u->proto);
+			u->status = 999;
+			sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
+			set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
 			break;
 	}
+	return port;
+}
+
+/**
+ * Init URL struct
+ */
+
+void init_url(struct surl *u, const char *url, const int index) {
+	// Init the url
+	strcpy(u->rawurl, url);
+	u->index = index;
+	simpleparseurl(u);
+	u->state = SURL_S_JUSTBORN;
+	//debugf("[%d] born\n",i);
+	u->bufp = 0;
+	u->contentlen = -1;
+	u->cookiecnt = 0;
+
+	check_proto(u);
 }
 
 /**
@@ -844,7 +916,7 @@ void go(void)
 		change = 0;
 		
 		selectall();
-		for(int t=0; url[t].rawurl[0]; t++) {
+		for(int t = 0; url[t].rawurl[0]; t++) {
 			//debugf("%d: %d\n",t,url[t].state);
 			const int state = get_atomic_int(&url[t].state);
 			if(state < SURL_S_DONE) {
