@@ -134,6 +134,7 @@ struct surl {
 	
 	// network
 	int sockfd;
+	int ssl_connected;
 	int ip;
 	int prev_ip;
 	

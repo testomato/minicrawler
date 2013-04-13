@@ -104,7 +104,8 @@ void sec_destroy_ctx(SSL_CTX *ctx) {
 
 static void sec_handshake(struct surl *u) {
 	assert(u->ssl);
-	const int t = SSL_do_handshake(u->ssl);
+
+	const int t = SSL_connect(u->ssl);
     if (t == 1) {
         set_atomic_int(&u->state, SURL_S_GENREQUEST);
         return;
@@ -117,12 +118,15 @@ static void sec_handshake(struct surl *u) {
     }
     if (err == SSL_ERROR_WANT_WRITE) {
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+		return;
     }
     if (err == SSL_ERROR_ZERO_RETURN) {
         debugf("[%d] Connection closed (in handshake)", u->index);
         set_atomic_int(&u->state, SURL_S_ERROR);
+        return;
     }
-    debugf("[%d] Unexpected SSL error (in handshake): %d", u->index, err);
+    debugf("[%d] Unexpected SSL error (in handshake): %d\n", u->index, err);
+    ERR_print_errors_fp(stderr);
     set_atomic_int(&u->state, SURL_S_ERROR);
 }
 
@@ -208,7 +212,7 @@ static int check_proto(struct surl *u);
 /** spusti preklad pres ares
  */
 static void launchdns(struct surl *u) {
-	if (check_proto(u) == -1) {
+	if ((u->port = check_proto(u)) == -1) {
 		return;
 	}
 
@@ -265,6 +269,19 @@ static void connectsocket(struct surl *u) {
 	set_atomic_int(&u->rw, 1<< SURL_RW_READY_READ | 1<<SURL_RW_READY_WRITE);
 }
 
+static int maybe_create_ssl(struct surl *u) {
+	if (0 != strcmp(u->proto, "https")) {
+		return 1;
+	}
+
+	SSL *ssl = SSL_new(sec_ctx);
+	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
+	SSL_set_bio(ssl, sbio, sbio);
+	u->ssl = ssl;
+
+	return 1;
+}
+
 /** uz znam IP, otevri socket
  */
 static void opensocket(struct surl *u)
@@ -281,6 +298,10 @@ static void opensocket(struct surl *u)
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
 
 	const int t = connect(u->sockfd, (struct sockaddr *)&addr, sizeof(addr));
+	if (!maybe_create_ssl(u)) {
+		debugf("%d: cannot create ssl session :-(\n", u->index);
+		set_atomic_int(&u->state, SURL_S_ERROR);
+	}
 	if(t) {
 		if(errno == EINPROGRESS) {
 			set_atomic_int(&u->state, SURL_S_CONNECT);
@@ -288,10 +309,11 @@ static void opensocket(struct surl *u)
 		}
 		else {
 			debugf("%d: connect failed (%d, %s)\n", u->index, errno, strerror(errno));
-			set_atomic_int(&u->state, SURL_S_ERROR);}
+			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
-	else {
+	} else {
 		set_atomic_int(&u->state, SURL_S_HANDSHAKE);
+		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE | 1<<SURL_RW_WANT_WRITE);
 	}
 }
 
@@ -320,11 +342,11 @@ static void genrequest(struct surl *u) {
 	char customheader[4096];
 //	char *p;
 
-        if (*settings.customagent) {
-            strcpy(agent, settings.customagent);
-        } else {
-            strcpy(agent, "minicrawler/1");
-        }
+    if (*settings.customagent) {
+        strcpy(agent, settings.customagent);
+    } else {
+        strcpy(agent, "minicrawler/1");
+    }
 
 	// vytvoří si to řetězec cookies a volitelných parametrů
 	cookiestring[0] = 0;
@@ -749,7 +771,7 @@ static void resolvelocation(struct surl *u) {
 	
 	debugf("[%d] Lproto = '%s' Lhost='%s' Lpath='%s'\n", u->index, lproto, lhost, lpath);
 
-       	if (strcmp(u->host,lhost)) {
+	if (strcmp(u->host,lhost)) {
 		set_atomic_int(&u->state, SURL_S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
 	}
 	else {
@@ -773,7 +795,7 @@ static void resolvelocation(struct surl *u) {
 	u->contentlen = -1;
 	u->bufp = 0;
 
-	if (check_proto(u) == -1) {
+	if ((u->port = check_proto(u)) == -1) {
 		return;
 	}
 }
@@ -1031,7 +1053,7 @@ void simpleparseurl(struct surl *u) {
 		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host), I_LENGTHOF(u->path) - 1);
 		// FIXME: sscanf may not be succesfull
 		const int ret = sscanf(u->rawurl, buf, u->proto, u->host, u->path + 1);
-		u->port = 80;
+		u->port = parse_proto(u->proto);
 	}
 
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
@@ -1102,7 +1124,7 @@ void init_url(struct surl *u, const char *url, const int index) {
 	u->contentlen = -1;
 	u->cookiecnt = 0;
 
-	check_proto(u);
+	u->port = check_proto(u);
 }
 
 /**
