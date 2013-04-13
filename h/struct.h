@@ -2,6 +2,10 @@
 
 enum { BUFSIZE = 700*1024, };
 
+#define SEC_KEYFILE "xxx.pem"
+#define SEC_PASSWORD "password"
+#define SEC_ROOT_CERTS "root.pem"
+
 struct nv {
     char *name, *value;
 };
@@ -16,13 +20,10 @@ enum surl_s {
 	SURL_S_JUSTBORN,
 	SURL_S_INDNS,
 	SURL_S_GOTIP,
-//	SURL_S_CONNECTING,
-//	SURL_S_CONNECTED,
 	SURL_S_CONNECT,
+	SURL_S_HANDSHAKE,
 	SURL_S_GENREQUEST,
 	SURL_S_SENDREQUEST,
-//	SURL_S_GETREPLY,
-//	SURL_S_READYREPLY,
 	SURL_S_RECVREPLY,
 	SURL_S_INTERNAL_ERROR,
 	SURL_S_DONE,
@@ -39,6 +40,8 @@ static inline const char *state_to_s(const enum surl_s x) {
 			return "SURL_S_GOTIP";
 		case SURL_S_CONNECT:
 			return "SURL_S_CONNECT";
+		case SURL_S_HANDSHAKE:
+			return "SURL_S_HANDSHAKE";
 		case SURL_S_GENREQUEST:
 			return "SURL_S_GENREQUEST";
 		case SURL_S_SENDREQUEST:
@@ -55,7 +58,7 @@ static inline const char *state_to_s(const enum surl_s x) {
 }
 
 enum {
-	SURL_STATES_IO = 1<<SURL_S_CONNECT | 1<<SURL_S_SENDREQUEST | 1<<SURL_S_RECVREPLY,
+	SURL_STATES_IO = 1<<SURL_S_CONNECT | 1<<SURL_S_HANDSHAKE | 1<<SURL_S_SENDREQUEST | 1<<SURL_S_RECVREPLY,
 };
 
 enum surl_rw {
@@ -65,15 +68,27 @@ enum surl_rw {
 	SURL_RW_READY_WRITE,
 };
 
+ enum surl_io {
+	SURL_IO_WRITE = -3,
+	SURL_IO_READ = -2,
+	SURL_IO_ERROR = -1,
+	SURL_IO_EOF = 0,
+};
+
 struct surl;
 
 typedef void (*surl_callback)(struct surl*);
+typedef ssize_t (*read_callback)(const struct surl *u, char *buf, const size_t size);
+typedef ssize_t (*write_callback)(const struct surl *u, const char *buf, const size_t size);
 
 struct surl_func {
+	read_callback read;
+	write_callback write;
 	surl_callback launch_dns;
 	surl_callback check_dns;
 	surl_callback open_socket;
 	surl_callback connect_socket;
+	surl_callback handshake;
 	surl_callback gen_request;
 	surl_callback send_request;
 	surl_callback recv_reply;
@@ -82,7 +97,7 @@ struct surl_func {
 struct surl {
 	struct surl_func f;
 
-        // ...
+    // ...
 	int index;
 	char rawurl[1024];
  
@@ -139,6 +154,7 @@ struct surl {
 
 struct ssettings {
 	int debug;
+	int ssl;
 	int timeout;
 	int writehead;
 	int impatient;

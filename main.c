@@ -20,6 +20,7 @@ void initurls(int argc, char *argv[])
 	int i = 0;
 	for (int t = 1; t < argc; ++t) {
 		if(!strcmp(argv[t], "-d")) {settings.debug=1;continue;}
+		if(!strcmp(argv[t], "-S")) {settings.ssl=1;continue;}
 		if(!strcmp(argv[t], "-h")) {settings.writehead=1;continue;}
 		if(!strcmp(argv[t], "-i")) {settings.impatient=1;continue;}
 		if(!strcmp(argv[t], "-p")) {settings.partial=1;continue;}
@@ -64,14 +65,17 @@ void printusage()
 	         "         -c         convert text format (with utf-8 encoding)\n"
 	         "         -8         convert from page encoding to utf-8\n"
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP\n"
+	         "         -S         enable ssl support\n"
 	         "\n", VERSION);
 }
 
 /** a jedeeeem...
  */
-int main(int argc, char *argv[])
-{
-	if(argc<2) {printusage();exit(-1);}
+int main(int argc, char *argv[]) {
+	if(argc < 2) {
+		printusage();
+		exit(-1);
+	}
 	
 	signal(SIGUSR1,sighandler);
 	signal(SIGPIPE,sighandler);
@@ -80,7 +84,7 @@ int main(int argc, char *argv[])
 	settings.timeout=5;
 	settings.delay=100;
 	
-	initurls(argc,argv);
+	initurls(argc, argv);
 	go();
  
 	exit(0);

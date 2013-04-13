@@ -3,7 +3,8 @@ objs=$(patsubst %.c,o/%.o,$(wildcard *.c))
 name=minicrawler
 
 $(name): $(objs)
-	gcc -g -O3 -o $(name) $(objs) -static -lcares -lrt -lssl
+#	gcc -g -O3 -o $(name) $(objs) -static -lcares -lrt -lssl -lcrypto -lz -lpthread -lm -lc -ldl
+	gcc -g -O3 -o $(name) $(objs) -lcares -lrt -lssl
 
 .odir.stamp:
 	mkdir -p o

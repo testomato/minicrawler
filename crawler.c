@@ -12,6 +12,8 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 #include "h/struct.h"
 #include "h/proto.h"
@@ -35,6 +37,143 @@ static int check_io(const int state, const int rw) {
 	}
 }
 
+static BIO *bio_err = NULL;
+static SSL_CTX *sec_ctx = NULL;
+
+static int sec_pem_password_cb(char *buf, int size, int rwflag, void *password) {
+	strncpy(buf, (char *)(password), size);
+	buf[size - 1] = 0;
+	return(strlen(buf));
+}
+
+static int berr_exit(const char *string) {
+	BIO_printf(bio_err, "%s\n", string);
+	ERR_print_errors(bio_err);
+	exit(1);
+}
+
+static void sec_initialize_ctx(void) {
+	if (sec_ctx) {
+		return;
+	}
+	if (!settings.ssl) {
+		return;
+	}
+	if(!bio_err){
+		/* Global system initialization*/
+		SSL_library_init();
+		SSL_load_error_strings();
+
+		/* An error write context */
+		bio_err = BIO_new_fp(stderr, BIO_NOCLOSE);
+	}
+
+	/* Set up a SIGPIPE handler */
+	//FIXME: Is this necessary?
+//	signal(SIGPIPE,sigpipe_handle);
+
+	/* Create our context*/
+	SSL_METHOD *meth = SSLv23_method();
+	SSL_CTX *ctx = SSL_CTX_new(meth);
+
+	/* Load our keys and certificates*/
+	if(!(SSL_CTX_use_certificate_chain_file(ctx, SEC_KEYFILE))) {
+		berr_exit("Can't read certificate file");
+	}
+	SSL_CTX_set_default_passwd_cb_userdata(ctx, SEC_PASSWORD);
+	SSL_CTX_set_default_passwd_cb(ctx, sec_pem_password_cb);
+	if(!SSL_CTX_use_PrivateKey_file(ctx, SEC_KEYFILE, SSL_FILETYPE_PEM)) {
+		berr_exit("Can't read key file");
+	}
+
+	/* Load the CAs we trust*/
+	if(!(SSL_CTX_load_verify_locations(ctx, SEC_ROOT_CERTS, 0))) {
+		berr_exit("Can't read CA list");
+	}
+
+	#if (OPENSSL_VERSION_NUMBER < 0x00905100L)
+	SSL_CTX_set_verify_depth(ctx,1);
+	#endif
+
+	sec_ctx = ctx;
+}
+     
+void sec_destroy_ctx(SSL_CTX *ctx) {
+	SSL_CTX_free(ctx);
+}
+
+static void sec_handshake(struct surl *u) {
+	assert(u->ssl);
+	const int t = SSL_do_handshake(u->ssl);
+    if (t == 1) {
+        set_atomic_int(&u->state, SURL_S_GENREQUEST);
+        return;
+    }
+
+    const int err = SSL_get_error(u->ssl, t);
+    if (err == SSL_ERROR_WANT_READ) {
+    	set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+		return;
+    }
+    if (err == SSL_ERROR_WANT_WRITE) {
+		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+    }
+    if (err == SSL_ERROR_ZERO_RETURN) {
+        debugf("[%d] Connection closed (in handshake)", u->index);
+        set_atomic_int(&u->state, SURL_S_ERROR);
+    }
+    debugf("[%d] Unexpected SSL error (in handshake): %d", u->index, err);
+    set_atomic_int(&u->state, SURL_S_ERROR);
+}
+
+static ssize_t sec_read(const struct surl *u, char *buf, const size_t size) {
+	assert(u->ssl);
+
+	const int t = SSL_read(u->ssl, buf, size);
+	// FIX: ? fix this fix?
+	/* Fix CVE-2009-3555. Disable reneg if started by client. */
+	/*
+	if (ps->renegotiation) {
+		shutdown_proxy(ps, SHUTDOWN_SSL);
+		return;
+	}
+	*/
+
+	if (t > 0) {
+		return (ssize_t) size;
+	}
+	else {
+		const int err = SSL_get_error(u->ssl, t);
+		if (err == SSL_ERROR_WANT_WRITE) {
+			return SURL_IO_WRITE;
+		}
+		else if (err == SSL_ERROR_WANT_READ) {
+			return SURL_IO_READ;
+		}
+		else {
+			return SURL_IO_ERROR;
+		}
+	}
+}
+
+static ssize_t sec_write(const struct surl *u, const char *buf, const size_t size) {
+    assert(u->ssl);
+
+	const int t = SSL_write(u->ssl, buf, size);
+    if (t > 0) {
+    	return (ssize_t)t;
+    }
+
+	const int err = SSL_get_error(u->ssl, t);
+	if (err == SSL_ERROR_WANT_READ) {
+		return SURL_IO_READ;
+	}
+	if (err == SSL_ERROR_WANT_WRITE) {
+		return SURL_IO_WRITE;
+	}
+	return SURL_IO_ERROR;
+}
+
 /** callback funkce, kterou zavola ares
  */
 static void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent) {
@@ -54,7 +193,6 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	set_atomic_int(&u->state, SURL_S_GOTIP);
 }
 
-
 static int parse_proto(const char *s) {
 	if (0 == strcmp(s, "https")) {
 		return 443;
@@ -69,8 +207,7 @@ static int check_proto(struct surl *u);
 
 /** spusti preklad pres ares
  */
-static void launchdns(struct surl *u)
-{
+static void launchdns(struct surl *u) {
 	if (check_proto(u) == -1) {
 		return;
 	}
@@ -90,8 +227,7 @@ static void launchdns(struct surl *u)
 
 /** uz je ares hotovy?
  */
-static void checkdns(struct surl *u)
-{
+static void checkdns(struct surl *u) {
 	int t;
 	fd_set readfds;
 	fd_set writefds;
@@ -125,7 +261,8 @@ static void connectsocket(struct surl *u) {
 		return;
 	}
 
-	set_atomic_int(&u->state, SURL_S_GENREQUEST);
+	set_atomic_int(&u->state, SURL_S_HANDSHAKE);
+	set_atomic_int(&u->rw, 1<< SURL_RW_READY_READ | 1<<SURL_RW_READY_WRITE);
 }
 
 /** uz znam IP, otevri socket
@@ -154,7 +291,7 @@ static void opensocket(struct surl *u)
 			set_atomic_int(&u->state, SURL_S_ERROR);}
 		}
 	else {
-		set_atomic_int(&u->state, SURL_S_GENREQUEST);
+		set_atomic_int(&u->state, SURL_S_HANDSHAKE);
 	}
 }
 
@@ -177,8 +314,7 @@ static char *str_replace( const char *string, const char *substr, const char *re
 
 /** socket bezi, posli dotaz
  */
-static void genrequest(struct surl *u)
-{
+static void genrequest(struct surl *u) {
 	char agent[256];
 	char cookiestring[4096];
 	char customheader[4096];
@@ -227,30 +363,42 @@ static void genrequest(struct surl *u)
 	u->request_it = 0;
 
 	set_atomic_int(&u->state, SURL_S_SENDREQUEST);
-	set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+//	set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+	set_atomic_int(&u->rw, 1<<SURL_RW_READY_WRITE);
 }
 
 static void sendrequest(struct surl *u) {
 	if (u->request_it < u->request_len) {
-		const ssize_t ret = write(u->sockfd, &u->request[u->request_it], u->request_len - u->request_it);
-		if (ret < 0) {
+		const ssize_t ret = u->f.write(u, &u->request[u->request_it], u->request_len - u->request_it);
+		if (ret == SURL_IO_ERROR || ret == SURL_IO_EOF) {
 			debugf("[%d] Error when writing to socket: %m\n", u->index);
 			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
-		u->request_it += (size_t)ret;
+		else if (ret == SURL_IO_WRITE) {
+			set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+		} else if (ret == SURL_IO_READ) {
+			set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+		} else {
+			assert(ret > 0);
+			u->request_it += (size_t)ret;
+		}
 	}
 	if (u->request_it == u->request_len) {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
-		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+//		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+		set_atomic_int(&u->rw, 1<<SURL_RW_READY_READ);
 	} else {
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
 	}
 }
 
+static void empty_handshake(struct surl *u) {
+	set_atomic_int(&u->state, SURL_S_GENREQUEST);
+}
+
 /** strcpy, ktere se ukonci i koncem radku
  */
-static void strcpy_term(char *to, char *from)
-{
+static void strcpy_term(char *to, char *from) {
 	for(;*from && *from != '\r' && *from != '\n';) *to++ = *from++;
 	*to = 0;
 }
@@ -259,8 +407,7 @@ static void strcpy_term(char *to, char *from)
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
  *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
  */
-static int eatchunked(struct surl *u, int first)
-{
+static int eatchunked(struct surl *u, int first) {
 	int t,i;
 	unsigned char hex[10];
 	int size;
@@ -311,8 +458,7 @@ static int eatchunked(struct surl *u, int first)
 /** zapíše si do pole novou cookie (pokud ji tam ještě nemá; pokud má, tak ji nahradí)
  * kašleme na cestu a na dobu platnosti cookie (to by mělo být pro účely minicrawleru v pohodě)
  */
-static void setcookie(struct surl *u,char *str)
-{
+static void setcookie(struct surl *u,char *str) {
 	for (; *str == ' ' || *str == '\t'; ++str);
 	// FIXME: Whitespaces are permited between tokens, must be skipped event between name, '=', value!!!
     const int name_len = strchrnul(str, '=') - str; //strcpy_endchar(NULL, str, '=');
@@ -351,8 +497,7 @@ static void setcookie(struct surl *u,char *str)
 	}
 }
 
-static void find_content_type(struct surl *u)
-{
+static void find_content_type(struct surl *u) {
 	static const char content_type[] = "\nContent-Type:";
 	static const char charset[] = " charset=";
 	char *p_ct = (char*) memmem(u->buf, u->headlen, content_type, sizeof(content_type) - 1);
@@ -391,8 +536,7 @@ static char *find_head_end(struct surl *u) {
 
 /** pozná status a hlavičku http požadavku
  */
-static void detecthead(struct surl *u)
-{
+static void detecthead(struct surl *u) {
 	u->status = atoi(u->buf + 9);
 	u->buf[u->bufp] = 0;
 	
@@ -439,10 +583,44 @@ static void detecthead(struct surl *u)
 	}
 }
 
+ssize_t plain_read(const struct surl *u, char *buf, const size_t size) {
+	const int fd = u->sockfd;
+	const ssize_t res = read(fd, buf, size);
+	if (0 < res) {
+		return res;
+	}
+	if (0 == res) {
+		return SURL_IO_EOF;
+	}
+	if (-1 == res) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+			return SURL_IO_READ;
+		}
+	}
+	return SURL_IO_ERROR;
+}
+
+ssize_t plain_write(const struct surl *u, const char *buf, const size_t size) {
+	const int fd = u->sockfd;
+	const ssize_t res = write(fd, buf, size);
+	if (0 < res) {
+		return res;
+	}	
+	if (0 == res) {
+		return SURL_IO_EOF;
+	}
+	if (-1 == res) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+			return SURL_IO_WRITE;
+		}
+	}
+	return SURL_IO_ERROR;
+}
+
+
 /** vypise vystup na standardni vystup
  */
-static void output(struct surl *u)
-{
+static void output(struct surl *u) {
 	unsigned char header[4096];
 
 	if (!*u->charset) {
@@ -507,8 +685,7 @@ static void output(struct surl *u)
 }
 
 
-static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size)
-{
+static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size) {
 	assert(0 == strcmp(lpath, "/"));
 
 	const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
@@ -525,8 +702,7 @@ static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lh
 }
 
 
-static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size)
-{
+static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size) {
 	assert(0 == strcmp(lpath, "/"));
 
 	const char fmt[] = "%%%d[^/]/%%%ds";
@@ -545,8 +721,7 @@ static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhos
 
 /** vyres presmerovani
  */
-static void resolvelocation(struct surl *u)
-{
+static void resolvelocation(struct surl *u) {
 	char lproto[ sizeof(u->proto) ] = "http";
 	char lhost[ sizeof(u->host) ];
 	char lpath[ sizeof(u->path) ] = "/";
@@ -605,8 +780,7 @@ static void resolvelocation(struct surl *u)
 
 /** uz mame cely vstup - bud ho vypis nebo vyres presmerovani
  */
-static void finish(struct surl *u)
-{
+static void finish(struct surl *u) {
 	if(u->headlen==0) {
 		detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
 	}
@@ -627,19 +801,27 @@ static ssize_t try_read(struct surl *u) {
 		left = 4096;
 	}
 
-	return read(u->sockfd, u->buf + u->bufp, left);
+	return u->f.read(u, u->buf + u->bufp, left);
 }
 
 /** cti odpoved
  */
-static void readreply(struct surl *u)
-{
+static void readreply(struct surl *u) {
 	debugf("} bufp = %d\n", u->bufp);
 
 	unsigned char buf[1024];
 	
 	const ssize_t t = try_read(u);
-	if (t < 0) {
+	assert(t >= SURL_IO_WRITE);
+	if (t == SURL_IO_READ) {
+		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+		return;
+	}
+	if (t == SURL_IO_WRITE) {
+		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+		return;
+	}
+	if (t == SURL_IO_ERROR) {
 		debugf("read failed: %m");
 	}
 	if(t > 0) {
@@ -648,7 +830,7 @@ static void readreply(struct surl *u)
 	}
 
 	debugf("}1 bufp = %d; buf = [%.*s]\n", u->bufp, u->bufp, u->buf);
-		if (u->headlen == 0 && find_head_end(u)) {
+	if (u->headlen == 0 && find_head_end(u)) {
 		detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
 	}
 	debugf("}2 bufp = %d\n", u->bufp);
@@ -666,9 +848,9 @@ static void readreply(struct surl *u)
 		}
 	}
 	
-	if(t <= 0 || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
-		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server
-		finish(u);
+	if(t == SURL_IO_EOF || t == SURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
+		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
+		finish(u); // u->state is changed here
 	} else {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
@@ -679,8 +861,7 @@ static void readreply(struct surl *u)
 
 /** provede systemovy select nad vsemi streamy
  */
-static void selectall(void)
-{
+static void selectall(void) {
 	fd_set set;
 	fd_set writeset;
 	struct timeval timeout;	
@@ -718,7 +899,7 @@ static void selectall(void)
 		if (rw) {
 			set_atomic_int(&url[i].rw, rw);
 		} else {
-			// Do nothing, this way you preserver the original value !!
+			// Do nothing, this way you preserve the original value !!
 		}
 	}
 }
@@ -726,8 +907,7 @@ static void selectall(void)
 
 /** provede jeden krok pro dane url
  */
-static void goone(struct surl *u)
-{
+static void goone(struct surl *u) {
 	const int state = get_atomic_int(&u->state);
 	const int rw = get_atomic_int(&u->rw);
 
@@ -759,9 +939,12 @@ static void goone(struct surl *u)
 		u->f.connect_socket(u);
 		break;
 
-	case SURL_S_GENREQUEST:
-		u->f.gen_request(u);
+	case SURL_S_HANDSHAKE:
+		u->f.handshake(u);
 		break;
+
+    case SURL_S_GENREQUEST:
+        u->f.gen_request(u);
 
 	case SURL_S_SENDREQUEST:
 		u->f.send_request(u);
@@ -786,8 +969,7 @@ static void goone(struct surl *u)
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
  */
-static int exitprematurely(void)
-{
+static int exitprematurely(void) {
 	int tim;
 	int t;
 	int notdone = 0, lastread = 0;
@@ -855,16 +1037,25 @@ void simpleparseurl(struct surl *u) {
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 }
 
+static void set_unsupported_protocol(struct surl *u) {
+			debugf("Unsupported protocol: [%s]\n", u->proto);
+			u->status = 999;
+			sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
+			set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
+}
 
 static int check_proto(struct surl *u) {
 	const int port = parse_proto(u->proto);
 	switch (port) {
 		case 80:
 			u->f = (struct surl_func) {
+				read:plain_read,
+				write:plain_write,
 				launch_dns:launchdns,
 				check_dns:checkdns,
 				open_socket:opensocket,
 				connect_socket:connectsocket,
+				handshake:empty_handshake,
 				gen_request:genrequest,
 				send_request:sendrequest,
 				recv_reply:readreply,
@@ -872,13 +1063,26 @@ static int check_proto(struct surl *u) {
 			break;
 
 		case 443:
+			if (!settings.ssl) {
+				set_unsupported_protocol(u);
+			} else {
+				u->f = (struct surl_func) {
+					read:sec_read,
+					write:sec_write,
+					launch_dns:launchdns,
+					check_dns:checkdns,
+					open_socket:opensocket,
+					connect_socket:connectsocket,
+					handshake:sec_handshake,
+					gen_request:genrequest,
+					send_request:sendrequest,
+					recv_reply:readreply,
+				};				
+			}
 			break;
 
 		default:
-			debugf("Unsupported protocol: [%s]\n", u->proto);
-			u->status = 999;
-			sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
-			set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
+			set_unsupported_protocol(u);
 			break;
 	}
 	return port;
@@ -887,7 +1091,6 @@ static int check_proto(struct surl *u) {
 /**
  * Init URL struct
  */
-
 void init_url(struct surl *u, const char *url, const int index) {
 	// Init the url
 	strcpy(u->rawurl, url);
@@ -905,8 +1108,9 @@ void init_url(struct surl *u, const char *url, const int index) {
 /**
  * hlavni smycka
  */
-void go(void)
-{
+void go(void) {
+	sec_initialize_ctx();
+
 	int done;
 	int change;
 	do {
@@ -947,4 +1151,3 @@ void go(void)
 		debugf("All successful. Took %d ms.\n", get_time_int());
 	}
 }
-
