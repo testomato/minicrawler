@@ -144,20 +144,16 @@ static ssize_t sec_read(const struct surl *u, char *buf, const size_t size) {
 	*/
 
 	if (t > 0) {
-		return (ssize_t) size;
+		return (ssize_t)t;
 	}
-	else {
-		const int err = SSL_get_error(u->ssl, t);
-		if (err == SSL_ERROR_WANT_WRITE) {
-			return SURL_IO_WRITE;
-		}
-		else if (err == SSL_ERROR_WANT_READ) {
-			return SURL_IO_READ;
-		}
-		else {
-			return SURL_IO_ERROR;
-		}
+	const int err = SSL_get_error(u->ssl, t);
+	if (err == SSL_ERROR_WANT_WRITE) {
+		return SURL_IO_WRITE;
 	}
+	if (err == SSL_ERROR_WANT_READ) {
+		return SURL_IO_READ;
+	}
+	return SURL_IO_ERROR;
 }
 
 static ssize_t sec_write(const struct surl *u, const char *buf, const size_t size) {
