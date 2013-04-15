@@ -1,4 +1,3 @@
-#include "h/global.h"
 #include "h/struct.h"
 #include "h/proto.h"
 
