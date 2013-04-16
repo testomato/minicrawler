@@ -2,10 +2,6 @@
 
 enum { BUFSIZE = 700*1024, };
 
-#define SEC_KEYFILE "xxx.pem"
-#define SEC_PASSWORD "password"
-#define SEC_ROOT_CERTS "root.pem"
-
 struct nv {
     char *name, *value;
 };

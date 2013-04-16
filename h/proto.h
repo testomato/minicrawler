@@ -1,3 +1,5 @@
+#include <assert.h>
+
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
@@ -6,6 +8,9 @@ extern struct surl url[];
 extern struct ssettings settings;
 
 #define debugf(...)   {if(settings.debug) fprintf(stderr, __VA_ARGS__);}
+
+SSL_CTX *mossad(void);
+void free_mossad(void);
 
 int get_time_int(void);
 unsigned get_time_slot(const unsigned key);

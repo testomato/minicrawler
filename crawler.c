@@ -37,71 +37,6 @@ static int check_io(const int state, const int rw) {
 	}
 }
 
-static BIO *bio_err = NULL;
-static SSL_CTX *sec_ctx = NULL;
-
-static int sec_pem_password_cb(char *buf, int size, int rwflag, void *password) {
-	strncpy(buf, (char *)(password), size);
-	buf[size - 1] = 0;
-	return(strlen(buf));
-}
-
-static int berr_exit(const char *string) {
-	BIO_printf(bio_err, "%s\n", string);
-	ERR_print_errors(bio_err);
-	exit(1);
-}
-
-static void sec_initialize_ctx(void) {
-	if (sec_ctx) {
-		return;
-	}
-	if (!settings.ssl) {
-		return;
-	}
-	if(!bio_err){
-		/* Global system initialization*/
-		SSL_library_init();
-		SSL_load_error_strings();
-
-		/* An error write context */
-		bio_err = BIO_new_fp(stderr, BIO_NOCLOSE);
-	}
-
-	/* Set up a SIGPIPE handler */
-	//FIXME: Is this necessary?
-//	signal(SIGPIPE,sigpipe_handle);
-
-	/* Create our context*/
-	SSL_METHOD *meth = SSLv23_method();
-	SSL_CTX *ctx = SSL_CTX_new(meth);
-
-	/* Load our keys and certificates*/
-	if(!(SSL_CTX_use_certificate_chain_file(ctx, SEC_KEYFILE))) {
-		berr_exit("Can't read certificate file");
-	}
-	SSL_CTX_set_default_passwd_cb_userdata(ctx, SEC_PASSWORD);
-	SSL_CTX_set_default_passwd_cb(ctx, sec_pem_password_cb);
-	if(!SSL_CTX_use_PrivateKey_file(ctx, SEC_KEYFILE, SSL_FILETYPE_PEM)) {
-		berr_exit("Can't read key file");
-	}
-
-	/* Load the CAs we trust*/
-	if(!(SSL_CTX_load_verify_locations(ctx, SEC_ROOT_CERTS, 0))) {
-		berr_exit("Can't read CA list");
-	}
-
-	#if (OPENSSL_VERSION_NUMBER < 0x00905100L)
-	SSL_CTX_set_verify_depth(ctx,1);
-	#endif
-
-	sec_ctx = ctx;
-}
-     
-void sec_destroy_ctx(SSL_CTX *ctx) {
-	SSL_CTX_free(ctx);
-}
-
 static void sec_handshake(struct surl *u) {
 	assert(u->ssl);
 
@@ -270,7 +205,7 @@ static int maybe_create_ssl(struct surl *u) {
 		return 1;
 	}
 
-	SSL *ssl = SSL_new(sec_ctx);
+	SSL *ssl = SSL_new(mossad());
 	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
 	SSL_set_bio(ssl, sbio, sbio);
 	u->ssl = ssl;
@@ -336,7 +271,6 @@ static void genrequest(struct surl *u) {
 	char agent[256];
 	char cookiestring[4096];
 	char customheader[4096];
-//	char *p;
 
     if (*settings.customagent) {
         strcpy(agent, settings.customagent);
@@ -1128,8 +1062,6 @@ void init_url(struct surl *u, const char *url, const int index) {
  * hlavni smycka
  */
 void go(void) {
-	sec_initialize_ctx();
-
 	int done;
 	int change;
 	do {
