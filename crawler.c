@@ -500,7 +500,7 @@ static void detecthead(struct surl *u) {
 	u->headlen = p-u->buf;
 	debugf("[%d] buf='%s'\n", u->index, u->buf);
 	
-	p=(char*)memmem(u->buf,u->headlen,"Content-Length: ",16);
+	p=(char*)memmem(u->buf, u->headlen, "Content-Length: ", 16)?:(char*)memmem(u->buf, u->headlen, "Content-length: ", 16)?:(char*)memmem(u->buf, u->headlen, "content-length: ", 16);
 	if(p!=NULL) u->contentlen=atoi(p+16);
 	debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
 	
@@ -517,7 +517,7 @@ static void detecthead(struct surl *u) {
 		}
 	}
 	
-	p=(char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26);
+	p=(char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26)?:(char*)memmem(u->buf, u->headlen, "Transfer-Encoding:  chunked", 27);
 	if(p != NULL) {
 		u->chunked = 1;
 		u->nextchunkedpos=u->headlen;
@@ -746,9 +746,6 @@ static ssize_t try_read(struct surl *u) {
 	ssize_t left = BUFSIZE - u->bufp;
 	if(left <= 0) {
 		return 0;
-	}
-	if(left > 4096) {
-		left = 4096;
 	}
 
 	return u->f.read(u, u->buf + u->bufp, left);
