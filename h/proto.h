@@ -43,6 +43,15 @@ static inline size_t write_all(const int fd, const char *buf, const size_t len) 
 	return written;
 }
 
+static inline char *safe_cpy(char *dst, const char *src, const size_t sz) {
+	size_t i = 0;
+	for (; i < sz - 1 && src[i]; ++i) {
+		dst[i] = src[i];
+	}
+	dst[i++] = 0;
+	return &dst[i];
+}
+
 #ifdef __APPLE__
 
 #include <stddef.h>

@@ -95,9 +95,9 @@ static ssize_t sec_write(const struct surl *u, const char *buf, const size_t siz
     assert(u->ssl);
 
 	const int t = SSL_write(u->ssl, buf, size);
-    if (t > 0) {
-    	return (ssize_t)t;
-    }
+	if (t > 0) {
+		return (ssize_t)t;
+	}
 
 	const int err = SSL_get_error(u->ssl, t);
 	if (err == SSL_ERROR_WANT_READ) {
@@ -272,11 +272,11 @@ static void genrequest(struct surl *u) {
 	char cookiestring[4096];
 	char customheader[4096];
 
-    if (*settings.customagent) {
-        strcpy(agent, settings.customagent);
-    } else {
-        strcpy(agent, "minicrawler/1");
-    }
+	if (settings.customagent[0]) {
+		safe_cpy(agent, settings.customagent, sizeof(agent));
+	} else {
+		strcpy(agent, "minicrawler/1");
+	}
 
 	// vytvoří si to řetězec cookies a volitelných parametrů
 	cookiestring[0] = 0;
@@ -291,13 +291,12 @@ static void genrequest(struct surl *u) {
 	if (strlen(cookiestring)) {
 		sprintf(cookiestring + strlen(cookiestring), "\r\n");
 	}
-	if(settings.customheader) {
+	if(settings.customheader[0]) {
 		sprintf(customheader,"%s\r\n",settings.customheader);
 		if(u->customparam[0]) {
 			char *p = str_replace(customheader, "%", u->customparam);
 			strcpy(customheader,p);
 		}
-		debugf("[%d] Customheader: %s", u->index, customheader);
 		strcpy(cookiestring+strlen(cookiestring), customheader);
 	}
 	if(u->cookiecnt) {
@@ -310,12 +309,11 @@ static void genrequest(struct surl *u) {
 	} else { // POST
 		sprintf(u->request, "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n", u->path, u->host, agent, (int)strlen(u->post), u->post, cookiestring);
 	}
-
+	debugf("Request: [%s]", u->request);
 	u->request_len = strlen(u->request);
 	u->request_it = 0;
 
 	set_atomic_int(&u->state, SURL_S_SENDREQUEST);
-//	set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
 	set_atomic_int(&u->rw, 1<<SURL_RW_READY_WRITE);
 }
 
@@ -337,7 +335,6 @@ static void sendrequest(struct surl *u) {
 	}
 	if (u->request_it == u->request_len) {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
-//		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
 		set_atomic_int(&u->rw, 1<<SURL_RW_READY_READ);
 	} else {
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
@@ -869,7 +866,7 @@ static void goone(struct surl *u) {
 	if (want_io(state, rw)) {
 		return;  // select will look after this state
 	}
-    check_io(state, rw); // Checks that when we need some io, then the socket is in readable/writeable state
+	check_io(state, rw); // Checks that when we need some io, then the socket is in readable/writeable state
 
 	const int tim = get_time_int();
 
@@ -896,8 +893,9 @@ static void goone(struct surl *u) {
 		u->f.handshake(u);
 		break;
 
-    case SURL_S_GENREQUEST:
-        u->f.gen_request(u);
+	case SURL_S_GENREQUEST:
+		u->f.gen_request(u);
+		break;
 
 	case SURL_S_SENDREQUEST:
 		u->f.send_request(u);
