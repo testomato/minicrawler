@@ -151,7 +151,7 @@ struct surl {
 
 struct ssettings {
 	int debug;
-	int ssl;
+	int non_ssl;
 	int timeout;
 	int writehead;
 	int impatient;

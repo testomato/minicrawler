@@ -1011,7 +1011,7 @@ static int check_proto(struct surl *u) {
 			break;
 
 		case 443:
-			if (!settings.ssl) {
+			if (settings.non_ssl) {
 				set_unsupported_protocol(u);
 			} else {
 				u->f = (struct surl_func) {
