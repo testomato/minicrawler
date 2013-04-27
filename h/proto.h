@@ -56,6 +56,8 @@ static inline char *safe_cpy(char *dst, const char *src, const size_t sz) {
 
 #include <stddef.h>
 
+void *memmem(const void *big, size_t big_len, const void *little, size_t little_len);
+
 static inline void *mempcpy(void *dest, const void *src, size_t n) {
 	if (!n)
 		return dest;

@@ -1,16 +1,21 @@
 objs=$(patsubst %.c,o/%.o,$(wildcard *.c))
-
 name=minicrawler
 
 $(name): $(objs)
-	gcc -g -o $(name) $(objs) -L$(HOME)/opt/lib -lcares -liconv
+	gcc -g -o $(name) -L$(HOME)/.minicrawler/lib $(objs) -lcares -liconv -lssl -lcrypto
 
 .odir.stamp:
 	mkdir -p o
 	touch .odir.stamp
 
-$(objs): o/%.o: %.c .odir.stamp h/struct.h h/proto.h h/global.h h/version.h
-	gcc -g -c -std=gnu99 -fnested-functions -I$(HOME)/opt/include -o $@ $<
+$(objs): o/%.o: %.c .odir.stamp h/struct.h h/proto.h h/version.h
+	gcc -g -c -std=gnu99 -fnested-functions -I$(HOME)/.minicrawler/include -o $@ $<
+
+install-deps:
+	rm -fr ../opt && mkdir -p ../opt
+	cd ../opt && tar xvf ../c-ares-1.9.1.tar.gz && cd c-ares-1.9.1 && ./configure prefix=$(HOME)/.minicrawler && make -j 8 && make install
+	cd ../opt && tar xvf ../libiconv-1.14.tar.gz && cd libiconv-1.14 && ./configure prefix=$(HOME)/.minicrawler && make -j 8 && make install
+	cd ../opt && tar xvf ../openssl-1.0.1e.tar.gz && cd openssl-1.0.1e && ./Configure darwin64-x86_64-cc --prefix=$(HOME)/.minicrawler && make && make install
 
 clean:
 	rm -f $(objs)

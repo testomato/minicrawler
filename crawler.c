@@ -501,11 +501,16 @@ static void detecthead(struct surl *u) {
 	debugf("[%d] buf='%s'\n", u->index, u->buf);
 	
 	p=(char*)memmem(u->buf, u->headlen, "Content-Length: ", 16)?:(char*)memmem(u->buf, u->headlen, "Content-length: ", 16)?:(char*)memmem(u->buf, u->headlen, "content-length: ", 16);
-	if(p!=NULL) u->contentlen=atoi(p+16);
+	if(p != NULL) {
+		u->contentlen = atoi(p + 16);
+	}
 	debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
 	
 	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11); // FIXME: handle http headers case-insensitive!!
-	if(p!=NULL) {strcpy_term(u->location,p+11);debugf("[%d] Location='%s'\n",u->index,u->location);}
+	if(p!=NULL) {
+		strcpy_term(u->location,p+11);
+		debugf("[%d] Location='%s'\n",u->index,u->location);
+	}
 	
 	for (char *q = u->buf; q < &u->buf[u->headlen];) {
 		q = (char*)memmem(q, u->headlen - (q - u->buf), "\nSet-Cookie: ", 13);
@@ -604,7 +609,7 @@ static void output(struct surl *u) {
 	if (u->conv_errno) {
 		char err_buf[128];
 #		ifdef __APPLE__
-		char *err = !strerror_r(u->conv_errno, err_buf, sizeof(err_buf)) ? err_b/uf : "Unknown error";
+		char *err = !strerror_r(u->conv_errno, err_buf, sizeof(err_buf)) ? err_buf : "Unknown error";
 #		else
 		char *err = strerror_r(u->conv_errno, err_buf, sizeof(err_buf));
 #		endif
