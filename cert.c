@@ -5,8 +5,14 @@
 #include "h/struct.h"
 #include "h/proto.h"
 
+/**
+Password for out certificate.
+*/
 static const char psswd[] = "password";
 
+/**
+Certificate stored in memory.
+*/
 static const char xxx[] =
 	"-----BEGIN CERTIFICATE-----\n"
 	"MIICGDCCAYECAgEBMA0GCSqGSIb3DQEBBAUAMFcxCzAJBgNVBAYTAlVTMRMwEQYD\n"
@@ -45,18 +51,32 @@ static const char xxx[] =
 static BIO *bio_err = NULL;
 static SSL_CTX *ctx = NULL;
 
+/**
+Helper function for "reading" of the password.
+Useful when some wants to allow user
+to enter password by hand.
+
+Does nothing interesting in our case, simply copies password.
+*/
 static int password_cb(char *buf, int size, int rwflag, void *password) {
 	strncpy(buf, (char *)(password), size);
 	buf[size - 1] = 0;
 	return(strlen(buf));
 }
 
+/**
+Create BIO output file handler for standard error output.
+*/
 static int berr_exit(const char *string) {
 	BIO_printf(bio_err, "%s\n", string);
 	ERR_print_errors(bio_err);
 	exit(1);
 }
 
+/**
+Returns valid SSL context.
+When call for the first time, then initialize SSL and the context itself.
+*/
 SSL_CTX *mossad(void) {
 	if (ctx) {
 		return ctx;
@@ -94,6 +114,9 @@ SSL_CTX *mossad(void) {
 	return ctx;
 }
 
+/**
+Free SSL context. After this function is called, SSL should not be in used.
+*/
 void free_mossad(void) {
 	SSL_CTX_free(ctx);
 	ctx = NULL;

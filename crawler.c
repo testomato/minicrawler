@@ -18,25 +18,44 @@
 #include "h/struct.h"
 #include "h/proto.h"
 
+/**
+Atomic setter for integer. Library c-ares uses threads and it can cause
+non-defined state when we touch variables in non-atomic way inside it.
+*/
 static void set_atomic_int(int *ptr, const int val) {
 	*(volatile int*)ptr = val;
 	asm volatile ("" : : : "memory");  // memory barrier
 }
 
+/**
+Atomic getter for integer. There is some pain with library c-ares, see doc for set_atomic_int(.) .
+*/
 static int get_atomic_int(const int* const ptr) {
 	return *(volatile const int* const)ptr;
 }
 
+/** This function returns true if the state requires io and no io is available to it at the same time.
+Otherwise it returns false.
+HINT: This function says: you should call select(.) over the filedescriptor.
+*/
 static int want_io(const int state, const int rw) {
 	return ((1 << state) & SURL_STATES_IO) && (rw & (1 << SURL_RW_WANT_READ | 1 << SURL_RW_WANT_WRITE));
 }
 
+/** Assert like function: Check that actual state either doesn't requiere io or io is available for its socket.
+Otherwise die in cruel pain!
+HINT: This function simply checks whether we check availability of fd for reading/writing before using it for r/w.
+*/
 static int check_io(const int state, const int rw) {
 	if ( ((1 << state) & SURL_STATES_IO) && !(rw & (1 << SURL_RW_READY_READ | 1 << SURL_RW_READY_WRITE)) ) {
 		abort();
 	}
 }
 
+/** Impement handshake over SSL non-blocking socket.
+We may switch between need read/need write for several times.
+SSL is blackbox this time for us.
+*/
 static void sec_handshake(struct surl *u) {
 	assert(u->ssl);
 
@@ -65,6 +84,11 @@ static void sec_handshake(struct surl *u) {
     set_atomic_int(&u->state, SURL_S_ERROR);
 }
 
+/** Read some data from SSL socket.
+NOTE: We must read as much as possible, because select(.) may
+not notify us that other data are available.
+From select(.)'s point of view they are read but in fact they are in SSL buffers.
+*/
 static ssize_t sec_read(const struct surl *u, char *buf, const size_t size) {
 	assert(u->ssl);
 
@@ -91,6 +115,10 @@ static ssize_t sec_read(const struct surl *u, char *buf, const size_t size) {
 	return SURL_IO_ERROR;
 }
 
+/** Write some data to SSL socket.
+NOTE: We must write as much as possible otherwise
+select(.) would not notify us that socket is writable again.
+*/
 static ssize_t sec_write(const struct surl *u, const char *buf, const size_t size) {
     assert(u->ssl);
 
@@ -128,6 +156,9 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	set_atomic_int(&u->state, SURL_S_GOTIP);
 }
 
+/** Parse string with the name of the protocol and return default port for that protocol or 0,
+if such protocol is not supported by minicrawler.
+*/
 static int parse_proto(const char *s) {
 	if (0 == strcmp(s, "https")) {
 		return 443;
@@ -178,6 +209,9 @@ static void checkdns(struct surl *u) {
 	ares_process(u->aresch, &readfds, &writefds); // pri uspechu zavola callback sama
 }
 
+/**
+Finish connection for non-blocking socket for which connect(.) returned EAGAIN.
+*/
 static void connectsocket(struct surl *u) {
 	int result;
 	socklen_t result_len = sizeof(result);
@@ -200,6 +234,8 @@ static void connectsocket(struct surl *u) {
 	set_atomic_int(&u->rw, 1<< SURL_RW_READY_READ | 1<<SURL_RW_READY_WRITE);
 }
 
+/** Allocate ssl objects for ssl connection. Do nothing for plain connection.
+*/
 static int maybe_create_ssl(struct surl *u) {
 	if (0 != strcmp(u->proto, "https")) {
 		return 1;
@@ -317,6 +353,9 @@ static void genrequest(struct surl *u) {
 	set_atomic_int(&u->rw, 1<<SURL_RW_READY_WRITE);
 }
 
+/** Sends the request string. This string was generated in previous state:
+GEN_REQUEST.
+*/
 static void sendrequest(struct surl *u) {
 	if (u->request_it < u->request_len) {
 		const ssize_t ret = u->f.write(u, &u->request[u->request_it], u->request_len - u->request_it);
@@ -341,6 +380,9 @@ static void sendrequest(struct surl *u) {
 	}
 }
 
+/** Fake handshake handler that does nothing, only increments state.
+Usefull for plain http protocol that does not need handshake.
+*/
 static void empty_handshake(struct surl *u) {
 	set_atomic_int(&u->state, SURL_S_GENREQUEST);
 }
@@ -447,6 +489,8 @@ static void setcookie(struct surl *u,char *str) {
 	}
 }
 
+/** Find string with content type inside the http head.
+*/
 static void find_content_type(struct surl *u) {
 	static const char content_type[] = "\nContent-Type:";
 	static const char charset[] = " charset=";
@@ -538,6 +582,13 @@ static void detecthead(struct surl *u) {
 	}
 }
 
+/**
+Perform simple non-blocking read.
+It uses callback function that performs the reaing so it can read from both SSL and plain connections.
+Length of the read data is not limited if possible.
+Unread data may remain in SSL buffers and select(.) may not notify us about it,
+because from its point of view they were read.
+*/
 ssize_t plain_read(const struct surl *u, char *buf, const size_t size) {
 	const int fd = u->sockfd;
 	const ssize_t res = read(fd, buf, size);
@@ -639,7 +690,9 @@ static void output(struct surl *u) {
 	debugf("[%d] Done.\n",u->index);
 }
 
-
+/**
+One of the resolvelocation_xxx(.) functions, expaxts url of the form: proto://host/path
+*/
 static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size) {
 	assert(0 == strcmp(lpath, "/"));
 
@@ -656,7 +709,9 @@ static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lh
 	}
 }
 
-
+/**
+One of the resolvelocation_xxx(.) functions, expects url of the form: host/path .
+*/
 static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size) {
 	assert(0 == strcmp(lpath, "/"));
 
@@ -747,6 +802,9 @@ static void finish(struct surl *u) {
 	}
 }
 
+/**
+Try read some data from the socket, check that we have some available place in the buffer.
+*/
 static ssize_t try_read(struct surl *u) {
 	ssize_t left = BUFSIZE - u->bufp;
 	if(left <= 0) {
@@ -990,6 +1048,10 @@ void simpleparseurl(struct surl *u) {
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 }
 
+/**
+Turn the state to INTERNAL ERROR with information that
+we have been requested to download url with unsupported protocol.
+*/
 static void set_unsupported_protocol(struct surl *u) {
 			debugf("Unsupported protocol: [%s]\n", u->proto);
 			u->status = 999;
@@ -997,6 +1059,10 @@ static void set_unsupported_protocol(struct surl *u) {
 			set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
 }
 
+/**
+Check the protocol of the destination url. If it is supported protocol,
+then set all callbacks, otherwise turn the state to UNSUPPORTED PROTOCOL.
+*/
 static int check_proto(struct surl *u) {
 	const int port = parse_proto(u->proto);
 	switch (port) {
