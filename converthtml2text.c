@@ -57,8 +57,8 @@ static const char *elems_names[] = {
 	[OTHER] = NULL,
 };
 
-static char test_elems_number[OTHER < 32 ? 0 : -1];
-static char test_elems_names[sizeof(elems_names) == (OTHER + 1)*sizeof(*elems_names) ? 0 : -1];
+static char test_elems_number[OTHER < 32 ? 0 : -1]; // Static assert
+static char test_elems_names[sizeof(elems_names) == (OTHER + 1)*sizeof(*elems_names) ? 0 : -1]; // Static assert
 
 struct ElemDesc {
   unsigned id;
@@ -66,6 +66,9 @@ struct ElemDesc {
   unsigned end : 1;
 };
 
+/**
+Finds index to array `elems_names' that points to element with name `name'.
+*/
 static unsigned elem_name_to_id(const char *name)
 {
 	for (unsigned i = 0; i < sizeof(elems_names)/sizeof(*elems_names); ++i) {
@@ -75,34 +78,52 @@ static unsigned elem_name_to_id(const char *name)
 	return OTHER;
 }
 
+/**
+Is `c' whitespace character?
+*/
 static int crawler_is_space(const int c)
 {
 	return c == '\n' || c == '\r' || c == ' ' || c == '\t';
 }
 
+/**
+Skips all spaces in string `s'. Pointer `end' points after the end of the string.
+*/
 static char *consume_spaces(char *s, const char *end)
 {
 	for (; s < end && crawler_is_space(*s); ++s);
 	return s;
 }
 
+/**
+Skips all non-space characters in s. Pointer `end' points after the end of the string.
+*/
 static char *consume_nonspaces(char *s, const char *end)
 {
 	for (; s < end && !crawler_is_space(*s); ++s);
 	return s;
 }
 
+/**
+Can be `c' as a character part of a name of tag?
+*/
 static int crawler_is_tag_name(const int c)
 {
 	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.';
 }
 
+/**
+Consumes one element that starts at `s[0]'.
+*/
 static char *consume_elem_name(char *s, const char *end)
 {
 	for (; s < end && crawler_is_tag_name(*s); ++s);
 	return s;
 }
 
+/**
+Consumes all characters of string `s' until either character `c' is found or end is reached.
+*/
 static char *consume_until_c(char *s, const char *end, const char c)
 {
 	int backslash = 0;
@@ -114,6 +135,11 @@ static char *consume_until_c(char *s, const char *end, const char c)
 	return s;
 }
 
+/**
+Consumes all characters that belong to element that begins at `s[0]'.
+Element's description is written to `*desc'.
+If no element starts at `s[0]', then `s' is returned.
+*/
 static char *consume_elem(char *s, const char *end, struct ElemDesc *desc)
 {
 	if (s >= end)
@@ -156,14 +182,20 @@ static char *consume_elem(char *s, const char *end, struct ElemDesc *desc)
 	return s;
 }
 
+/**
+Tests whether html comment starts at `s[0]'.
+*/
 static char *test_comment_start(char *s, const char *end)
 {
 	static const char comment_start[] = "<!--";
 	unsigned i = 0;
 	for (; i < sizeof(comment_start) - 1 && &s[i] < end && s[i] == comment_start[i]; ++i);
 	return i == sizeof(comment_start) - 1 ? &s[sizeof(comment_start) - 1] : NULL;
-}
+	}
 
+/**
+Consumes one html comments that starts at `s[0]'. `s[0]' MUST be the inside html comment before --> .
+*/
 static char *consume_comment(char *s, const char *end)
 {
 	static const char comment_end[] = "-->";
@@ -178,6 +210,9 @@ static char *consume_comment(char *s, const char *end)
 	return s;
 }
 
+/**
+Tests whether CDATA block starts at `s[0]'.
+*/
 static char *test_cdata_start(char *s, const char *end)
 {
 	static const char cdata_start[] = "<!CDATA[";
@@ -186,6 +221,9 @@ static char *test_cdata_start(char *s, const char *end)
 	return i == sizeof(cdata_start) - 1 ? &s[sizeof(cdata_start) - 1] : NULL;
 }
 
+/**
+Consumes CDATA block that starts at `s[0]'. `s[0]' MUST be inside CDATA block before ]]> . 
+*/
 static char *consume_cdata(char *s, const char *end, void (*f)(const int c))
 {
 	static const char cdata_end[] = "]]>";
@@ -343,6 +381,10 @@ struct tag_desc_pointer
 	unsigned *l;
 };
 
+/**
+Compares string `left' with `right'. `left' is zero terminated, `right' has length `right_len',
+Return 1 if they are equal, 0 otherwise.
+*/
 static int str_equiv_right(const char *left, const char *right, const size_t right_len)
 {
 	const char *pl = left, *pr = right;
@@ -353,6 +395,10 @@ static int str_equiv_right(const char *left, const char *right, const size_t rig
 	return !*pl;
 }
 
+/**
+Compares string `left' with `right', case insensitive. `left' is zero terminated, `right' has length `right_len',
+Return 1 if they are equal, 0 otherwise.
+*/
 static int str_equiv_right_nocase(const char *left, const char *right, const size_t right_len)
 {
 	const char *pl = left, *pr = right;
@@ -372,6 +418,11 @@ static int str_equiv_right_nocase(const char *left, const char *right, const siz
 	return !*pl;
 }
 
+/**
+Checks whether `name' with `name_len' matches for: charset, encoding, http-equiv, content.
+If it matches then it returns pointer to appropriate fields in `struct tag_desc'.
+Returs NULL pointers otherwise.
+*/
 static void get_tag_desc_pointer(const char *name, const unsigned name_len, struct tag_desc *tag, struct tag_desc_pointer *pointer)
 {
 	if (str_equiv_right("charset", name, name_len)) {
@@ -391,12 +442,21 @@ static void get_tag_desc_pointer(const char *name, const unsigned name_len, stru
 	}
 }
 
+/**
+Returns pointer to character `c' in string `s'. Pointer `end' points after
+the last character of `s'.
+Return `end' if `c' is not in `s'.
+*/
 static char *find_c(char *s, const char *end, const int c)
 {
 	for (; s < end && *s != c; ++s);
 	return s;
 }
 
+/**
+Finds first tag in `s' and returns its name and arguments in `tag'.
+Returns pointer to the first character after the tag, or `end', if no tag is found.
+*/
 static char *next_tag(char *s, const char *end, struct tag_desc *tag)
 {
 	*tag = (struct tag_desc) {};
@@ -452,6 +512,10 @@ static char *next_tag(char *s, const char *end, struct tag_desc *tag)
 	return s;
 }
 
+/**
+Parses xhtml/html document in `s', tries to find declared content encoding, either in ?xml part, or in meta tag.
+Retrns string with the encoding, or NULL if no encoding can be extracted from the document.
+*/
 char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_len)
 {
 	const char *end = &s[len];

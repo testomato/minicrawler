@@ -2,6 +2,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+/**
+Calculate hash of string src with length len.
+String may containms zero characters and may not be zero terminated.
+*/
 static unsigned hash(const char *str, const size_t len)
 {
 	unsigned hashval = 0;
@@ -10,6 +14,9 @@ static unsigned hash(const char *str, const size_t len)
 	return hashval;
 }
 
+/**
+Calculate hash of string s, that is zero terminated.
+*/
 static unsigned hash_str(const char *s)
 {
 	return hash(s, strlen(s));
@@ -284,6 +291,11 @@ struct entity_desc entities[] = {
 
 struct entity_desc *hash_cache[HASH_SIZE] = {};
 
+/**
+Finds pointer to the field in array `entites' that points to entity with name
+`name'. Length of string `name' is `name_len'.
+Returns `NULL' if entity of such name is not known.
+*/
 static struct entity_desc *find_name_entity(const char *name, const size_t name_len)
 {
 	const unsigned hash_val = hash(name, name_len);
@@ -307,6 +319,15 @@ static struct entity_desc *find_name_entity(const char *name, const size_t name_
 	return NULL;
 }
 
+/**
+Consumes one html entity that begins at `s[0]'. 
+Pointer `end' is a pointer to the first chractetr
+after the end of string `s' (its length is `end - s').
+
+Returns pointer to the first character after the entity string.
+Unicode code that is assigned to the entity is returned in `*code'.
+If there is no entity at position `s[0]' then function returns `s' and `*code == 0'.
+*/
 char *consume_entity(char *s, const char *end, int *code)
 {
 	static const unsigned max_entity_len = 80;
