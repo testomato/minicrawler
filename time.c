@@ -8,6 +8,11 @@
 #include <limits.h>
 #include <assert.h>
 
+
+/**
+ * It seems that cats' OSes cannot provide non-decreasing time. :-(
+ * Good job Mr. Jobs.
+ */
 #ifdef __APPLE__
 static long long get_uptime(void)
 {
@@ -18,6 +23,10 @@ static long long get_uptime(void)
 	return (long long)(tmval.tv_sec*1000LL + tmval.tv_usec/1000);
 }
 #else
+/**
+ * Time that is provided with gettimeofday(.) can be decreasing.
+ *   Let's have a look at /proc/... .
+ */
 static long long get_uptime(void)
 {
 	static const char file_name[] = "/proc/uptime";
@@ -51,6 +60,11 @@ int get_time_int(void)
 	return now != birth ? (int)(now - birth) : 1;
 }
 
+/**
+ * Let's use some good hash function.
+ *   Good hashing is important, otherwise we will perform
+ *   redundant waiting.
+ */
 static unsigned hash_uns(const unsigned key)
 {
 	return 13*(key >> 16 | key << 16) ^ 113*(key >> 20 | key << 10) ^ key;
@@ -59,16 +73,27 @@ static unsigned hash_uns(const unsigned key)
 #define HASH_SIZE 64
 int hash_table[] = { [0 ... (HASH_SIZE - 1)]=INT_MIN, };
 
+/**
+ * Returns slot that is assigned to the supplied key.
+ */
 unsigned get_time_slot(const unsigned key)
 {
 	return hash_uns(key) % HASH_SIZE;
 }
 
+/**
+ * Returns hash item that is assigned to the supplied key.
+ */
 static int *get_hash_item(const unsigned key)
 {
 	return &hash_table[get_time_slot(key)];
 }
 
+/**
+ * Calculates slot that is assigned to the particular ip.
+ * If the slot is free, then actual time is assigned to it and the time is returned.
+ * Zero is returned otherwise.
+ */
 int test_free_channel(const unsigned u_ip, const unsigned milis, const int force)
 {
 	const int now = get_time_int();

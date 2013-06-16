@@ -9,6 +9,10 @@
 #include "h/proto.h"
 
 
+/**
+ * Convert body of the page from u->charset to
+ *   UCS4. Use dst as a destination buffer.
+ */
 static int convertor(struct surl *u, char *dst, const size_t dst_size)
 {
 	const char *from_charset = !strcasecmp(u->charset, "unknown") ? "utf-8" : u->charset;
@@ -53,6 +57,11 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
 	return 0;
 }
 
+
+/**
+ * Convert body of the page from u->charset to
+ *   UCS4.
+ */
 void conv_charset(struct surl *u)
 {
 	assert(u->charset && *u->charset);
@@ -65,6 +74,10 @@ void conv_charset(struct surl *u)
 	free(dst);
 }
 
+/**
+ * Convert one UNICODE char to UTF-8 char.
+ *   Usefull for entities.
+ */
 char *put_code(char *dst, const unsigned dst_len, const int code)
 {
 	char src[2] = { code & 0xFF, (code >> 8) & 0XFF, };
