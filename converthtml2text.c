@@ -514,7 +514,7 @@ static char *next_tag(char *s, const char *end, struct tag_desc *tag)
 
 /**
 Parses xhtml/html document in `s', tries to find declared content encoding, either in ?xml part, or in meta tag.
-Retrns string with the encoding, or NULL if no encoding can be extracted from the document.
+Returns string with the encoding, or NULL if no encoding can be extracted from the document.
 */
 char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_len)
 {
