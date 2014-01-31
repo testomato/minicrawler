@@ -777,6 +777,7 @@ static void resolvelocation(struct surl *u) {
 	u->ispost = 0;
 	u->headlen = 0;
 	u->contentlen = -1;
+	u->chunked = 0;
 	u->bufp = 0;
 
 	if (check_proto(u) == -1) {
