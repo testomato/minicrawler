@@ -171,6 +171,38 @@ static int parse_proto(const char *s) {
 
 static int check_proto(struct surl *u);
 
+/** primitivni parsovatko url
+ */
+static int simpleparseurl(struct surl *u, const char *url) {
+	int r;
+
+	u->port = 0;
+	u->proto[0] = 0;
+	u->path[0] = '/';
+
+	r = sscanf(url, "%31[^:]://%99[^:]:%99d%99[^\n]", u->proto, u->host, &(u->port), u->path);
+	if (r < 2) {
+		debugf("[%d] error: url='%s' failed to parse\n", u->index, url);
+		return 0;
+	}
+
+	if(u->port == 0) {
+		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
+		char buf[256];
+		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host), I_LENGTHOF(u->path) - 1);
+		r = sscanf(url, buf, u->proto, u->host, u->path + 1);
+		if (r < 2) {
+			debugf("[%d] error: url='%s' failed to parse\n", u->index, url);
+			return 0;
+		}
+
+		u->port = parse_proto(u->proto);
+	}
+
+	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
+	return 1;
+}
+
 /** spusti preklad pres ares
  */
 static void launchdns(struct surl *u) {
@@ -697,76 +729,29 @@ static void output(struct surl *u) {
 	debugf("[%d] Done.\n",u->index);
 }
 
-/**
-One of the resolvelocation_xxx(.) functions, expaxts url of the form: proto://host/path
-*/
-static int resolvelocation_url_with_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size) {
-	assert(0 == strcmp(lpath, "/"));
-
-	const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
-	char buf[256];
-	sprintf(buf, fmt, i_lproto_size, i_lhost_size, i_lpath_size - 1);
-
-	switch (sscanf(u->location, buf, lproto, lhost, &lpath[1])) {
-		case 2:
-		case 3:
-			return 1;
-		default:
-			return 0;
-	}
-}
-
-/**
-One of the resolvelocation_xxx(.) functions, expects url of the form: host/path .
-*/
-static int resolvelocation_url_no_proto(struct surl *u, char *lproto, char *lhost, char *lpath, const int i_lproto_size, const int i_lhost_size, const int i_lpath_size) {
-	assert(0 == strcmp(lpath, "/"));
-
-	const char fmt[] = "%%%d[^/]/%%%ds";
-	char buf[256];
-	sprintf(buf, fmt, i_lhost_size, i_lpath_size - 1);
-
-	switch (sscanf(u->location, buf, lhost, &lpath[1])) {
-		case 1:
-		case 2:
-			strcpy(lproto, u->proto);
-			return 1;
-		default:
-			return 0;
-	}
-}
-
 /** vyres presmerovani
  */
 static void resolvelocation(struct surl *u) {
-	char lproto[ sizeof(u->proto) ] = "http";
-	char lhost[ sizeof(u->host) ];
-	char lpath[ sizeof(u->path) ] = "/";
-
-	debugf("[%d] Resolve location='%s'\n",u->index, u->location);
-
-	// FIXME: simpleparseurl(...) should be used here
-	const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
-	char buf[256];
-	sprintf(buf, fmt, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath) - 1);
-
-	if (resolvelocation_url_with_proto(u, lproto, lhost, lpath, I_LENGTHOF(lproto), I_LENGTHOF(lhost), I_LENGTHOF(lpath))) {
- 	} else if(u->location[0] == '/') {
-		strcpy(lproto, u->proto);
-		strcpy(lhost, u->host);
-		strcpy(lpath, u->location);
-		// relativni adresy (i kdyz by podle RFC nemely byt)
-	} else {
-		debugf("[%d] Weird location format, assuming filename in root\n", u->index);
-		strcpy(lproto, u->proto);
-		strcpy(lhost, u->host);
-		strcpy(lpath, "/");
-		strcpy(lpath+1, u->location);
-	}
+	char ohost[ sizeof(u->host) ];
 	
-	debugf("[%d] Lproto = '%s' Lhost='%s' Lpath='%s'\n", u->index, lproto, lhost, lpath);
+	strcpy(ohost, u->host);
 
-	if (strcmp(u->host,lhost)) {
+	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
+
+	if (!simpleparseurl(u, u->location)) {
+		if (u->location[0] == '/') {
+			// relativni adresy (i kdyz by podle RFC nemely byt)
+			strcpy(u->path, u->location);
+		} else {
+			debugf("[%d] Weird location format, assuming filename in root\n", u->index);
+			strcpy(u->path, "/");
+			strcpy(u->path+1, u->location);
+		}
+
+		debugf("[%d] proto = '%s' host='%s' path='%s'\n", u->index, u->proto, u->host, u->path);
+	}
+
+	if (strcmp(u->host,ohost)) {
 		set_atomic_int(&u->state, SURL_S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
 	}
 	else {
@@ -780,9 +765,6 @@ static void resolvelocation(struct surl *u) {
 	rinfo->next = u->redirect_info;
 	u->redirect_info = rinfo;
 
-	strcpy(u->proto, lproto);
-	strcpy(u->path, lpath);		// bez tam
-	strcpy(u->host, lhost);		// bez tam
 	strcpy(u->redirectedto, u->location);
 	u->location[0] = 0;
 	u->ispost = 0;
@@ -790,7 +772,7 @@ static void resolvelocation(struct surl *u) {
 	u->contentlen = -1;
 	u->bufp = 0;
 
-	if ((u->port = check_proto(u)) == -1) {
+	if (check_proto(u) == -1) {
 		return;
 	}
 }
@@ -1034,27 +1016,6 @@ static void outputpartial(void) {
 	}
 }
 
-/** primitivni parsovatko url
- */
-void simpleparseurl(struct surl *u) {
-	u->port = 0;
-	u->proto[0] = 0;
-	u->path[0] = '/';
-
-	sscanf(u->rawurl, "%31[^:]://%99[^:]:%99d%99[^\n]", u->proto, u->host, &(u->port), u->path);
-
-	if(u->port == 0) {
-		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
-		char buf[256];
-		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host), I_LENGTHOF(u->path) - 1);
-		// FIXME: sscanf may not be succesfull
-		const int ret = sscanf(u->rawurl, buf, u->proto, u->host, u->path + 1);
-		u->port = parse_proto(u->proto);
-	}
-
-	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
-}
-
 /**
 Turn the state to INTERNAL ERROR with information that
 we have been requested to download url with unsupported protocol.
@@ -1121,7 +1082,7 @@ void init_url(struct surl *u, const char *url, const int index) {
 	// Init the url
 	strcpy(u->rawurl, url);
 	u->index = index;
-	simpleparseurl(u);
+	simpleparseurl(u, url);
 	u->state = SURL_S_JUSTBORN;
 	//debugf("[%d] born\n",i);
 	u->bufp = 0;
