@@ -568,6 +568,7 @@ static char *find_head_end(struct surl *u) {
 }
 
 /** pozná status a hlavičku http požadavku
+ *  FIXME: handle http headers case-insensitive!!
  */
 static void detecthead(struct surl *u) {
 	u->status = atoi(u->buf + 9);
@@ -588,13 +589,19 @@ static void detecthead(struct surl *u) {
 		u->contentlen = atoi(p + 16);
 	}
 	debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
-	
-	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11); // FIXME: handle http headers case-insensitive!!
+
+	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11);
 	if(p!=NULL) {
 		strcpy_term(u->location,p+11);
 		debugf("[%d] Location='%s'\n",u->index,u->location);
 	}
-	
+
+	p=(char*)memmem(u->buf,u->headlen,"\nRefresh: 0;url=",16)?:(char*)memmem(u->buf,u->headlen,"\nrefresh: 0;url=",16);
+	if(p!=NULL) {
+		strcpy_term(u->location,p+16);
+		debugf("[%d] Refresh='%s'\n",u->index,u->location);
+	}
+
 	for (char *q = u->buf; q < &u->buf[u->headlen];) {
 		q = (char*)memmem(q, u->headlen - (q - u->buf), "\nSet-Cookie: ", 13);
 		if (q != NULL) {
