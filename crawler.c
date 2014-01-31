@@ -304,6 +304,9 @@ static char *str_replace( const char *string, const char *substr, const char *re
 /** socket bezi, posli dotaz
  */
 static void genrequest(struct surl *u) {
+	const char getrqfmt[] = "GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n";
+	const char postrqfmt[] = "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n";
+
 	char agent[256];
 	char cookiestring[4096];
 	char customheader[4096];
@@ -340,10 +343,14 @@ static void genrequest(struct surl *u) {
 	}
 
 	// FIXME: Check beffers length and vice verse
-	if(!u->post[0]) {// GET
-		sprintf(u->request, "GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n", u->path, agent, u->host, cookiestring);
+	if(!u->ispost) {// GET
+		u->request_len = sizeof(getrqfmt) + strlen(u->path) + strlen(agent) + strlen(u->host) + strlen(cookiestring);
+		u->request = malloc(u->request_len + 1);
+		sprintf(u->request, getrqfmt, u->path, agent, u->host, cookiestring);
 	} else { // POST
-		sprintf(u->request, "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n", u->path, u->host, agent, (int)strlen(u->post), u->post, cookiestring);
+		u->request_len = sizeof(postrqfmt) + strlen(u->path) + strlen(agent) + strlen(u->host) + strlen(cookiestring) + strlen(u->post) + 9; // 9 - dost místa na content-length
+		u->request = malloc(u->request_len + 1);
+		sprintf(u->request, postrqfmt, u->path, u->host, agent, (int)strlen(u->post), u->post, cookiestring);
 	}
 	debugf("Request: [%s]", u->request);
 	u->request_len = strlen(u->request);
@@ -778,7 +785,7 @@ static void resolvelocation(struct surl *u) {
 	strcpy(u->host, lhost);		// bez tam
 	strcpy(u->redirectedto, u->location);
 	u->location[0] = 0;
-	u->post[0] = 0;
+	u->ispost = 0;
 	u->headlen = 0;
 	u->contentlen = -1;
 	u->bufp = 0;

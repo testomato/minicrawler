@@ -30,7 +30,14 @@ void initurls(int argc, char *argv[])
 		if(!strncmp(argv[t], "-D", 2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
 		if(!strncmp(argv[t], "-w", 2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
 		if(!strncmp(argv[t], "-A", 2)) {sprintf(settings.customagent,"%.*s", I_LENGTHOF(settings.customagent), argv[t+1]); t++; debugf("Custom agent: %s\n",settings.customagent); continue;}
-		if(!strcmp(argv[t], "-P")) {strcpy(url[i].post,argv[t+1]);t++;debugf("[%d] POST: %s\n",i,url[i].post);continue;}
+		if(!strcmp(argv[t], "-P")) {
+			url[i].ispost = 1;
+			url[i].post = malloc(strlen(argv[t+1]) + 1);
+			memcpy(url[i].post, argv[t+1], strlen(argv[t+1]) + 1);
+			t++;
+			debugf("[%d] POST: %s\n",i,url[i].post);
+			continue;
+		}
 		if(!strncmp(argv[t], "-C", 2)) {strcpy(url[i].customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,url[i].customparam);continue;}
 
 		init_url(&url[i], argv[t], i);
@@ -60,7 +67,7 @@ void printusage()
 	         "         -i         enables impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress\n"
 	         "         -p         outputs also partially downloaded urls\n"
 	         "         -A STRING  custom user agent\n"
-	         "         -w STRING  write this custom header to all requests\n"
+	         "         -w STRING  write this custom header to all requests (max 4096 bytes)\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
 	         "         -c         convert text format (with utf-8 encoding)\n"
 	         "         -8         convert from page encoding to utf-8\n"
