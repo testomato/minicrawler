@@ -479,7 +479,11 @@ static int eatchunked(struct surl *u, int first) {
 	u->nextchunkedpos=movestart+size+2;			// o 2 vic kvuli odradkovani na konci chunku
 	
 	if(size == 0) {
-		debugf("[%d] Chunksize=0 (end)\n",u->index);u->contentlen=u->bufp-u->headlen; 	// a to je konec, pratele! ... taaadydaaadydaaa!
+		// a to je konec, pratele! ... taaadydaaadydaaa!
+		debugf("[%d] Chunksize=0 (end)\n",u->index);
+		// zbytek odpovedi zahodime
+		u->bufp = movestart;
+		u->contentlen = movestart - u->headlen;
 	}
 	
 	return 0;
@@ -816,8 +820,6 @@ static ssize_t try_read(struct surl *u) {
 static void readreply(struct surl *u) {
 	debugf("} bufp = %d\n", u->bufp);
 
-	unsigned char buf[1024];
-	
 	const ssize_t t = try_read(u);
 	assert(t >= SURL_IO_WRITE);
 	if (t == SURL_IO_READ) {
