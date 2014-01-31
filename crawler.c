@@ -174,7 +174,7 @@ static int check_proto(struct surl *u);
 /** spusti preklad pres ares
  */
 static void launchdns(struct surl *u) {
-	if ((u->port = check_proto(u)) == -1) {
+	if (check_proto(u) == -1) {
 		return;
 	}
 
@@ -1128,7 +1128,7 @@ void init_url(struct surl *u, const char *url, const int index) {
 	u->contentlen = -1;
 	u->cookiecnt = 0;
 
-	u->port = check_proto(u);
+	check_proto(u);
 }
 
 /**
