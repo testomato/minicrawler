@@ -101,7 +101,8 @@ struct surl {
 	char host[256];
 	int port;
 	char path[1024];
-	char post[4096];
+	int ispost;
+	char *post;
 
 	// hlavicky	
 	char location[1024];	// presne to co je v hlavicce Location - pro ucely redirect
@@ -114,7 +115,7 @@ struct surl {
 	char charset[32];
 
 	// request
-	char request[8*1024];
+	char *request;
 	size_t request_len;
 	size_t request_it;
 
