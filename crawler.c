@@ -297,6 +297,7 @@ static void opensocket(struct surl *u)
 	flags = fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
 
+	debugf("[%d] connecting to ip: %x, port: %i (socket %d)\n", u->index, u->ip, u->port, u->sockfd);
 	const int t = connect(u->sockfd, (struct sockaddr *)&addr, sizeof(addr));
 	if (!maybe_create_ssl(u)) {
 		debugf("%d: cannot create ssl session :-(\n", u->index);
@@ -745,13 +746,20 @@ static void output(struct surl *u) {
 /** vyres presmerovani
  */
 static void resolvelocation(struct surl *u) {
+	char oproto[ sizeof(u->proto) ];
 	char ohost[ sizeof(u->host) ];
-	
+	int oport;
+
+	strcpy(oproto, u->proto);
 	strcpy(ohost, u->host);
+	oport = u->port;
 
 	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
 
 	if (!simpleparseurl(u, u->location)) {
+		strcpy(u->proto, oproto);
+		strcpy(u->host, ohost);
+		u->port = oport;
 		if (u->location[0] == '/') {
 			// relativni adresy (i kdyz by podle RFC nemely byt)
 			strcpy(u->path, u->location);
