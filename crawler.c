@@ -179,6 +179,7 @@ static int simpleparseurl(struct surl *u, const char *url) {
 	u->port = 0;
 	u->proto[0] = 0;
 	u->path[0] = '/';
+	u->path[1] = 0;
 
 	r = sscanf(url, "%31[^:]://%99[^:]:%99d%99[^\n]", u->proto, u->host, &(u->port), u->path);
 	if (r < 2) {
