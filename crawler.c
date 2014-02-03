@@ -376,6 +376,7 @@ static void genrequest(struct surl *u) {
 	}
 
 	// FIXME: Check beffers length and vice verse
+	free(u->request);
 	if(!u->ispost) {// GET
 		u->request_len = sizeof(getrqfmt) + strlen(u->path) + strlen(agent) + strlen(u->host) + strlen(cookiestring);
 		u->request = malloc(u->request_len + 1);
