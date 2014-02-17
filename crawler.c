@@ -144,8 +144,18 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	struct surl *u;
 	
 	u=(struct surl *)arg;
-	if(status!=0) {debugf("[%d] error: dnscallback with non zero status! - status=%d\n",u->index,status);set_atomic_int(&u->state, SURL_S_ERROR);return;}
+	if (status != ARES_SUCCESS) {
+		debugf("[%d] gethostbyname error: %s: %s\n", u->index, (char *) arg, ares_strerror(status));
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
+	}
 	
+	if (hostent->h_addr == NULL) {
+		debugf("[%d] Could not resolve host\n", u->index);
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
+	}
+
 	ip=(unsigned char*)(hostent->h_addr);
 	u->prev_ip = u->ip;
 	u->ip=*(int *)ip;
@@ -1106,6 +1116,7 @@ void init_url(struct surl *u, const char *url, const int index) {
 	u->state = SURL_S_JUSTBORN;
 	//debugf("[%d] born\n",i);
 	u->bufp = 0;
+	u->headlen = 0;
 	u->contentlen = -1;
 	u->cookiecnt = 0;
 
