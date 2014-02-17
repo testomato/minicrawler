@@ -76,11 +76,13 @@ static void sec_handshake(struct surl *u) {
     }
     if (err == SSL_ERROR_ZERO_RETURN) {
         debugf("[%d] Connection closed (in handshake)", u->index);
+		sprintf(u->error_msg, "SSL connection closed during handshake");
         set_atomic_int(&u->state, SURL_S_ERROR);
         return;
     }
     debugf("[%d] Unexpected SSL error (in handshake): %d\n", u->index, err);
     ERR_print_errors_fp(stderr);
+	sprintf(u->error_msg, "Unexpected SSL error during handshake");
     set_atomic_int(&u->state, SURL_S_ERROR);
 }
 
@@ -146,12 +148,14 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	u=(struct surl *)arg;
 	if (status != ARES_SUCCESS) {
 		debugf("[%d] gethostbyname error: %s: %s\n", u->index, (char *) arg, ares_strerror(status));
+		sprintf(u->error_msg, "%s", ares_strerror(status));
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return;
 	}
 	
 	if (hostent->h_addr == NULL) {
 		debugf("[%d] Could not resolve host\n", u->index);
+		sprintf(u->error_msg, "Could not resolve host");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return;
 	}
@@ -261,6 +265,7 @@ static void connectsocket(struct surl *u) {
 	if (getsockopt(u->sockfd, SOL_SOCKET, SO_ERROR, &result, &result_len) < 0) {
 		// error, fail somehow, close socket
 		debugf("%d: Cannot connect, getsoskopt(.) returned error status: %m", u->index);
+		sprintf(u->error_msg, "Failed to connect to host (%m)");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		close(u->sockfd);
 		return;
@@ -268,6 +273,7 @@ static void connectsocket(struct surl *u) {
 
 	if (result != 0) {
 		debugf("%d: Cannot connect, attempt to connect failed", u->index);
+		sprintf(u->error_msg, "Failed to connect to host");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		close(u->sockfd);
 		return;
@@ -311,6 +317,7 @@ static void opensocket(struct surl *u)
 	const int t = connect(u->sockfd, (struct sockaddr *)&addr, sizeof(addr));
 	if (!maybe_create_ssl(u)) {
 		debugf("%d: cannot create ssl session :-(\n", u->index);
+		sprintf(u->error_msg, "Cannot create SSL session");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 	}
 	if(t) {
@@ -320,6 +327,7 @@ static void opensocket(struct surl *u)
 		}
 		else {
 			debugf("%d: connect failed (%d, %s)\n", u->index, errno, strerror(errno));
+			sprintf(u->error_msg, "Failed to connect to host (%m)");
 			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
 	} else {
@@ -413,6 +421,7 @@ static void sendrequest(struct surl *u) {
 		const ssize_t ret = u->f.write(u, &u->request[u->request_it], u->request_len - u->request_it);
 		if (ret == SURL_IO_ERROR || ret == SURL_IO_EOF) {
 			debugf("[%d] Error when writing to socket: %m\n", u->index);
+			sprintf(u->error_msg, "Connection to host lost (%m)");
 			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
 		else if (ret == SURL_IO_WRITE) {
@@ -984,7 +993,9 @@ static void goone(struct surl *u) {
 		u->f.recv_reply(u);
 		break;
   
+	case SURL_S_ERROR:
 	case SURL_S_INTERNAL_ERROR:
+		u->status = 999;
 		output(u);
 		break;
 	}
@@ -1052,7 +1063,6 @@ we have been requested to download url with unsupported protocol.
 */
 static void set_unsupported_protocol(struct surl *u) {
 			debugf("Unsupported protocol: [%s]\n", u->proto);
-			u->status = 999;
 			sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
 			set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
 }

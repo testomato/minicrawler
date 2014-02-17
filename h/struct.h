@@ -22,8 +22,8 @@ enum surl_s {
 	SURL_S_SENDREQUEST,
 	SURL_S_RECVREPLY,
 	SURL_S_INTERNAL_ERROR,
-	SURL_S_DONE,
 	SURL_S_ERROR,
+	SURL_S_DONE,
 };
 
 static inline const char *state_to_s(const enum surl_s x) {
