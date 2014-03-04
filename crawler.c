@@ -359,9 +359,16 @@ static void genrequest(struct surl *u) {
 	const char getrqfmt[] = "GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n";
 	const char postrqfmt[] = "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n";
 
+	char host[262];
 	char agent[256];
 	char cookiestring[4096];
 	char customheader[4096];
+
+	const int port = parse_proto(u->proto);
+	strcpy(host, u->host);
+	if (port != u->port) {
+		sprintf(host + strlen(u->host), ":%d", u->port);
+	}
 
 	if (settings.customagent[0]) {
 		safe_cpy(agent, settings.customagent, sizeof(agent));
@@ -397,13 +404,13 @@ static void genrequest(struct surl *u) {
 	// FIXME: Check beffers length and vice verse
 	free(u->request);
 	if(!u->ispost) {// GET
-		u->request_len = sizeof(getrqfmt) + strlen(u->path) + strlen(agent) + strlen(u->host) + strlen(cookiestring);
+		u->request_len = sizeof(getrqfmt) + strlen(u->path) + strlen(agent) + strlen(host) + strlen(cookiestring);
 		u->request = malloc(u->request_len + 1);
-		sprintf(u->request, getrqfmt, u->path, agent, u->host, cookiestring);
+		sprintf(u->request, getrqfmt, u->path, agent, host, cookiestring);
 	} else { // POST
-		u->request_len = sizeof(postrqfmt) + strlen(u->path) + strlen(agent) + strlen(u->host) + strlen(cookiestring) + strlen(u->post) + 9; // 9 - dost místa na content-length
+		u->request_len = sizeof(postrqfmt) + strlen(u->path) + strlen(agent) + strlen(host) + strlen(cookiestring) + strlen(u->post) + 9; // 9 - dost místa na content-length
 		u->request = malloc(u->request_len + 1);
-		sprintf(u->request, postrqfmt, u->path, u->host, agent, (int)strlen(u->post), u->post, cookiestring);
+		sprintf(u->request, postrqfmt, u->path, host, agent, (int)strlen(u->post), u->post, cookiestring);
 	}
 	debugf("Request: [%s]", u->request);
 	u->request_len = strlen(u->request);
