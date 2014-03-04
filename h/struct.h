@@ -7,7 +7,7 @@ struct nv {
 };
 
 struct redirect_info {
-	char url[1024];
+	char url[2048];
 	int status;
 	struct redirect_info *next;
 };
@@ -95,18 +95,18 @@ struct surl {
 
     // ...
 	int index;
-	char rawurl[1024];
+	char rawurl[2048];
  
 	char proto[32];
 	char host[256];
 	int port;
-	char path[1024];
+	char path[2048];
 	int ispost;
 	char *post;
 
 	// hlavicky	
-	char location[1024];	// presne to co je v hlavicce Location - pro ucely redirect
-	char redirectedto[1024];	// co nakonec hlasime ve vystupu v hlavicce
+	char location[2048];	// presne to co je v hlavicce Location - pro ucely redirect
+	char redirectedto[2048];	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos;
 	struct nv cookies[20];	// nekolik cookie, kazda ma name ([0]) a value ([1])
