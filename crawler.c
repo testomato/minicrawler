@@ -59,6 +59,8 @@ SSL is blackbox this time for us.
 static void sec_handshake(struct surl *u) {
 	assert(u->ssl);
 
+	SSL_set_tlsext_host_name(u->ssl, u->host);
+
 	const int t = SSL_connect(u->ssl);
     if (t == 1) {
         set_atomic_int(&u->state, SURL_S_GENREQUEST);
@@ -80,7 +82,7 @@ static void sec_handshake(struct surl *u) {
         set_atomic_int(&u->state, SURL_S_ERROR);
         return;
     }
-    debugf("[%d] Unexpected SSL error (in handshake): %d\n", u->index, err);
+    debugf("[%d] Unexpected SSL error (in handshake): %d, %d\n", u->index, err, t);
     ERR_print_errors_fp(stderr);
 	sprintf(u->error_msg, "Unexpected SSL error during handshake");
     set_atomic_int(&u->state, SURL_S_ERROR);
