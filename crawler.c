@@ -197,16 +197,16 @@ static int simpleparseurl(struct surl *u, const char *url) {
 	u->path[0] = '/';
 	u->path[1] = 0;
 
-	r = sscanf(url, "%31[^:]://%99[^:/]:%99d%99[^\n]", u->proto, u->host, &(u->port), u->path);
+	r = sscanf(url, "%31[^:]://%99[^:/]:%99d%2048[^\n#]", u->proto, u->host, &(u->port), u->path);
 	if (r < 2) {
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, url);
 		return 0;
 	}
 
 	if(u->port == 0) {
-		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%%ds";
+		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%2047[^\n#]";
 		char buf[256];
-		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host), I_LENGTHOF(u->path) - 1);
+		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host));
 		r = sscanf(url, buf, u->proto, u->host, u->path + 1);
 		if (r < 2) {
 			debugf("[%d] error: url='%s' failed to parse\n", u->index, url);
