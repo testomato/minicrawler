@@ -400,9 +400,6 @@ static void genrequest(struct surl *u) {
 		}
 		strcpy(cookiestring+strlen(cookiestring), customheader);
 	}
-	if(u->cookiecnt) {
-		sprintf(cookiestring+strlen(cookiestring), "\r\n");
-	}
 
 	// FIXME: Check beffers length and vice verse
 	free(u->request);
