@@ -17,6 +17,7 @@
 
 #include "h/struct.h"
 #include "h/proto.h"
+#include "h/version.h"
 
 /**
 Atomic setter for integer. Library c-ares uses threads and it can cause
@@ -375,7 +376,7 @@ static void genrequest(struct surl *u) {
 	if (settings.customagent[0]) {
 		safe_cpy(agent, settings.customagent, sizeof(agent));
 	} else {
-		strcpy(agent, "minicrawler/1");
+		sprintf(agent, "minicrawler/%s", VERSION);
 	}
 
 	// vytvoří si to řetězec cookies a volitelných parametrů
