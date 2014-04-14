@@ -898,6 +898,7 @@ static void readreply(struct surl *u) {
 	if(t == SURL_IO_EOF || t == SURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
 		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
 		finish(u); // u->state is changed here
+		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 	} else {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
