@@ -113,6 +113,7 @@ struct surl {
 	int cookiecnt;
 	char customparam[256];		// parametr do custom headeru
 	char charset[32];
+	int gzipped;
 
 	// request
 	char *request;
@@ -160,6 +161,7 @@ struct ssettings {
 	int convert;		// 1 pokud se má konvertovat do textu
 	int convert_to_utf;     // 1 pokud se ma konvertovat do utf8
 	int delay;		// zpozdeni pri stahovani ze stejne ip, default je 100ms
+	int gzip;
 	char customagent[256];
 	char customheader[4096];
 };

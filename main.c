@@ -26,6 +26,7 @@ void initurls(int argc, char *argv[])
 		if(!strcmp(argv[t], "-p")) {settings.partial=1;continue;}
 		if(!strcmp(argv[t], "-c")) {settings.convert=settings.convert_to_utf=1;continue;}
 		if(!strcmp(argv[t], "-8")) {settings.convert_to_utf=1;continue;}
+		if(!strcmp(argv[t], "-g")) {settings.gzip=1;continue;}
 		if(!strncmp(argv[t], "-t", 2)) {settings.timeout=atoi(argv[t]+2);continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
 		if(!strncmp(argv[t], "-w", 2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
@@ -73,6 +74,7 @@ void printusage()
 	         "         -8         convert from page encoding to utf-8\n"
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP\n"
 	         "         -S         disable ssl support\n"
+	         "         -g         accept gzip encoding\n"
 	         "\n", VERSION);
 }
 

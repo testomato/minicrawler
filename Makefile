@@ -4,7 +4,7 @@ name=minicrawler
 
 $(name): $(objs)
 #	gcc -g -O3 -o $(name) $(objs) -static -lcares -lrt -lssl -lcrypto -lz -lpthread -lm -lc -ldl
-	gcc -g -O3 -o $(name) $(objs) -lcares -lrt -lssl -lcrypto
+	gcc -g -O3 -o $(name) $(objs) -lcares -lrt -lssl -lcrypto -lz
 
 .odir.stamp:
 	mkdir -p o

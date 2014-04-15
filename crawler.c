@@ -400,6 +400,9 @@ static void genrequest(struct surl *u) {
 		}
 		strcpy(cookiestring+strlen(cookiestring), customheader);
 	}
+	if (settings.gzip) {
+		strcpy(cookiestring+strlen(cookiestring), "Accept-Encoding: gzip\r\n");
+	}
 
 	// FIXME: Check beffers length and vice verse
 	free(u->request);
@@ -652,6 +655,12 @@ static void detecthead(struct surl *u) {
 		debugf("[%d] Chunked!\n",u->index);
 	}
 
+	p=(char*)memmem(u->buf, u->headlen, "Content-Encoding: gzip", 22)?:(char*)memmem(u->buf,u->headlen,"content-encoding: gzip", 22)?:(char*)memmem(u->buf, u->headlen, "Content-Encoding:  gzip", 23);
+	if(p != NULL) {
+		u->gzipped = 1;
+		debugf("[%d] Gzipped!\n",u->index);
+	}
+
 	find_content_type(u);
 
 	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
@@ -707,6 +716,24 @@ ssize_t plain_write(const struct surl *u, const char *buf, const size_t size) {
  */
 static void output(struct surl *u) {
 	unsigned char header[4096];
+
+	if (u->gzipped) {
+		char *buf;
+		int buflen = BUFSIZE - u->headlen;
+		int ret;
+
+		buf = (char *)malloc(u->bufp);
+		memcpy(buf, u->buf + u->headlen, u->bufp - u->headlen);
+		ret = gunzip(u->buf + u->headlen, &buflen, buf, u->bufp - u->headlen);
+		debugf("[%d] gzip decompress status: %d\n", u->index, ret);
+		if (ret == 0) {
+			u->bufp = buflen + u->headlen;
+		} else {
+			sprintf(u->error_msg, "Gzip decompression error %d", ret);
+			u->status = 999;
+			u->bufp = u->headlen;
+		}
+	}
 
 	if (!*u->charset) {
 		unsigned charset_len = 0;
@@ -818,6 +845,7 @@ static void resolvelocation(struct surl *u) {
 	u->headlen = 0;
 	u->contentlen = -1;
 	u->chunked = 0;
+	u->gzipped = 0;
 	u->bufp = 0;
 
 	if (check_proto(u) == -1) {
