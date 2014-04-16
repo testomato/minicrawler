@@ -1,5 +1,7 @@
 #include <openssl/ssl.h>
 
+#define MAXURLSIZE 4096
+
 enum { BUFSIZE = 700*1024, };
 
 struct nv {
@@ -7,7 +9,7 @@ struct nv {
 };
 
 struct redirect_info {
-	char url[2048];
+	char url[MAXURLSIZE];
 	int status;
 	struct redirect_info *next;
 };
@@ -95,18 +97,18 @@ struct surl {
 
     // ...
 	int index;
-	char rawurl[2048];
+	char rawurl[MAXURLSIZE];
  
 	char proto[32];
 	char host[256];
 	int port;
-	char path[2048];
+	char path[MAXURLSIZE];
 	int ispost;
 	char *post;
 
 	// hlavicky	
-	char location[2048];	// presne to co je v hlavicce Location - pro ucely redirect
-	char redirectedto[2048];	// co nakonec hlasime ve vystupu v hlavicce
+	char location[MAXURLSIZE];	// presne to co je v hlavicce Location - pro ucely redirect
+	char redirectedto[MAXURLSIZE];	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos;
 	struct nv cookies[20];	// nekolik cookie, kazda ma name ([0]) a value ([1])
