@@ -725,7 +725,7 @@ static void output(struct surl *u) {
 		buf = (char *)malloc(u->bufp);
 		memcpy(buf, u->buf + u->headlen, u->bufp - u->headlen);
 		ret = gunzip(u->buf + u->headlen, &buflen, buf, u->bufp - u->headlen);
-		debugf("[%d] gzip decompress status: %d\n", u->index, ret);
+		debugf("[%d] gzip decompress status: %d (input length: %d, output length: %d)\n", u->index, ret, u->bufp - u->headlen, buflen);
 		if (ret == 0) {
 			u->bufp = buflen + u->headlen;
 		} else {
