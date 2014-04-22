@@ -2,7 +2,7 @@ objs=$(patsubst %.c,o/%.o,$(wildcard *.c))
 name=minicrawler
 
 $(name): $(objs)
-	gcc -g -o $(name) -L$(HOME)/.minicrawler/lib $(objs) -lcares -liconv -lssl -lcrypto
+	gcc -g -o $(name) -L$(HOME)/.minicrawler/lib $(objs) -lcares -liconv -lssl -lcrypto -lz
 
 .odir.stamp:
 	mkdir -p o
