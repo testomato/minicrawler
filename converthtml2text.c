@@ -221,36 +221,6 @@ static char *test_cdata_start(char *s, const char *end)
 	return i == sizeof(cdata_start) - 1 ? &s[sizeof(cdata_start) - 1] : NULL;
 }
 
-/**
-Consumes CDATA block that starts at `s[0]'. `s[0]' MUST be inside CDATA block before ]]> . 
-*/
-static char *consume_cdata(char *s, const char *end, void (*f)(const int c))
-{
-	static const char cdata_end[] = "]]>";
-	for (; s < end; ++s) {
-		const int c = *s;
-		if (c == '\n' || c == '\t') {
-			f(' ');
-		}
-		else if (c == '\r')
-			;
-		else if (c == cdata_end[0]) {
-			unsigned i = 1;
-			for (; i < sizeof(cdata_end) - 1 && &s[i] < end && s[i] == cdata_end[i]; ++i);
-			if (i == sizeof(cdata_end) - 1) {
-				return &s[sizeof(cdata_end) - 1];
-			}
-			else {
-				f(c);
-			}
-		}
-		else {
-			f(c);
-		}
-	}
-	return s;
-}
-
 enum {
 	CH_SPACE = 0,
 	CH_TAB,
@@ -267,6 +237,59 @@ static struct {
 	[CH_OTHER] = { 0, 0 },
 };
 
+
+void put_char(const int c, unsigned hints,int *ending,char **p_dst)
+{
+	if (hints & ELEMS_SKIP_CONTENT)
+		return;
+	const int act = c == ' ' ? CH_SPACE : c == '\n' ? CH_NEWLINE : c == '\t' ? CH_TAB : CH_OTHER;
+	if (1<<(*ending) & ch[act].skip)
+		;
+	else if (1<<(*ending) & ch[act].replace) {
+		(*p_dst)[-1] = c;
+		(*ending) = act;
+	}
+	else {
+		**p_dst = c;
+		(*p_dst)++;
+		(*ending) = act;
+	}
+}
+
+#define PUT_CHAR(c) put_char(c,hints,&ending,&p_dst)
+
+
+/**
+Consumes CDATA block that starts at `s[0]'. `s[0]' MUST be inside CDATA block before ]]> . 
+*/
+static char *consume_cdata(char *s, const char *end)
+{
+/*	static const char cdata_end[] = "]]>";
+	for (; s < end; ++s) {
+		const int c = *s;
+		if (c == '\n' || c == '\t') {
+			PUT_CHAR(' ');
+		}
+		else if (c == '\r')
+			;
+		else if (c == cdata_end[0]) {
+			unsigned i = 1;
+			for (; i < sizeof(cdata_end) - 1 && &s[i] < end && s[i] == cdata_end[i]; ++i);
+			if (i == sizeof(cdata_end) - 1) {
+				return &s[sizeof(cdata_end) - 1];
+			}
+			else {
+				PUT_CHAR(c);
+			}
+		}
+		else {
+			PUT_CHAR(c);
+		}
+	}
+	return s;*/
+}
+
+
 /** převede html na text
  * @param s vstupní řetězec (html); tamtéž se uloží i výstup (pozor, nemusí být ukončen nulou)
  * @param len velikost vstupního řetězce
@@ -281,22 +304,6 @@ int converthtml2text(char *s, int len)
 	char *p_src = s, *p_dst = s;
 
 	int ending = CH_NEWLINE;
-	void put_char(const int c)
-	{
-		if (hints & ELEMS_SKIP_CONTENT)
-			return;
-		const int act = c == ' ' ? CH_SPACE : c == '\n' ? CH_NEWLINE : c == '\t' ? CH_TAB : CH_OTHER;
-		if (1<<ending & ch[act].skip)
-			;
-		else if (1<<ending & ch[act].replace) {
-			p_dst[-1] = c;
-			ending = act;
-		}
-		else {
-			*p_dst++ = c;
-			ending = act;
-		}
-	}
 
 	while (p_src < end) {
 		assert(p_dst <= p_src);
@@ -306,7 +313,7 @@ int converthtml2text(char *s, int len)
 				break;
 			case '\n':
 			case '\t':
-				put_char(' ');
+				PUT_CHAR(' ');
 				++p_src;
 				break;
 			case '&':;
@@ -316,11 +323,11 @@ int converthtml2text(char *s, int len)
 				char *p_src_new = consume_entity(p_src, end, &code);
 				if (code && (dst_end = put_code(dst, sizeof(dst), code))) {
 					for (char *p = dst; p < dst_end; ++p)
-						put_char(*p);
+						PUT_CHAR(*p);
 					p_src = p_src_new;
 				}
 				else {
-					put_char('&');
+					PUT_CHAR('&');
 					++p_src;
 				}
 				break;
@@ -330,7 +337,40 @@ int converthtml2text(char *s, int len)
 					p_src = consume_comment(test_s, end);
 				}
 				else if ( (test_s = test_cdata_start(p_src, end)) ) {
-					p_src = consume_cdata(test_s, end, put_char);
+					//p_src = consume_cdata(test_s, end, put_char);
+					
+					
+{ // původní funkce consume_cdata překopírovaná sem - kvůli parametrům pro put_char nemůže být samostatně
+	char *s=test_s;
+	static const char cdata_end[] = "]]>";
+	for (; s < end; ++s) {
+		const int c = *s;
+		if (c == '\n' || c == '\t') {
+			PUT_CHAR(' ');
+		}
+		else if (c == '\r')
+			;
+		else if (c == cdata_end[0]) {
+			unsigned i = 1;
+			for (; i < sizeof(cdata_end) - 1 && &s[i] < end && s[i] == cdata_end[i]; ++i);
+			if (i == sizeof(cdata_end) - 1) {
+				p_src=&s[sizeof(cdata_end) - 1];
+				continue;
+			}
+			else {
+				PUT_CHAR(c);
+			}
+		}
+		else {
+			PUT_CHAR(c);
+		}
+	}
+	p_src=s;
+}
+					
+					
+					
+					
 				}
 				else {
 					struct ElemDesc elem_desc;
@@ -338,15 +378,15 @@ int converthtml2text(char *s, int len)
 					if (elem_desc.begin) {
 						if (1<<elem_desc.id & ELEMS_NEWLINE) {
 							if (hints & ELEMS_TAB)
-								put_char(' ');
+								PUT_CHAR(' ');
 							else
-								put_char('\n');
+								PUT_CHAR('\n');
 						}
 						if (1<<elem_desc.id & ELEMS_TAB) {
-							put_char('\t');
+							PUT_CHAR('\t');
 						}
 						if (1<<elem_desc.id & ELEMS_SPACE) {
-							put_char(' ');
+							PUT_CHAR(' ');
 						}
 					}
 					if (elem_desc.begin != elem_desc.end)
@@ -354,7 +394,7 @@ int converthtml2text(char *s, int len)
 				}
 				break;
 			default:
-				put_char(*p_src);
+				PUT_CHAR(*p_src);
 				++p_src;
 		}
 	}
