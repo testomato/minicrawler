@@ -359,8 +359,8 @@ static char *str_replace( const char *string, const char *substr, const char *re
 /** socket bezi, posli dotaz
  */
 static void genrequest(struct surl *u) {
-	const char getrqfmt[] = "GET %s HTTP/1.1\r\nUser-Agent: %s\r\nHost: %s\r\n%s\r\n";
-	const char postrqfmt[] = "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n\r\n%s\r\n%s\r\n";
+	const char getrqfmt[] = "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\n%s\r\n";
+	const char postrqfmt[] = "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n%s\r\n%s";
 
 	char host[262];
 	char agent[256];
@@ -409,11 +409,11 @@ static void genrequest(struct surl *u) {
 	if(!u->ispost) {// GET
 		u->request_len = sizeof(getrqfmt) + strlen(u->path) + strlen(agent) + strlen(host) + strlen(cookiestring);
 		u->request = malloc(u->request_len + 1);
-		sprintf(u->request, getrqfmt, u->path, agent, host, cookiestring);
+		sprintf(u->request, getrqfmt, u->path, host, agent, cookiestring);
 	} else { // POST
 		u->request_len = sizeof(postrqfmt) + strlen(u->path) + strlen(agent) + strlen(host) + strlen(cookiestring) + strlen(u->post) + 9; // 9 - dost místa na content-length
 		u->request = malloc(u->request_len + 1);
-		sprintf(u->request, postrqfmt, u->path, host, agent, (int)strlen(u->post), u->post, cookiestring);
+		sprintf(u->request, postrqfmt, u->path, host, agent, (int)strlen(u->post), cookiestring, u->post);
 	}
 	debugf("Request: [%s]", u->request);
 	u->request_len = strlen(u->request);
