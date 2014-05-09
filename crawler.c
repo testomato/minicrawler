@@ -532,7 +532,7 @@ static void setcookie(struct surl *u,char *str) {
 	if (0 == name_len) {
 		return;
 	}
-	const int value_len = str[name_len] ? strchrnul(&str[name_len + 1], ';') - &str[name_len + 1] : 0; //strcpy_endchar(NULL, str + name_len + 1, ';');
+	const int value_len = str[name_len] ? strpbrk(&str[name_len + 1], ";\r\n") - &str[name_len + 1] : 0; //strcpy_endchar(NULL, str + name_len + 1, ';');
 	char name[name_len + 1];
 	char value[value_len + 1];
 	*(char*)mempcpy(name, str, name_len) = 0;
