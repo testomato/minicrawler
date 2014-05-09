@@ -763,6 +763,17 @@ static void output(struct surl *u) {
 	if (*u->charset) {
 		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
 	}
+	for (int t = 0; t < u->cookiecnt; t++) {
+		if (0 == t) {
+			sprintf(header+strlen(header), "Cookie: %s=%s", u->cookies[t].name, u->cookies[t].value);
+		}
+		else {
+			sprintf(header+strlen(header), "; %s=%s", u->cookies[t].name, u->cookies[t].value);
+		}
+	}
+	if (u->cookiecnt) {
+		sprintf(header+strlen(header), "\n");
+	}
 	if (u->conv_errno) {
 		char err_buf[128];
 #		ifdef __APPLE__
