@@ -91,7 +91,7 @@ SSL_CTX *mossad(void) {
 	}
 
 	/* Create our context*/
-	SSL_METHOD *meth = SSLv23_method();
+	const SSL_METHOD *meth = SSLv23_method();
 	ctx = SSL_CTX_new(meth);
 
 	X509 *cert = NULL;
