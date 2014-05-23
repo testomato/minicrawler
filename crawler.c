@@ -78,15 +78,29 @@ static void sec_handshake(struct surl *u) {
 		return;
     }
     if (err == SSL_ERROR_ZERO_RETURN) {
-        debugf("[%d] Connection closed (in handshake)", u->index);
+		debugf("[%d] Connection closed (in handshake)", u->index);
 		sprintf(u->error_msg, "SSL connection closed during handshake");
-        set_atomic_int(&u->state, SURL_S_ERROR);
-        return;
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
     }
-    debugf("[%d] Unexpected SSL error (in handshake): %d, %d\n", u->index, err, t);
-    ERR_print_errors_fp(stderr);
-	sprintf(u->error_msg, "Unexpected SSL error during handshake");
-    set_atomic_int(&u->state, SURL_S_ERROR);
+
+	debugf("[%d] Unexpected SSL error (in handshake): %d, %d\n", u->index, err, t);
+	ERR_print_errors_fp(stderr);
+
+	if (SSL_get_options(u->ssl) & SSL_OP_NO_TLSv1) {
+		sprintf(u->error_msg, "Unexpected SSL error during handshake");
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
+	}
+	else {
+		// zkusíme ještě jednou bez TLSv1
+		debugf("[%d] Trying to switch to SSLv3\n", u->index);
+		u->ssl_options = u->ssl_options | SSL_OP_NO_TLSv1;
+		SSL_free(u->ssl);
+		close(u->sockfd);
+		set_atomic_int(&u->state, SURL_S_GOTIP);
+		return;
+	}
 }
 
 /** Read some data from SSL socket.
@@ -296,6 +310,7 @@ static int maybe_create_ssl(struct surl *u) {
 	SSL *ssl = SSL_new(mossad());
 	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
 	SSL_set_bio(ssl, sbio, sbio);
+	SSL_set_options(ssl, u->ssl_options);
 	u->ssl = ssl;
 
 	return 1;
@@ -858,6 +873,7 @@ static void resolvelocation(struct surl *u) {
 	u->chunked = 0;
 	u->gzipped = 0;
 	u->bufp = 0;
+	u->ssl_options = 0;
 
 	if (check_proto(u) == -1) {
 		return;
@@ -1176,6 +1192,7 @@ void init_url(struct surl *u, const char *url, const int index) {
 	u->headlen = 0;
 	u->contentlen = -1;
 	u->cookiecnt = 0;
+	u->ssl_options = 0;
 
 	check_proto(u);
 }

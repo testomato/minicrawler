@@ -134,7 +134,6 @@ struct surl {
 	
 	// network
 	int sockfd;
-	int ssl_connected;
 	int ip;
 	int prev_ip;
 	
@@ -151,6 +150,7 @@ struct surl {
 
 	// SSL support
 	SSL *ssl;
+	long ssl_options;
 };
 
 struct ssettings {
