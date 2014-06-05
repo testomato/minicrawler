@@ -290,7 +290,7 @@ static void connectsocket(struct surl *u) {
 
 	if (result != 0) {
 		debugf("%d: Cannot connect, attempt to connect failed", u->index);
-		sprintf(u->error_msg, "Failed to connect to host");
+		sprintf(u->error_msg, "Failed to connect to host (%s)", strerror(result));
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		close(u->sockfd);
 		return;
