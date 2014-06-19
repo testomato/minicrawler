@@ -484,7 +484,7 @@ static void strcpy_term(char *to, char *from) {
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
  *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
  */
-static int eatchunked(struct surl *u, int first) {
+static int eatchunked(struct surl *u) {
 	int t,i;
 	unsigned char hex[10];
 	int size;
@@ -518,7 +518,9 @@ static int eatchunked(struct surl *u, int first) {
 	debugf("[%d] Chunksize at %d (now %d): '%s' (=%d)\n",u->index,u->nextchunkedpos,u->bufp,hex,size);
 
 	movestart=u->nextchunkedpos;
-	if(!first&&movestart!=u->headlen) {/*debugf("eating %d %d at %d\n",u->buf[movestart-2],u->buf[movestart-1],movestart);*/movestart-=2;} // ten headlen je kvuli adventura.cz - moooc divne
+	if (u->nextchunkedpos != u->headlen) {
+		movestart -= 2;
+	}
 	assert(t <= u->bufp);
 	memmove(u->buf+movestart,u->buf+t,u->bufp-t);		// cely zbytek posun
 	u->bufp-=(t-movestart);					// ukazatel taky
@@ -679,10 +681,6 @@ static void detecthead(struct surl *u) {
 	find_content_type(u);
 
 	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
-	
-	if(u->chunked && u->bufp>u->nextchunkedpos) {
-		eatchunked(u, 1);
-	}
 }
 
 /**
@@ -941,7 +939,7 @@ static void readreply(struct surl *u) {
 	if(t > 0 && u->chunked) {
 		//debugf("debug: bufp=%d nextchunkedpos=%d",u->bufp,u->nextchunkedpos);
 		while(u->bufp > u->nextchunkedpos) {
-			const int i = eatchunked(u,0);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
+			const int i = eatchunked(u);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
 			if(i == -1) {
 				break;
 			}
