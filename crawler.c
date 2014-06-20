@@ -743,7 +743,7 @@ static void output(struct surl *u) {
 			u->bufp = buflen + u->headlen;
 		} else {
 			sprintf(u->error_msg, "Gzip decompression error %d", ret);
-			u->status = 999;
+			u->status = -2;
 			u->bufp = u->headlen;
 		}
 	}
@@ -1086,7 +1086,7 @@ static void goone(struct surl *u) {
   
 	case SURL_S_ERROR:
 	case SURL_S_INTERNAL_ERROR:
-		u->status = 999;
+		u->status = -1;
 		output(u);
 		break;
 
