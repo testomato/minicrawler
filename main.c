@@ -66,7 +66,7 @@ void printusage()
 	         "         -tSECONDS  sets timeout (default is 5 seconds)\n"
 	         "         -h         enables output of headers\n"
 	         "         -i         enables impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress\n"
-	         "         -p         outputs also partially downloaded urls\n"
+	         "         -p         outputs also urls that timed out and a reason of it\n"
 	         "         -A STRING  custom user agent\n"
 	         "         -w STRING  write this custom header to all requests (max 4096 bytes)\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"

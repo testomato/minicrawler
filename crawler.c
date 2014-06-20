@@ -770,6 +770,36 @@ static void output(struct surl *u) {
 		sprintf(header+strlen(header), "Redirect-info: %s %d\n", rinfo->url, rinfo->status);
 	}
 	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
+
+	const int url_state = get_atomic_int(&u->state);
+	if (url_state <= SURL_S_RECVREPLY) {
+		char timeouterr[50];
+		switch (url_state) {
+			case SURL_S_JUSTBORN:
+				strcpy(timeouterr, "Process has not started yet"); break;
+			case SURL_S_INDNS:
+				strcpy(timeouterr, "Timeout while contacting DNS servers"); break;
+			case SURL_S_GOTIP:
+				if (u->downstart) {
+					strcpy(timeouterr, "Connection timed out");
+				} else {
+					strcpy(timeouterr, "Waiting for download slot");
+				}
+				break;
+			case SURL_S_CONNECT:
+				strcpy(timeouterr, "Connection timed out"); break;
+			case SURL_S_HANDSHAKE:
+				strcpy(timeouterr, "Timeout during SSL handshake"); break;
+			case SURL_S_GENREQUEST:
+				strcpy(timeouterr, "Timeout while generating HTTP request"); break;
+			case SURL_S_SENDREQUEST:
+				strcpy(timeouterr, "Timeout while sending HTTP request"); break;
+			case SURL_S_RECVREPLY:
+				strcpy(timeouterr, "HTTP server timed out"); break;
+		}
+
+		sprintf(header+strlen(header), "Timeout: %d (%s); %s\n", url_state, state_to_s(url_state), timeouterr);
+	}
 	if (*u->error_msg) {
 		sprintf(header+strlen(header), "Error-msg: %s\n", u->error_msg);
 	}
@@ -815,9 +845,7 @@ static void output(struct surl *u) {
 	if(u->chunked) debugf("[%d] bufp=%d nextchunkedpos=%d\n",u->index,u->bufp,u->nextchunkedpos);
 
 	debugf("[%d] Outputed.\n",u->index);
-
-	set_atomic_int(&u->state, SURL_S_DONE);
-	debugf("[%d] Done.\n",u->index);
+	set_atomic_int(&u->state, SURL_S_OUTPUTED);
 }
 
 /** vyres presmerovani
@@ -889,7 +917,8 @@ static void finish(struct surl *u) {
 	if(u->location[0]) {
 		resolvelocation(u);
 	} else {
-		output(u);
+		set_atomic_int(&u->state, SURL_S_DONE);
+		debugf("[%d] Done.\n",u->index);
 	}
 }
 
@@ -949,8 +978,8 @@ static void readreply(struct surl *u) {
 	
 	if(t == SURL_IO_EOF || t == SURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
 		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
-		finish(u); // u->state is changed here
 		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
+		finish(u); // u->state is changed here
 	} else {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
@@ -1060,6 +1089,10 @@ static void goone(struct surl *u) {
 		u->status = 999;
 		output(u);
 		break;
+
+	case SURL_S_DONE:
+		output(u);
+		break;
 	}
 
 	if (settings.debug) {	
@@ -1113,7 +1146,7 @@ static void outputpartial(void) {
 
 	for(t=0; url[t].rawurl[0]; t++) {
 		const int url_state = get_atomic_int(&url[t].state);
-		if(url_state == SURL_S_RECVREPLY) {
+		if(url_state <= SURL_S_RECVREPLY) {
 			output(&url[t]);
 		}
 	}
@@ -1210,7 +1243,7 @@ void go(void) {
 		for(int t = 0; url[t].rawurl[0]; t++) {
 			//debugf("%d: %d\n",t,url[t].state);
 			const int state = get_atomic_int(&url[t].state);
-			if(state < SURL_S_DONE) {
+			if(state < SURL_S_OUTPUTED) {
 				goone(&url[t]);
 				done = 0;
 			}
