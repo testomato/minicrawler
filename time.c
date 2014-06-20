@@ -98,7 +98,7 @@ int test_free_channel(const unsigned u_ip, const unsigned milis, const int force
 {
 	const int now = get_time_int();
 	int *slot = get_hash_item(u_ip);
-	debugf("%d; 0x%x => %d [%p]\n", now, u_ip, (int)milis <= 0 || *slot + (int)milis <= now, slot);
+	debugf("%d; 0x%x => %d || %d [%p]\n", now, u_ip, force, (int)milis <= 0 || *slot + (int)milis <= now, slot);
 	if (force || (int)milis <= 0 || *slot + (int)milis <= now) {
 		return *slot = now;
 	}

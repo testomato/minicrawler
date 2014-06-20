@@ -853,6 +853,7 @@ static void resolvelocation(struct surl *u) {
 		set_atomic_int(&u->state, SURL_S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
 	}
 	else {
+		u->prev_ip = u->ip;
 		set_atomic_int(&u->state, SURL_S_GOTIP);	// jinak se muzes pripojit na tu puvodni IP
 	}
 
