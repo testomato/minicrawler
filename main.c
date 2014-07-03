@@ -72,7 +72,7 @@ void printusage()
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
 	         "         -c         convert text format (with utf-8 encoding)\n"
 	         "         -8         convert from page encoding to utf-8\n"
-	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP\n"
+	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)\n"
 	         "         -S         disable ssl support\n"
 	         "         -g         accept gzip encoding\n"
 	         "\n", VERSION);
