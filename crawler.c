@@ -891,6 +891,12 @@ static void resolvelocation(struct surl *u) {
 	rinfo->status = u->status;
 	rinfo->next = u->redirect_info;
 	u->redirect_info = rinfo;
+	if (--u->redirect_limit <= 0) {
+		debugf("[%d] Exceeded redirects limit", u->index);
+		sprintf(u->error_msg, "Too many redirects, possibly a redirect loop");
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
+	}
 
 	strcpy(u->redirectedto, u->location);
 	u->location[0] = 0;
@@ -1225,6 +1231,7 @@ void init_url(struct surl *u, const char *url, const int index) {
 	u->contentlen = -1;
 	u->cookiecnt = 0;
 	u->ssl_options = 0;
+	u->redirect_limit = MAX_REDIRECTS;
 
 	check_proto(u);
 }

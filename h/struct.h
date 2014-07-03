@@ -1,8 +1,15 @@
 #include <openssl/ssl.h>
 
-#define MAXURLSIZE 4096
+enum {
+	BUFSIZE = 700*1024,
+	MAXURLSIZE = 4096,
+};
 
-enum { BUFSIZE = 700*1024, };
+enum {
+	DEFAULT_TIMEOUT = 5,
+	DEFAULT_DELAY = 100,
+	MAX_REDIRECTS = 20,
+};
 
 struct nv {
     char *name, *value;
@@ -126,6 +133,7 @@ struct surl {
 	size_t request_it;
 
 	struct redirect_info *redirect_info;
+	int redirect_limit;
  
 	int state;
 	int rw;

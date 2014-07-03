@@ -90,8 +90,8 @@ int main(int argc, char *argv[]) {
 	signal(SIGPIPE,sighandler);
 //	signal(SIGSEGV,sighandler);
 
-	settings.timeout=5;
-	settings.delay=100;
+	settings.timeout=DEFAULT_TIMEOUT;
+	settings.delay=DEFAULT_DELAY;
 	
 	initurls(argc, argv);
 	go();
