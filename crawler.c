@@ -899,13 +899,14 @@ static void resolvelocation(struct surl *u) {
 	}
 
 	strcpy(u->redirectedto, u->location);
+	u->status = 0;
 	u->location[0] = 0;
 	u->ispost = 0;
+	u->bufp = 0;
 	u->headlen = 0;
 	u->contentlen = -1;
 	u->chunked = 0;
 	u->gzipped = 0;
-	u->bufp = 0;
 	u->ssl_options = 0;
 
 	if (check_proto(u) == -1) {
