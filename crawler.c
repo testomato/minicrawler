@@ -728,7 +728,7 @@ ssize_t plain_write(const struct surl *u, const char *buf, const size_t size) {
 /** vypise vystup na standardni vystup
  */
 static void output(struct surl *u) {
-	unsigned char header[4096];
+	unsigned char header[16384];
 
 	if (u->gzipped) {
 		char *buf;
