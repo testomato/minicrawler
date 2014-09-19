@@ -15,6 +15,11 @@ struct nv {
     char *name, *value;
 };
 
+struct cookie {
+    char *name, *value, *domain;
+	int secure, host_only;
+};
+
 struct redirect_info {
 	char url[MAXURLSIZE];
 	int status;
@@ -121,7 +126,7 @@ struct surl {
 	char redirectedto[MAXURLSIZE];	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos;
-	struct nv cookies[20];	// nekolik cookie, kazda ma name ([0]) a value ([1])
+	struct cookie cookies[20];
 	int cookiecnt;
 	char customparam[256];		// parametr do custom headeru
 	char charset[32];

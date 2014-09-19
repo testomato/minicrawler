@@ -372,6 +372,7 @@ static char *str_replace( const char *string, const char *substr, const char *re
 } 
 
 /** socket bezi, posli dotaz
+ * cookie header see http://tools.ietf.org/html/rfc6265 section 5.4
  */
 static void genrequest(struct surl *u) {
 	const char getrqfmt[] = "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\n%s\r\n";
@@ -396,12 +397,21 @@ static void genrequest(struct surl *u) {
 
 	// vytvoří si to řetězec cookies a volitelných parametrů
 	cookiestring[0] = 0;
-	for(int t = 0; t < u->cookiecnt; t++) {
-		if(0 == t) {
-			sprintf(cookiestring, "Cookie: %s=%s", u->cookies[t].name, u->cookies[t].value);
-		}
-		else {
-			sprintf(cookiestring+strlen(cookiestring), "; %s=%s", u->cookies[t].name, u->cookies[t].value);
+	char *p;
+	for (int t = 0; t < u->cookiecnt; t++) {
+		// see http://tools.ietf.org/html/rfc6265 section 5.4
+		// TODO: The request-uri's path path-matches the cookie's path.
+		if (
+				(u->cookies[t].host_only == 1 && strcasecmp(u->host, u->cookies[t].domain) == 0 ||
+					u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) != NULL && *(p+strlen(u->cookies[t].domain)+1) == '\0') &&
+				(u->cookies[t].secure == 0 || strcmp(u->proto, "https") == 0)
+		) {
+			if (!cookiestring[0]) {
+				sprintf(cookiestring, "Cookie: %s=%s", u->cookies[t].name, u->cookies[t].value);
+			}
+			else {
+				sprintf(cookiestring+strlen(cookiestring), "; %s=%s", u->cookies[t].name, u->cookies[t].value);
+			}
 		}
 	}
 	if (strlen(cookiestring)) {
@@ -538,47 +548,159 @@ static int eatchunked(struct surl *u) {
 	return 0;
 }
 
-/** zapíše si do pole novou cookie (pokud ji tam ještě nemá; pokud má, tak ji nahradí)
- * kašleme na cestu a na dobu platnosti cookie (to by mělo být pro účely minicrawleru v pohodě)
+char *trim(char *str) {
+	int len = strlen(str);
+	while ((str[0] == ' ' || str[0] == '\t') && str[0] != '\0') str++;
+	while ((str[len-1] == ' ' || str[len-1] == '\t') && len > 0) str[--len] = '\0';
+	return str;
+}
+
+/** 
+ * zapíše si do pole novou cookie (pokud ji tam ještě nemá; pokud má, tak ji nahradí)
+ * kašleme na *cestu* a na dobu platnosti cookie (to by mělo být pro účely minicrawleru v pohodě)
+ * see http://tools.ietf.org/html/rfc6265 section 5.2 and 5.3
  */
 static void setcookie(struct surl *u,char *str) {
-	for (; *str == ' ' || *str == '\t'; ++str);
-	// FIXME: Whitespaces are permited between tokens, must be skipped event between name, '=', value!!!
+	struct cookie cookie;
+	char *p, *q, *r;
+	int len;
 
-	const int name_len = strchrnul(str, '=') - str; //strcpy_endchar(NULL, str, '=');
-	if (0 == name_len) {
+	p = strpbrk(str, ";\r\n");
+	if (p == NULL) return;
+
+	char namevalue[p-str+1];
+	*(char*)mempcpy(namevalue, str, p-str) = 0;
+
+	char *attributestr;
+	if (p[0] == ';') {
+		q = strpbrk(str, "\r\n");
+		if (q == NULL) return;
+		attributestr = (char *) malloc(q - p + 1);
+		*(char*)mempcpy(attributestr, p, q - p) = 0;
+	} else {
+		attributestr = malloc(1);
+		attributestr[0] = '\0';
+	}
+
+	// parse name and value
+	if ((p = strchr(namevalue, '=')) == NULL) {
+		debugf("[%d] Cookie string '%s' lacks a '=' character\n", u->index, namevalue);
 		return;
 	}
-	const int value_len = str[name_len] ? strpbrk(&str[name_len + 1], ";\r\n") - &str[name_len + 1] : 0; //strcpy_endchar(NULL, str + name_len + 1, ';');
-	char name[name_len + 1];
-	char value[value_len + 1];
-	*(char*)mempcpy(name, str, name_len) = 0;
-	*(char*)mempcpy(value, &str[name_len + 1], value_len) = 0;
+
+	cookie.name = malloc(p - namevalue + 1);
+	cookie.value = malloc(strlen(namevalue) - (p-namevalue));
+	*(char*)mempcpy(cookie.name, namevalue, p - namevalue) = 0;
+	*(char*)mempcpy(cookie.value, p + 1, strlen(namevalue) - (p-namevalue) - 1) = 0;
+
+	cookie.name = trim(cookie.name);
+	cookie.value = trim(cookie.value);
+
+	if (strlen(cookie.name) == 0) {
+		debugf("[%d] Cookie string '%s' has empty name\n", u->index, namevalue);
+		return;
+	}
+	
+	// parse cookie attributes
+	struct nv attributes[10];
+	struct nv *attr;
+	int att_len = 0;
+	p = attributestr;
+	while (p[0] != '\0') {
+		if (att_len > 10) {
+			debugf("[%d] Cookie string '%s%s' has more 10 attributes (not enough memory)... skipping the rest\n", u->index, namevalue, attributestr);
+			break;
+		}
+
+		attr = attributes + att_len++;
+		q = strchrnul(p+1, ';');
+		if ((r = strchr(p+1, '=')) != NULL && r < q) {
+			attr->name = malloc(r-(p+1)+1);
+			attr->value = malloc(q-r);
+			*(char*)mempcpy(attr->name, p+1, r-(p+1)) = 0;
+			*(char*)mempcpy(attr->value, r+1, q-r-1) = 0;
+		} else {
+			attr->name = malloc(q-(p+1)+1);
+			attr->value = malloc(1);
+			*(char*)mempcpy(attr->name, p+1, q-(p+1)) = 0;
+			attr->value[0] = '\0';
+		}
+		attr->name = trim(attr->name);
+		attr->value = trim(attr->value);
+		
+		p = q;
+	}
+
+	// process attributes
+	cookie.secure = 0;
+	int i;
+	for (i = 0; i < att_len; i++) {
+		attr = attributes + i;
+
+		// The Domain Attribute
+		if (!strcasecmp(attr->name, "Domain")) {
+			if (strlen(attr->value) == 0) {
+				debugf("[%d] Cookie string '%s%s' has empty value for domain attribute... ignoring\n", u->index, namevalue, attributestr);
+				return;
+			}
+
+			// ignore leading '.'
+			if (attr->value[0] == '.') {
+				attr->value++;
+			}
+
+			// TODO: ignore public suffixes, see 5.3.5
+			
+			// match request host
+			if ((p = strcasestr(u->host, attr->value)) == NULL || *(p+strlen(attr->value)+1) != '\0') {
+				debugf("[%d] Domain in cookie string '%s%s' does not match request host '%s'... ignoring\n", u->index, namevalue, attributestr, u->host);
+				return;
+			}
+
+			cookie.domain = malloc(strlen(attr->value)+1);
+			strcpy(cookie.domain, attr->value);
+			cookie.host_only = 0;
+		}
+
+		// The Secure Attribute
+		if (!strcasecmp(attr->name, "Secure")) {
+			cookie.secure = 1;
+		}
+	}
+
+	if (!cookie.domain) {
+		cookie.domain = malloc(strlen(u->host) +1);
+		strcpy(cookie.domain, u->host);
+		cookie.host_only = 1;
+	}
 
 	int t;
-	for(t = 0; t<u->cookiecnt; ++t) {
-		if(!strcmp(name,u->cookies[t].name)) {
+	for (t = 0; t<u->cookiecnt; ++t) {
+		if(!strcasecmp(cookie.name,u->cookies[t].name) && !strcasecmp(cookie.domain,u->cookies[t].domain)) {
 			break;
 		}
 	}
 
-	if(t<u->cookiecnt) { // už tam byla
-		if(!strcmp(u->cookies[t].value,value)) {
-			debugf("[%d] Received same cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
-		} else {
-			free(u->cookies[t].value);
-			u->cookies[t].value = malloc(value_len + 1);
-			*(char*)mempcpy(u->cookies[t].value, value, value_len) = 0;
-			debugf("[%d] Changed cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
-		}
-	} else if (u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies)) { // nová
-		u->cookies[t].name = malloc(name_len + 1);
-		u->cookies[t].value = malloc(value_len + 1);
-		*(char*)mempcpy(u->cookies[t].name, name, name_len) = 0;
-		*(char*)mempcpy(u->cookies[t].value, value, value_len) = 0;
+	if (t<u->cookiecnt) { // už tam byla
+		free(u->cookies[t].name);
+		free(u->cookies[t].value);
+		free(u->cookies[t].domain);
+		debugf("[%d] Changed cookie\n",u->index);
+	} else {
 		u->cookiecnt++;
-		debugf("[%d] Added new cookie #%d: '%s' = '%s'\n",u->index,t,name,value);
 	}
+
+	if (u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies)) {
+		u->cookies[t].name = cookie.name;
+		u->cookies[t].value = cookie.value;
+		u->cookies[t].domain = cookie.domain;
+		u->cookies[t].secure = cookie.secure;
+		u->cookies[t].host_only = cookie.host_only;
+		debugf("[%d] Storing cookie #%d: name='%s', value='%s', domain='%s', host_only=%d, secure=%d\n",u->index,t,cookie.name,cookie.value,cookie.domain,cookie.host_only,cookie.secure);
+	} else {
+		debugf("[%d] Not enough memory for storing cookies\n",u->index);
+	}
+
 }
 
 /** Find string with content type inside the http head.
