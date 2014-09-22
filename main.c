@@ -61,20 +61,24 @@ void sighandler(int signum)
  */
 void printusage()
 {
-	printf("\nminicrawler, version %s\n\nUsage:   minicrawler [-d] [-h] [i] [-tSECONDS] url [url2] [url3] [...]\n\n"
-	         "Where:   -d         enables debug messages (to stderr)\n"
-	         "         -tSECONDS  sets timeout (default is 5 seconds)\n"
-	         "         -h         enables output of headers\n"
-	         "         -i         enables impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress\n"
-	         "         -p         outputs also urls that timed out and a reason of it\n"
-	         "         -A STRING  custom user agent\n"
+	printf("\nminicrawler, version %s\n\nUsage:   minicrawler [options] [urloptions] url [[url2options] url2]...\n\n"
+	         "Where\n"
+	         "   options:\n"
+	         "         -d         enable debug messages (to stderr)\n"
+	         "         -tSECONDS  set timeout (default is 5 seconds)\n"
+	         "         -h         enable output of headers\n"
+	         "         -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)\n"
+	         "         -p         output also urls that timed out and a reason of it\n"
+	         "         -A STRING  custom user agent (max 256 bytes)\n"
 	         "         -w STRING  write this custom header to all requests (max 4096 bytes)\n"
-	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
-	         "         -c         convert text format (with utf-8 encoding)\n"
+	         "         -c         convert content to text format (with utf-8 encoding)\n"
 	         "         -8         convert from page encoding to utf-8\n"
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)\n"
 	         "         -S         disable ssl support\n"
 	         "         -g         accept gzip encoding\n"
+	         "\n   urloptions:\n"
+	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
+	         "         -P STRING  http post parameters\n"
 	         "\n", VERSION);
 }
 
