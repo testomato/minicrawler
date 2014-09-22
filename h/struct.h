@@ -167,6 +167,8 @@ struct surl {
 	// SSL support
 	SSL *ssl;
 	long ssl_options;
+
+	struct surl *next; // linked list
 };
 
 struct ssettings {

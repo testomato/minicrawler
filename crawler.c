@@ -1120,6 +1120,7 @@ static void selectall(void) {
 	fd_set set;
 	fd_set writeset;
 	struct timeval timeout;	
+	struct surl *curl;
 	
 	FD_ZERO (&set);
 	FD_ZERO (&writeset);
@@ -1127,21 +1128,22 @@ static void selectall(void) {
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 20000;
 	
-	for(int i = 0; url[i].rawurl[0]; i++) {
-		const int state = get_atomic_int(&url[i].state);
-		const int rw = get_atomic_int(&url[i].rw);
-		debugf("[%d] select.state = [%s][%d]\n", url[i].index, state_to_s(state), want_io(state, rw));
+	curl = url;
+	do {
+		const int state = get_atomic_int(&curl->state);
+		const int rw = get_atomic_int(&curl->rw);
+		debugf("[%d] select.state = [%s][%d]\n", curl->index, state_to_s(state), want_io(state, rw));
 		if (!want_io(state, rw)) {
 			continue;
 		}
 		if(rw & 1<<SURL_RW_WANT_READ) {
-			FD_SET(url[i].sockfd, &set);
+			FD_SET(curl->sockfd, &set);
 		}
 		
 		if(rw & 1<<SURL_RW_WANT_WRITE) {
-			FD_SET(url[i].sockfd, &writeset);
+			FD_SET(curl->sockfd, &writeset);
 		}
-	}
+	} while ((curl = curl->next) != NULL);
 	switch (select(FD_SETSIZE, &set, &writeset, NULL, &timeout)) {
 		case -1:
 			fprintf(stderr, "select failed: %m");
@@ -1149,14 +1151,15 @@ static void selectall(void) {
 		case 0:
 			return; // nothing
 	}
-	for(int i = 0; url[i].rawurl[0]; i++) {
-		const int rw = !!FD_ISSET(url[i].sockfd, &set) << SURL_RW_READY_READ | !!FD_ISSET(url[i].sockfd, &writeset) << SURL_RW_READY_WRITE;
+	curl = url;
+	do {
+		const int rw = !!FD_ISSET(curl->sockfd, &set) << SURL_RW_READY_READ | !!FD_ISSET(curl->sockfd, &writeset) << SURL_RW_READY_WRITE;
 		if (rw) {
-			set_atomic_int(&url[i].rw, rw);
+			set_atomic_int(&curl->rw, rw);
 		} else {
 			// Do nothing, this way you preserve the original value !!
 		}
-	}
+	} while ((curl = curl->next) != NULL);
 }
 
 
@@ -1233,31 +1236,33 @@ static void goone(struct surl *u) {
  */
 static int exitprematurely(void) {
 	int tim;
-	int t;
-	int notdone = 0, lastread = 0;
+	int cnt = 0, notdone = 0, lastread = 0;
+	struct surl *curl;
 	
 	tim=get_time_int();
 	if(tim<settings.timeout*1000-1000) {
 		return 0; // jeste je brzy
 	}
 	
-	for(t = 0; url[t].rawurl[0]; t++) {
-		const int url_state = get_atomic_int(&url[t].state);
+	curl = url;
+	do {
+		const int url_state = get_atomic_int(&curl->state);
 		if(url_state<SURL_S_DONE) {
 			notdone++;
 		}
-		if(url[t].lastread>lastread) {
-			lastread=url[t].lastread;
+		if(curl->lastread>lastread) {
+			lastread=curl->lastread;
 		}
-	}
+		cnt++;
+	} while ((curl = curl->next) != NULL);
 	
 	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,tim);
 	
-	if(t >= 5 && notdone == 1 && (tim-lastread) > 400) {
+	if(cnt >= 5 && notdone == 1 && (tim-lastread) > 400) {
 		debugf("[-] Forcing premature end 1!\n");
 		return 1;
 	}
-	if(t >= 20 && notdone <= 2 && (tim-lastread) > 400) {
+	if(cnt >= 20 && notdone <= 2 && (tim-lastread) > 400) {
 		debugf("[-] Forcing premature end 2!\n");
 		return 1;
 	}
@@ -1268,14 +1273,15 @@ static int exitprematurely(void) {
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
 static void outputpartial(void) {
-	int t;
+	struct surl *curl;
 
-	for(t=0; url[t].rawurl[0]; t++) {
-		const int url_state = get_atomic_int(&url[t].state);
+	curl = url;
+	do {
+		const int url_state = get_atomic_int(&curl->state);
 		if(url_state <= SURL_S_RECVREPLY) {
-			output(&url[t]);
+			output(curl);
 		}
-	}
+	} while ((curl = curl->next) != NULL);
 }
 
 /**
@@ -1377,23 +1383,25 @@ void init_url(struct surl *u, const char *url, const int index, struct cookie *c
 void go(void) {
 	int done;
 	int change;
+	struct surl *curl;
 	do {
 		done = 1;
 		change = 0;
 		
 		selectall();
-		for(int t = 0; url[t].rawurl[0]; t++) {
-			//debugf("%d: %d\n",t,url[t].state);
-			const int state = get_atomic_int(&url[t].state);
+		curl = url;
+		do {
+			//debugf("%d: %d\n",t,curl->state);
+			const int state = get_atomic_int(&curl->state);
 			if(state < SURL_S_OUTPUTED) {
-				goone(&url[t]);
+				goone(curl);
 				done = 0;
 			}
-			// url[t].state can change inside goone
-			if(state != get_atomic_int(&url[t].state)) {
+			// curl->state can change inside goone
+			if(state != get_atomic_int(&curl->state)) {
 				change = 1;
 			}
-		}
+		} while ((curl = curl->next) != NULL);
 
 		const int t = get_time_int();
 		if(t > settings.timeout*1000) {

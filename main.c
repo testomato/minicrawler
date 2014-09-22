@@ -10,7 +10,7 @@
 #include "h/proto.h"
 #include "h/version.h"
 
-struct surl url[100];
+struct surl *url;
 
 struct ssettings settings;
 
@@ -18,10 +18,13 @@ struct ssettings settings;
  */
 void initurls(int argc, char *argv[])
 {
-	int i = 0;
+	struct surl *curl, *purl;
 	char *p, *q;
 	struct cookie cookies[20];
-	int ccnt = 0;
+	int ccnt = 0, i = 0;
+
+	url = (struct surl *)malloc(sizeof(struct surl));
+	curl = url;
 
 	for (int t = 1; t < argc; ++t) {
 
@@ -56,20 +59,23 @@ void initurls(int argc, char *argv[])
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
-			url[i].ispost = 1;
-			url[i].post = malloc(strlen(argv[t+1]) + 1);
-			memcpy(url[i].post, argv[t+1], strlen(argv[t+1]) + 1);
+			curl->ispost = 1;
+			curl->post = malloc(strlen(argv[t+1]) + 1);
+			memcpy(curl->post, argv[t+1], strlen(argv[t+1]) + 1);
 			t++;
-			debugf("[%d] POST: %s\n",i,url[i].post);
+			debugf("[%d] POST: %s\n",i,curl->post);
 			continue;
 		}
-		if(!strncmp(argv[t], "-C", 2)) {strcpy(url[i].customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,url[i].customparam);continue;}
+		if(!strncmp(argv[t], "-C", 2)) {strcpy(curl->customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,curl->customparam);continue;}
 
-		init_url(&url[i], argv[t], i, cookies, ccnt);
-		++i;
+		init_url(curl, argv[t], i++, cookies, ccnt);
+		purl = curl;
+		curl = (struct surl *)malloc(sizeof(struct surl));
+		purl->next = curl;
 	}
 
-	strcpy(url[i].rawurl, ""); // ukoncovaci znacka
+	free(curl);
+	purl->next = NULL;
 
 	for (int t = 0; t < ccnt; t++) {
 		free(cookies[t].name);

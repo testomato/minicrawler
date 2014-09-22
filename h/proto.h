@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <unistd.h>
 
-extern struct surl url[];
+extern struct surl *url;
 extern struct ssettings settings;
 
 #define debugf(...)   {if(settings.debug) fprintf(stderr, __VA_ARGS__);}
