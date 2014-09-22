@@ -1339,7 +1339,7 @@ static int check_proto(struct surl *u) {
 /**
  * Init URL struct
  */
-void init_url(struct surl *u, const char *url, const int index) {
+void init_url(struct surl *u, const char *url, const int index, struct cookie *cookies, const int cookiecnt) {
 	// Init the url
 	strcpy(u->rawurl, url);
 	u->index = index;
@@ -1352,6 +1352,21 @@ void init_url(struct surl *u, const char *url, const int index) {
 	u->cookiecnt = 0;
 	u->ssl_options = 0;
 	u->redirect_limit = MAX_REDIRECTS;
+	for (int i = 0; i < cookiecnt; i++) {
+		u->cookies[i].name = malloc(strlen(cookies[i].name) + 1);
+		u->cookies[i].value = malloc(strlen(cookies[i].value) + 1);
+		u->cookies[i].domain = malloc(strlen(cookies[i].domain) + 1);
+		u->cookies[i].path = malloc(strlen(cookies[i].path) + 1);
+
+		strcpy(u->cookies[i].name, cookies[i].name);
+		strcpy(u->cookies[i].value, cookies[i].value);
+		strcpy(u->cookies[i].domain, cookies[i].domain);
+		strcpy(u->cookies[i].path, cookies[i].path);
+		u->cookies[i].host_only = cookies[i].host_only;
+		u->cookies[i].secure = cookies[i].secure;
+		u->cookies[i].expire = cookies[i].expire;
+	}
+	u->cookiecnt = cookiecnt;
 
 	check_proto(u);
 }

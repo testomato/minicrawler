@@ -16,8 +16,8 @@ struct nv {
 };
 
 struct cookie {
-    char *name, *value, *domain;
-	int secure, host_only;
+    char *name, *value, *domain, *path;
+	int secure, host_only, expire;
 };
 
 struct redirect_info {

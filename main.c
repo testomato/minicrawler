@@ -1,3 +1,4 @@
+#define _GNU_SOURCE // memmem(.), strchrnul needs this :-(
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -18,7 +19,13 @@ struct ssettings settings;
 void initurls(int argc, char *argv[])
 {
 	int i = 0;
+	char *p, *q;
+	struct cookie cookies[20];
+	int ccnt = 0;
+
 	for (int t = 1; t < argc; ++t) {
+
+		// options
 		if(!strcmp(argv[t], "-d")) {settings.debug=1;continue;}
 		if(!strcmp(argv[t], "-S")) {settings.non_ssl=1;continue;}
 		if(!strcmp(argv[t], "-h")) {settings.writehead=1;continue;}
@@ -31,6 +38,23 @@ void initurls(int argc, char *argv[])
 		if(!strncmp(argv[t], "-D", 2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
 		if(!strncmp(argv[t], "-w", 2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
 		if(!strncmp(argv[t], "-A", 2)) {sprintf(settings.customagent,"%.*s", I_LENGTHOF(settings.customagent), argv[t+1]); t++; debugf("Custom agent: %s\n",settings.customagent); continue;}
+		if(!strncmp(argv[t], "-b", 2)) {
+			p = argv[t+1];
+			while (p[0] != '\0' && ccnt < 20) {
+				q = strchrnul(p, '\n');
+				cookies[ccnt].name = malloc(q-p);
+				cookies[ccnt].value = malloc(q-p);
+				cookies[ccnt].domain = malloc(q-p);
+				cookies[ccnt].path = malloc(q-p);
+				sscanf(p, "%s\t%d\t%s\t%d\t%d\t%s\t%s", cookies[ccnt].domain, &cookies[ccnt].host_only, cookies[ccnt].path, &cookies[ccnt].secure, &cookies[ccnt].expire, cookies[ccnt].name, cookies[ccnt].value);
+				p = (q[0] == '\n') ? q + 1 : q;
+				ccnt++;
+			}
+			t++;
+			continue;
+		}
+
+		// urloptions
 		if(!strcmp(argv[t], "-P")) {
 			url[i].ispost = 1;
 			url[i].post = malloc(strlen(argv[t+1]) + 1);
@@ -41,11 +65,18 @@ void initurls(int argc, char *argv[])
 		}
 		if(!strncmp(argv[t], "-C", 2)) {strcpy(url[i].customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,url[i].customparam);continue;}
 
-		init_url(&url[i], argv[t], i);
+		init_url(&url[i], argv[t], i, cookies, ccnt);
 		++i;
 	}
 
 	strcpy(url[i].rawurl, ""); // ukoncovaci znacka
+
+	for (int t = 0; t < ccnt; t++) {
+		free(cookies[t].name);
+		free(cookies[t].value);
+		free(cookies[t].domain);
+		free(cookies[t].path);
+	}
 }
 
 /** zpracuje signál (vypíše ho a ukončí program s -1)
@@ -76,6 +107,7 @@ void printusage()
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)\n"
 	         "         -S         disable ssl support\n"
 	         "         -g         accept gzip encoding\n"
+	         "         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)\n"
 	         "\n   urloptions:\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
 	         "         -P STRING  http post parameters\n"
