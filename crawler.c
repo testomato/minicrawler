@@ -690,7 +690,7 @@ static void setcookie(struct surl *u,char *str) {
 		u->cookiecnt++;
 	}
 
-	if (u->cookiecnt < sizeof(u->cookies)/sizeof(*u->cookies)) {
+	if (t < sizeof(u->cookies)/sizeof(*u->cookies)) {
 		u->cookies[t].name = cookie.name;
 		u->cookies[t].value = cookie.value;
 		u->cookies[t].domain = cookie.domain;
@@ -698,6 +698,7 @@ static void setcookie(struct surl *u,char *str) {
 		u->cookies[t].host_only = cookie.host_only;
 		debugf("[%d] Storing cookie #%d: name='%s', value='%s', domain='%s', host_only=%d, secure=%d\n",u->index,t,cookie.name,cookie.value,cookie.domain,cookie.host_only,cookie.secure);
 	} else {
+		u->cookiecnt--;
 		debugf("[%d] Not enough memory for storing cookies\n",u->index);
 	}
 

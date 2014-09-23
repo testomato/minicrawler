@@ -3,6 +3,7 @@
 enum {
 	BUFSIZE = 700*1024,
 	MAXURLSIZE = 4096,
+	COOKIESTORAGESIZE = 25,
 };
 
 enum {
@@ -126,7 +127,7 @@ struct surl {
 	char redirectedto[MAXURLSIZE];	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos;
-	struct cookie cookies[20];
+	struct cookie cookies[COOKIESTORAGESIZE];
 	int cookiecnt;
 	char customparam[256];		// parametr do custom headeru
 	char charset[32];

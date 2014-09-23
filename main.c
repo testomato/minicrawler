@@ -20,7 +20,7 @@ void initurls(int argc, char *argv[])
 {
 	struct surl *curl, *purl;
 	char *p, *q;
-	struct cookie cookies[20];
+	struct cookie cookies[COOKIESTORAGESIZE];
 	int ccnt = 0, i = 0;
 
 	url = (struct surl *)malloc(sizeof(struct surl));
@@ -43,7 +43,7 @@ void initurls(int argc, char *argv[])
 		if(!strncmp(argv[t], "-A", 2)) {sprintf(settings.customagent,"%.*s", I_LENGTHOF(settings.customagent), argv[t+1]); t++; debugf("Custom agent: %s\n",settings.customagent); continue;}
 		if(!strncmp(argv[t], "-b", 2)) {
 			p = argv[t+1];
-			while (p[0] != '\0' && ccnt < 20) {
+			while (p[0] != '\0' && ccnt < COOKIESTORAGESIZE) {
 				q = strchrnul(p, '\n');
 				cookies[ccnt].name = malloc(q-p);
 				cookies[ccnt].value = malloc(q-p);
