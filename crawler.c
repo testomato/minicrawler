@@ -206,20 +206,19 @@ static int check_proto(struct surl *u);
  */
 static int simpleparseurl(struct surl *u, const char *url) {
 	int r;
+	char doubledot[2];
 
 	u->port = 0;
 	u->proto[0] = 0;
 	u->path[0] = '/';
 	u->path[1] = 0;
 
-	r = sscanf(url, "%31[^:/?#]://%99[^:/?#]:%99d%2048[^\n#]", u->proto, u->host, &(u->port), u->path);
+	r = sscanf(url, "%31[^:/?#]://%255[^:/?#]%1[:]%99d%4095[^\n#]", u->proto, u->host, doubledot, &(u->port), u->path);
 	if (r < 2) {
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, url);
 		return 0;
-	}
-
-	if(u->port == 0) {
-		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%2047[^\n#]";
+	} else if (r < 3) { // nematchnuli jsme dvojtečku
+		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%4094[^\n#]";
 		char buf[256];
 		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host));
 		r = sscanf(url, buf, u->proto, u->host, u->path + 1);
@@ -228,6 +227,8 @@ static int simpleparseurl(struct surl *u, const char *url) {
 			return 0;
 		}
 
+		u->port = parse_proto(u->proto);
+	} else if (r == 3) {// prázdný port
 		u->port = parse_proto(u->proto);
 	}
 
