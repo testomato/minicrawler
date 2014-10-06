@@ -125,7 +125,7 @@ void printusage()
 int main(int argc, char *argv[]) {
 	if(argc < 2) {
 		printusage();
-		exit(-1);
+		exit(1);
 	}
 	
 	signal(SIGUSR1,sighandler);

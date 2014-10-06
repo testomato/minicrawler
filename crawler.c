@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <uriparser/Uri.h>
 
 #include "h/struct.h"
 #include "h/proto.h"
@@ -187,62 +188,102 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	set_atomic_int(&u->state, SURL_S_GOTIP);
 }
 
-/** Parse string with the name of the protocol and return default port for that protocol or 0,
-if such protocol is not supported by minicrawler.
-*/
-static int parse_proto(const char *s) {
-	if (0 == strcmp(s, "https")) {
-		return 443;
-	}
-	if (0 == strcmp(s, "http")) {
-		return 80;
-	}
-	return -1;
-}
+static int parse_proto(const char *s);
 
 static int check_proto(struct surl *u);
 
-/** primitivni parsovatko url
+/**
+ * Nastaví proto, host, port a path
  */
-static int simpleparseurl(struct surl *u, const char *url) {
+static int set_new_uri(struct surl *u, char *rawurl) {
 	int r;
-	char doubledot[2];
 
-	u->port = 0;
-	u->proto[0] = 0;
-	u->path[0] = '/';
-	u->path[1] = 0;
+	if (u->uri != NULL) {
+		uriFreeUriMembersA(u->uri);
+		free(u->uri);
+	}
 
-	r = sscanf(url, "%31[^:/?#]://%255[^:/?#]%1[:]%99d%4095[^\n#]", u->proto, u->host, doubledot, &(u->port), u->path);
-	if (r < 2) {
-		debugf("[%d] error: url='%s' failed to parse\n", u->index, url);
+	UriParserStateA state;
+
+	u->uri = (UriUriA *)malloc(sizeof(UriUriA));
+	state.uri = u->uri;
+
+	if (uriParseUriA(&state, rawurl) != URI_SUCCESS) {
+		debugf("[%d] error: url='%s' failed to parse\n", u->index, rawurl);
+		sprintf(u->error_msg, "Failed to parse URL");
+		set_atomic_int(&u->state, SURL_S_ERROR);
 		return 0;
-	} else if (r < 3) { // nematchnuli jsme dvojtečku
-		const char fmt[] = "%%%d[^:]://%%%d[^/]/%%4094[^\n#]";
-		char buf[256];
-		sprintf(buf, fmt, I_LENGTHOF(u->proto), I_LENGTHOF(u->host));
-		r = sscanf(url, buf, u->proto, u->host, u->path + 1);
-		if (r < 2) {
-			debugf("[%d] error: url='%s' failed to parse\n", u->index, url);
-			return 0;
-		}
+	}
 
+	if (u->uri->scheme.first == NULL) {
+		debugf("[%d] error: url='%s' has no scheme\n", u->index, rawurl);
+		sprintf(u->error_msg, "URL has no scheme");
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return 0;
+	}
+	if (u->proto != NULL) free(u->proto);
+	u->proto = malloc(u->uri->scheme.afterLast - u->uri->scheme.first + 1);
+	*(char*)mempcpy(u->proto, u->uri->scheme.first, u->uri->scheme.afterLast-u->uri->scheme.first) = 0;
+
+	if (check_proto(u) == -1) {
+		return 0;
+	}
+
+	if (u->uri->hostText.first == NULL) {
+		debugf("[%d] error: url='%s' has no host\n", u->index, rawurl);
+		sprintf(u->error_msg, "URL has no host");
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return 0;
+	}
+	if (u->host != NULL) free(u->host);
+	u->host = malloc(u->uri->hostText.afterLast - u->uri->hostText.first + 1);
+	*(char*)mempcpy(u->host, u->uri->hostText.first, u->uri->hostText.afterLast-u->uri->hostText.first) = 0;
+
+	const char *path;
+	if (u->uri->portText.first == NULL) {
 		u->port = parse_proto(u->proto);
-	} else if (r == 3) {// prázdný port
-		u->port = parse_proto(u->proto);
+		path = u->uri->hostText.afterLast;
+	} else {
+		r = sscanf(u->uri->portText.first, "%d", &u->port);
+		if (r == 0) { // prázdný port
+			u->port = parse_proto(u->proto);
+		}
+		path = u->uri->portText.afterLast;
+	}
+
+	if (u->path != NULL) free(u->path);
+	u->path = malloc(strlen(rawurl) - (path-u->uri->scheme.first) + 1 + 1); // +1 na lomítko na začátku
+	strcpy(u->path, path);
+	if (u->path[0] != '/') {
+		memmove(u->path + 1, u->path, strlen(u->path) + 1);
+		u->path[0] = '/';
 	}
 
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 	return 1;
 }
 
-/** spusti preklad pres ares
+/** Parsujeme URL
  */
-static void launchdns(struct surl *u) {
-	if (check_proto(u) == -1) {
+static void parseurl(struct surl *u) {
+	if (set_new_uri(u, u->rawurl) == 0) {
 		return;
 	}
 
+	if (u->uri->hostData.ip4 != NULL) {
+		u->ip = *(int *)u->uri->hostData.ip4->data;
+		set_atomic_int(&u->state, SURL_S_GOTIP);
+	} else if (u->uri->hostData.ip6 != NULL) {
+		sprintf(u->error_msg, "IPv6 URL is not supported");
+		set_atomic_int(&u->state, SURL_S_ERROR);
+	} else {
+		set_atomic_int(&u->state, SURL_S_PARSEDURL);
+	}
+}
+
+/** spusti preklad pres ares
+ */
+static void launchdns(struct surl *u) {
 	int t;
 
 	debugf("[%d] Resolving %s starts\n", u->index, u->host);
@@ -889,7 +930,7 @@ static void output(struct surl *u) {
 		u->bufp=converthtml2text(u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
 	sprintf(header,"URL: %s\n",u->rawurl);
-	if(u->redirectedto[0]) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
+	if(u->redirectedto != NULL) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
 	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
 		sprintf(header+strlen(header), "Redirect-info: %s %d\n", rinfo->url, rinfo->status);
 	}
@@ -901,8 +942,10 @@ static void output(struct surl *u) {
 		switch (url_state) {
 			case SURL_S_JUSTBORN:
 				strcpy(timeouterr, "Process has not started yet"); break;
-			case SURL_S_INDNS:
+			case SURL_S_PARSEDURL:
 				strcpy(timeouterr, "Timeout while contacting DNS servers"); break;
+			case SURL_S_INDNS:
+				strcpy(timeouterr, "Timeout while resolving host"); break;
 			case SURL_S_GOTIP:
 				if (u->downstart) {
 					strcpy(timeouterr, "Connection timed out");
@@ -969,57 +1012,10 @@ static void output(struct surl *u) {
 	set_atomic_int(&u->state, SURL_S_OUTPUTED);
 }
 
-/** vyres presmerovani
+/**
+ * Sets the url to initial state
  */
-static void resolvelocation(struct surl *u) {
-	char oproto[ sizeof(u->proto) ];
-	char ohost[ sizeof(u->host) ];
-	int oport;
-
-	strcpy(oproto, u->proto);
-	strcpy(ohost, u->host);
-	oport = u->port;
-
-	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
-
-	if (!simpleparseurl(u, u->location)) {
-		strcpy(u->proto, oproto);
-		strcpy(u->host, ohost);
-		u->port = oport;
-		if (u->location[0] == '/') {
-			// relativni adresy (i kdyz by podle RFC nemely byt)
-			strcpy(u->path, u->location);
-		} else {
-			debugf("[%d] Weird location format, assuming filename in root\n", u->index);
-			strcpy(u->path, "/");
-			strcpy(u->path+1, u->location);
-		}
-
-		debugf("[%d] proto = '%s' host='%s' path='%s'\n", u->index, u->proto, u->host, u->path);
-	}
-
-	if (strcmp(u->host,ohost)) {
-		set_atomic_int(&u->state, SURL_S_JUSTBORN); // pokud je to jina domena, tak znovu resolvuj
-	}
-	else {
-		u->prev_ip = u->ip;
-		set_atomic_int(&u->state, SURL_S_GOTIP);	// jinak se muzes pripojit na tu puvodni IP
-	}
-
-	struct redirect_info *rinfo = malloc(sizeof(*rinfo));
-	bzero(rinfo, sizeof(*rinfo));
-	strcpy(rinfo->url, u->location);
-	rinfo->status = u->status;
-	rinfo->next = u->redirect_info;
-	u->redirect_info = rinfo;
-	if (--u->redirect_limit <= 0) {
-		debugf("[%d] Exceeded redirects limit", u->index);
-		sprintf(u->error_msg, "Too many redirects, possibly a redirect loop");
-		set_atomic_int(&u->state, SURL_S_ERROR);
-		return;
-	}
-
-	strcpy(u->redirectedto, u->location);
+static void reset_url(struct surl *u) {
 	u->status = 0;
 	u->location[0] = 0;
 	u->ispost = 0;
@@ -1029,10 +1025,158 @@ static void resolvelocation(struct surl *u) {
 	u->chunked = 0;
 	u->gzipped = 0;
 	u->ssl_options = 0;
+}
 
-	if (check_proto(u) == -1) {
+/**
+ * Turn the state to INTERNAL ERROR with information that
+ * we have been requested to download url with unsupported protocol.
+ */
+static void set_unsupported_protocol(struct surl *u) {
+	debugf("Unsupported protocol: [%s]\n", u->proto);
+	sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
+	set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
+}
+
+/** Parse string with the name of the protocol and return default port for that protocol or 0,
+if such protocol is not supported by minicrawler.
+*/
+static int parse_proto(const char *s) {
+	if (0 == strcmp(s, "https")) {
+		return 443;
+	}
+	if (0 == strcmp(s, "http")) {
+		return 80;
+	}
+	return -1;
+}
+
+/**
+ * Check the protocol of the destination url. If it is supported protocol,
+ * then set all callbacks, otherwise turn the state to UNSUPPORTED PROTOCOL.
+ */
+static int check_proto(struct surl *u) {
+	const int port = parse_proto(u->proto);
+	switch (port) {
+		case 80:
+			u->f.read = plain_read;
+			u->f.write = plain_write;
+			u->f.handshake = empty_handshake;
+			break;
+
+		case 443:
+			if (settings.non_ssl) {
+				set_unsupported_protocol(u);
+			} else {
+				u->f.read = sec_read;
+				u->f.write = sec_write;
+				u->f.handshake = sec_handshake;
+			}
+			break;
+
+		default:
+			set_unsupported_protocol(u);
+			break;
+	}
+	return port;
+}
+
+/** vyres presmerovani
+ */
+static void resolvelocation(struct surl *u) {
+	if (--u->redirect_limit <= 0) {
+		debugf("[%d] Exceeded redirects limit", u->index);
+		sprintf(u->error_msg, "Too many redirects, possibly a redirect loop");
+		set_atomic_int(&u->state, SURL_S_ERROR);
 		return;
 	}
+
+	char ohost[ strlen(u->host) ];
+	strcpy(ohost, u->host);
+
+	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
+
+	UriParserStateA state;
+	UriUriA locUri, *uri;
+
+	state.uri = &locUri;
+	if (uriParseUriA(&state, u->location) != URI_SUCCESS) {
+		uriFreeUriMembersA(&locUri);
+
+		debugf("[%d] error: url='%s' failed to parse\n", u->index, u->location);
+		sprintf(u->error_msg, "Failed to parse URL %s", u->location);
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
+	}
+
+	// méně striktní resolvování url ve tvaru http:g
+	// see http://tools.ietf.org/html/rfc3986#section-5 section 5.4.2
+	if (locUri.scheme.first != NULL && locUri.hostText.first == NULL && locUri.pathHead != NULL && locUri.pathHead->text.first != NULL) {
+		locUri.hostText = u->uri->hostText;
+		locUri.hostData = u->uri->hostData;
+	}
+
+	uri = (UriUriA *)malloc(sizeof(UriUriA));
+
+	if (uriAddBaseUriA(uri, &locUri, u->uri) != URI_SUCCESS) {
+		uriFreeUriMembersA(&locUri);
+		uriFreeUriMembersA(uri);
+		free(uri);
+
+		debugf("[%d] error: url='%s' failed to resolve\n", u->index, u->location);
+		sprintf(u->error_msg, "Failed to resolve URL %s", u->location);
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
+	}
+
+	uriFreeUriMembersA(&locUri);
+
+	// normalizujeme
+	uriNormalizeSyntaxA(uri);
+
+	int chars;
+	chars = 0;
+	if (u->redirectedto != NULL) free(u->redirectedto);
+	if (uriToStringCharsRequiredA(uri, &chars) != URI_SUCCESS) {
+		debugf("[%d] failed recomposing uri\n", u->index);
+	}
+	u->redirectedto = malloc(chars + 1);
+	if (uriToStringA(u->redirectedto, uri, chars + 1, NULL) != URI_SUCCESS) {
+		debugf("[%d] failed recomposing uri\n", u->index);
+	}
+
+debugf("redirectedto: %s\n", u->redirectedto);
+
+	if (set_new_uri(u, u->redirectedto) == 0) {
+		return;
+	}
+
+	if (strcmp(u->host, ohost)) {
+		// pokud je to jina domena, tak znovu resolvuj
+
+		if (u->uri->hostData.ip4 != NULL) {
+			u->ip = *(int *)u->uri->hostData.ip4->data;
+			set_atomic_int(&u->state, SURL_S_GOTIP);
+		} else if (u->uri->hostData.ip6 != NULL) {
+			sprintf(u->error_msg, "IPv6 URL is not supported");
+			set_atomic_int(&u->state, SURL_S_ERROR);
+		} else {
+			set_atomic_int(&u->state, SURL_S_PARSEDURL);
+		}
+	} else {
+		// jinak se muzes pripojit na tu puvodni IP	
+		u->prev_ip = u->ip;
+		set_atomic_int(&u->state, SURL_S_GOTIP);
+	}
+
+	struct redirect_info *rinfo = malloc(sizeof(*rinfo));
+	bzero(rinfo, sizeof(*rinfo));
+	rinfo->url = malloc(strlen(u->location)+1);
+	strcpy(rinfo->url, u->location);
+	rinfo->status = u->status;
+	rinfo->next = u->redirect_info;
+	u->redirect_info = rinfo;
+
+	reset_url(u);
 }
 
 /** uz mame cely vstup - bud ho vypis nebo vyres presmerovani
@@ -1182,6 +1326,10 @@ static void goone(struct surl *u) {
 
 	switch(state) {  
 	case SURL_S_JUSTBORN:
+		u->f.parse_url(u);
+		break;
+
+	case SURL_S_PARSEDURL:
 		u->f.launch_dns(u);
 		break;
   
@@ -1287,78 +1435,13 @@ static void outputpartial(void) {
 }
 
 /**
-Turn the state to INTERNAL ERROR with information that
-we have been requested to download url with unsupported protocol.
-*/
-static void set_unsupported_protocol(struct surl *u) {
-			debugf("Unsupported protocol: [%s]\n", u->proto);
-			sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
-			set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
-}
-
-/**
-Check the protocol of the destination url. If it is supported protocol,
-then set all callbacks, otherwise turn the state to UNSUPPORTED PROTOCOL.
-*/
-static int check_proto(struct surl *u) {
-	const int port = parse_proto(u->proto);
-	switch (port) {
-		case 80:
-			u->f = (struct surl_func) {
-				read:plain_read,
-				write:plain_write,
-				launch_dns:launchdns,
-				check_dns:checkdns,
-				open_socket:opensocket,
-				connect_socket:connectsocket,
-				handshake:empty_handshake,
-				gen_request:genrequest,
-				send_request:sendrequest,
-				recv_reply:readreply,
-			};
-			break;
-
-		case 443:
-			if (settings.non_ssl) {
-				set_unsupported_protocol(u);
-			} else {
-				u->f = (struct surl_func) {
-					read:sec_read,
-					write:sec_write,
-					launch_dns:launchdns,
-					check_dns:checkdns,
-					open_socket:opensocket,
-					connect_socket:connectsocket,
-					handshake:sec_handshake,
-					gen_request:genrequest,
-					send_request:sendrequest,
-					recv_reply:readreply,
-				};				
-			}
-			break;
-
-		default:
-			set_unsupported_protocol(u);
-			break;
-	}
-	return port;
-}
-
-/**
  * Init URL struct
  */
 void init_url(struct surl *u, const char *url, const int index, struct cookie *cookies, const int cookiecnt) {
 	// Init the url
 	strcpy(u->rawurl, url);
 	u->index = index;
-	simpleparseurl(u, url);
 	u->state = SURL_S_JUSTBORN;
-	//debugf("[%d] born\n",i);
-	u->bufp = 0;
-	u->headlen = 0;
-	u->contentlen = -1;
-	u->cookiecnt = 0;
-	u->ssl_options = 0;
 	u->redirect_limit = MAX_REDIRECTS;
 	for (int i = 0; i < cookiecnt; i++) {
 		u->cookies[i].name = malloc(strlen(cookies[i].name) + 1);
@@ -1376,7 +1459,22 @@ void init_url(struct surl *u, const char *url, const int index, struct cookie *c
 	}
 	u->cookiecnt = cookiecnt;
 
-	check_proto(u);
+	// init callbacks
+	u->f = (struct surl_func) {
+		read:plain_read,
+		write:plain_write,
+		parse_url:parseurl,
+		launch_dns:launchdns,
+		check_dns:checkdns,
+		open_socket:opensocket,
+		connect_socket:connectsocket,
+		handshake:empty_handshake,
+		gen_request:genrequest,
+		send_request:sendrequest,
+		recv_reply:readreply,
+	};
+
+	reset_url(u);
 }
 
 /**

@@ -1,4 +1,5 @@
 #include <openssl/ssl.h>
+#include <uriparser/Uri.h>
 
 enum {
 	BUFSIZE = 700*1024,
@@ -22,13 +23,14 @@ struct cookie {
 };
 
 struct redirect_info {
-	char url[MAXURLSIZE];
+	char *url;
 	int status;
 	struct redirect_info *next;
 };
 
 enum surl_s {
 	SURL_S_JUSTBORN,
+	SURL_S_PARSEDURL,
 	SURL_S_INDNS,
 	SURL_S_GOTIP,
 	SURL_S_CONNECT,
@@ -46,6 +48,8 @@ static inline const char *state_to_s(const enum surl_s x) {
 	switch (x) {
 		case SURL_S_JUSTBORN:
 			return "SURL_S_JUSTBORN";
+		case SURL_S_PARSEDURL:
+			return "SURL_S_PARSEDURL";
 		case SURL_S_INDNS:
 			return "SURL_S_INDNS";
 		case SURL_S_GOTIP:
@@ -82,7 +86,7 @@ enum surl_rw {
 	SURL_RW_READY_WRITE,
 };
 
- enum surl_io {
+enum surl_io {
 	SURL_IO_WRITE = -3,
 	SURL_IO_READ = -2,
 	SURL_IO_ERROR = -1,
@@ -98,6 +102,7 @@ typedef ssize_t (*write_callback)(const struct surl *u, const char *buf, const s
 struct surl_func {
 	read_callback read;
 	write_callback write;
+	surl_callback parse_url;
 	surl_callback launch_dns;
 	surl_callback check_dns;
 	surl_callback open_socket;
@@ -115,16 +120,18 @@ struct surl {
 	int index;
 	char rawurl[MAXURLSIZE];
  
-	char proto[32];
-	char host[256];
+	UriUriA *uri;
+	char *proto;
+	char *host;
 	int port;
-	char path[MAXURLSIZE];
+	char *path;
+
 	int ispost;
 	char *post;
 
 	// hlavicky	
 	char location[MAXURLSIZE];	// presne to co je v hlavicce Location - pro ucely redirect
-	char redirectedto[MAXURLSIZE];	// co nakonec hlasime ve vystupu v hlavicce
+	char *redirectedto;	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos;
 	struct cookie cookies[COOKIESTORAGESIZE];
