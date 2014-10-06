@@ -158,8 +158,10 @@ struct surl {
 	
 	// network
 	int sockfd;
-	int ip;
-	int prev_ip;
+	int addrtype;
+	int addrlength;
+	unsigned char ip[16];
+	unsigned char prev_ip[16];
 	
 	// obsah
 	char buf[BUFSIZE];
@@ -190,6 +192,7 @@ struct ssettings {
 	int convert_to_utf;     // 1 pokud se ma konvertovat do utf8
 	int delay;		// zpozdeni pri stahovani ze stejne ip, default je 100ms
 	int gzip;
+	int ipv6;
 	char customagent[256];
 	char customheader[4096];
 };

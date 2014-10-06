@@ -9,6 +9,7 @@
 #include <sys/types.h>          
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
@@ -160,30 +161,49 @@ static ssize_t sec_write(const struct surl *u, const char *buf, const size_t siz
 /** callback funkce, kterou zavola ares
  */
 static void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent) {
-	unsigned char *ip;
 	struct surl *u;
 	
 	u=(struct surl *)arg;
 	if (status != ARES_SUCCESS) {
-		debugf("[%d] gethostbyname error: %s: %s\n", u->index, (char *) arg, ares_strerror(status));
+		if (u->addrtype == AF_INET) {
+			// zkusíme ještě IPv6
+			u->addrtype = AF_INET6;
+			debugf("[%d] gethostbyname error: %d: %s -> switch to ipv6\n", u->index, *(int *) arg, ares_strerror(status));
+			set_atomic_int(&u->state, SURL_S_PARSEDURL);
+			return;
+		}
+		debugf("[%d] gethostbyname error: %d: %s\n", u->index, *(int *) arg, ares_strerror(status));
 		sprintf(u->error_msg, "%s", ares_strerror(status));
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return;
 	}
 	
 	if (hostent->h_addr == NULL) {
+		if (u->addrtype == AF_INET) {
+			// zkusíme ještě IPv6
+			u->addrtype = AF_INET6;
+			debugf("[%d] Could not resolve host -> switch to ipv6\n", u->index);
+			set_atomic_int(&u->state, SURL_S_PARSEDURL);
+			return;
+		}
 		debugf("[%d] Could not resolve host\n", u->index);
 		sprintf(u->error_msg, "Could not resolve host");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return;
 	}
 
-	ip=(unsigned char*)(hostent->h_addr);
-	u->prev_ip = u->ip;
-	u->ip=*(int *)ip;
+	u->addrtype = hostent->h_addrtype;
+	u->addrlength = hostent->h_length;
+	memcpy(u->prev_ip, u->ip, 16);
+	memset(u->ip, 0, 16);
+	memcpy(u->ip, hostent->h_addr, hostent->h_length);
 	
-	debugf("[%d] Resolving %s ended => %d.%d.%d.%d\n", u->index, u->host, ip[0], ip[1], ip[2], ip[3]);
-	debugf("[%d] raw url => %s\n", u->index, u->rawurl);
+	debugf("[%d] Resolving %s ended => %s,", u->index, u->host, hostent->h_name);
+	if (u->addrtype == AF_INET6) {
+		debugf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%x%x\n", u->ip[0], u->ip[1], u->ip[2], u->ip[3], u->ip[4], u->ip[5], u->ip[6], u->ip[7], u->ip[8], u->ip[9], u->ip[10], u->ip[11], u->ip[12], u->ip[13], u->ip[14], u->ip[15]);
+	} else {
+		debugf("%d.%d.%d.%d\n", u->ip[0], u->ip[1], u->ip[2], u->ip[3]);
+	}
 
 	set_atomic_int(&u->state, SURL_S_GOTIP);
 }
@@ -250,6 +270,9 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 		}
 		path = u->uri->portText.afterLast;
 	}
+	if (u->uri->hostData.ip6 != NULL) {
+		path++;
+	}
 
 	if (u->path != NULL) free(u->path);
 	u->path = malloc(strlen(rawurl) - (path-u->uri->scheme.first) + 1 + 1); // +1 na lomítko na začátku
@@ -260,6 +283,25 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 	}
 
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
+
+	if (u->uri->hostData.ip4 != NULL) {
+		memcpy(u->prev_ip, u->ip, 16);
+		memset(u->ip, 0, 16);
+		memcpy(u->ip, u->uri->hostData.ip4->data, 4);
+		u->addrtype = AF_INET;
+		u->addrlength = 4;
+		set_atomic_int(&u->state, SURL_S_GOTIP);
+		debugf("[%d] go directly to ipv4\n", u->index);
+	} else if (u->uri->hostData.ip6 != NULL) {
+		memcpy(u->prev_ip, u->ip, 16);
+		memcpy(u->ip, u->uri->hostData.ip6->data, 16);
+		u->addrtype = AF_INET6;
+		u->addrlength = 16;
+		set_atomic_int(&u->state, SURL_S_GOTIP);
+		debugf("[%d] go directly to ipv6\n", u->index);
+	} else {
+		set_atomic_int(&u->state, SURL_S_PARSEDURL);
+	}
 	return 1;
 }
 
@@ -268,16 +310,6 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 static void parseurl(struct surl *u) {
 	if (set_new_uri(u, u->rawurl) == 0) {
 		return;
-	}
-
-	if (u->uri->hostData.ip4 != NULL) {
-		u->ip = *(int *)u->uri->hostData.ip4->data;
-		set_atomic_int(&u->state, SURL_S_GOTIP);
-	} else if (u->uri->hostData.ip6 != NULL) {
-		sprintf(u->error_msg, "IPv6 URL is not supported");
-		set_atomic_int(&u->state, SURL_S_ERROR);
-	} else {
-		set_atomic_int(&u->state, SURL_S_PARSEDURL);
 	}
 }
 
@@ -294,7 +326,7 @@ static void launchdns(struct surl *u) {
 	}
 
 	set_atomic_int(&u->state, SURL_S_INDNS);
-	ares_gethostbyname(u->aresch,u->host,AF_INET,(ares_host_callback)&dnscallback,u);
+	ares_gethostbyname(u->aresch,u->host,u->addrtype,(ares_host_callback)&dnscallback,u);
 }
 
 /** uz je ares hotovy?
@@ -362,19 +394,32 @@ static int maybe_create_ssl(struct surl *u) {
  */
 static void opensocket(struct surl *u)
 {
-	struct sockaddr_in addr;
 	int flags;
+	struct sockaddr_storage addr;
+	socklen_t addrlen;
 
-	addr.sin_family=AF_INET;
-	addr.sin_port=htons(u->port);
-	memcpy(&(addr.sin_addr), &(u->ip), 4);
-
-	u->sockfd=socket(AF_INET, SOCK_STREAM, 0);
+	u->sockfd = socket(u->addrtype, SOCK_STREAM, 0);
 	flags = fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
 
-	debugf("[%d] connecting to ip: %x, port: %i (socket %d)\n", u->index, u->ip, u->port, u->sockfd);
-	const int t = connect(u->sockfd, (struct sockaddr *)&addr, sizeof(addr));
+	if (settings.debug) {
+		char straddr[INET6_ADDRSTRLEN];
+		inet_ntop(u->addrtype, u->ip, straddr, sizeof(straddr));
+		debugf("[%d] connecting to ip: %s; %d, port: %i (socket %d)\n", u->index, straddr, get_time_slot(u->ip), u->port, u->sockfd);
+	}
+
+	memset(&addr, 0, sizeof(addr));
+	addr.ss_family = u->addrtype;
+	if (u->addrtype == AF_INET6) {
+		(*(struct sockaddr_in6 *)&addr).sin6_port = htons(u->port);
+		memcpy(&((*(struct sockaddr_in6 *)&addr).sin6_addr), &(u->ip), u->addrlength);
+		addrlen = sizeof(struct sockaddr_in6);
+	} else {
+		(*(struct sockaddr_in *)&addr).sin_port = htons(u->port);
+		memcpy(&((*(struct sockaddr_in *)&addr).sin_addr), &(u->ip), u->addrlength);
+		addrlen = sizeof(struct sockaddr_in);
+	}
+	const int t = connect(u->sockfd, (struct sockaddr *)&addr, addrlen);
 	if (!maybe_create_ssl(u)) {
 		debugf("%d: cannot create ssl session :-(\n", u->index);
 		sprintf(u->error_msg, "Cannot create SSL session");
@@ -990,7 +1035,9 @@ static void output(struct surl *u) {
 #		endif
 		sprintf(header+strlen(header), "Conversion error: %s\n", err);
 	}
-	sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=0x%x; %u)\n",u->lastread - u->downstart, u->downstart, u->ip, get_time_slot(u->ip));
+	char straddr[INET6_ADDRSTRLEN];
+	inet_ntop(u->addrtype, u->ip, straddr, sizeof(straddr));
+	sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=%s; %u)\n",u->lastread - u->downstart, u->downstart, straddr, get_time_slot(u->ip));
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
 	write_all(STDOUT_FILENO, header, strlen(header));
@@ -1144,28 +1191,20 @@ static void resolvelocation(struct surl *u) {
 		debugf("[%d] failed recomposing uri\n", u->index);
 	}
 
-debugf("redirectedto: %s\n", u->redirectedto);
-
 	if (set_new_uri(u, u->redirectedto) == 0) {
 		return;
 	}
 
-	if (strcmp(u->host, ohost)) {
-		// pokud je to jina domena, tak znovu resolvuj
-
-		if (u->uri->hostData.ip4 != NULL) {
-			u->ip = *(int *)u->uri->hostData.ip4->data;
-			set_atomic_int(&u->state, SURL_S_GOTIP);
-		} else if (u->uri->hostData.ip6 != NULL) {
-			sprintf(u->error_msg, "IPv6 URL is not supported");
-			set_atomic_int(&u->state, SURL_S_ERROR);
-		} else {
-			set_atomic_int(&u->state, SURL_S_PARSEDURL);
-		}
-	} else {
-		// jinak se muzes pripojit na tu puvodni IP	
-		u->prev_ip = u->ip;
+	if (strcmp(u->host, ohost) == 0) {
+		// muzes se pripojit na tu puvodni IP
+		memcpy(u->prev_ip, u->ip, 16);
 		set_atomic_int(&u->state, SURL_S_GOTIP);
+	} else {
+		// zmena host
+		if (get_atomic_int(&u->state) != SURL_S_GOTIP) {
+			// pokud jsme nedostali promo ip, přepneme se do ipv4
+			u->addrtype = AF_INET;
+		}
 	}
 
 	struct redirect_info *rinfo = malloc(sizeof(*rinfo));
@@ -1443,6 +1482,11 @@ void init_url(struct surl *u, const char *url, const int index, struct cookie *c
 	u->index = index;
 	u->state = SURL_S_JUSTBORN;
 	u->redirect_limit = MAX_REDIRECTS;
+	if (settings.ipv6) {
+		u->addrtype = AF_INET6;
+	} else {
+		u->addrtype = AF_INET;
+	}
 	for (int i = 0; i < cookiecnt; i++) {
 		u->cookies[i].name = malloc(strlen(cookies[i].name) + 1);
 		u->cookies[i].value = malloc(strlen(cookies[i].value) + 1);

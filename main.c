@@ -56,6 +56,7 @@ void initurls(int argc, char *argv[])
 			t++;
 			continue;
 		}
+		if(!strcmp(argv[t], "-6")) {settings.ipv6=1;continue;}
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
@@ -113,6 +114,7 @@ void printusage()
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)\n"
 	         "         -S         disable ssl support\n"
 	         "         -g         accept gzip encoding\n"
+	         "         -6         resolve host to IPv6 address\n"
 	         "         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)\n"
 	         "\n   urloptions:\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"

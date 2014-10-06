@@ -65,9 +65,15 @@ int get_time_int(void)
  *   Good hashing is important, otherwise we will perform
  *   redundant waiting.
  */
-static unsigned hash_uns(const unsigned key)
+static unsigned hash_uns(const unsigned char key[16])
 {
-	return 13*(key >> 16 | key << 16) ^ 113*(key >> 20 | key << 10) ^ key;
+	unsigned hash, k;
+	hash = *(int *)key;
+	for (int i = 0; i < 16; i += sizeof(unsigned)) {
+		k = *(int *)(key + i);
+		hash = 13*(k >> 16 | k << 16) ^ 113*(k >> 20 | k << 10) ^ hash;
+	}
+	return hash;
 }
 
 #define HASH_SIZE 64
@@ -76,7 +82,7 @@ int hash_table[] = { [0 ... (HASH_SIZE - 1)]=INT_MIN, };
 /**
  * Returns slot that is assigned to the supplied key.
  */
-unsigned get_time_slot(const unsigned key)
+unsigned get_time_slot(const unsigned char key[16])
 {
 	return hash_uns(key) % HASH_SIZE;
 }
@@ -84,7 +90,7 @@ unsigned get_time_slot(const unsigned key)
 /**
  * Returns hash item that is assigned to the supplied key.
  */
-static int *get_hash_item(const unsigned key)
+static int *get_hash_item(const unsigned char key[16])
 {
 	return &hash_table[get_time_slot(key)];
 }
@@ -94,11 +100,11 @@ static int *get_hash_item(const unsigned key)
  * If the slot is free, then actual time is assigned to it and the time is returned.
  * Zero is returned otherwise.
  */
-int test_free_channel(const unsigned u_ip, const unsigned milis, const int force)
+int test_free_channel(const unsigned char u_ip[16], const unsigned milis, const int force)
 {
 	const int now = get_time_int();
 	int *slot = get_hash_item(u_ip);
-	debugf("%d; 0x%x => %d || %d [%p]\n", now, u_ip, force, (int)milis <= 0 || *slot + (int)milis <= now, slot);
+	debugf("%d; %d => %d || %d\n", now, *slot, force, (int)milis <= 0 || *slot + (int)milis <= now);
 	if (force || (int)milis <= 0 || *slot + (int)milis <= now) {
 		return *slot = now;
 	}
