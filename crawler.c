@@ -1142,6 +1142,17 @@ static void resolvelocation(struct surl *u) {
 
 	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
 
+	// workaround for uriparser bug with resolving URI "/"
+	if (u->location[0] == '/' && (
+				u->location[1] == 0 ||
+				u->location[1] == '?' ||
+				u->location[1] == '#'
+				)
+	   ) {
+		memmove(u->location + 2, u->location + 1, strlen(u->location));
+		u->location[1] = '.';
+	}
+
 	UriParserStateA state;
 	UriUriA locUri, *uri;
 
