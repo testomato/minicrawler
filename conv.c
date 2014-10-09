@@ -94,3 +94,43 @@ char *put_code(char *dst, const unsigned dst_len, const int code)
 		return NULL;  // FIXME: Some log?
 	return dst_end;
 }
+
+/**
+ * Percent-encode chars, that are not allowed in url
+ */
+void urlencode(char *src)
+{
+	char buf[MAXURLSIZE];
+	char c;
+	int i = 0, bp = 0, escape_sq_br = 0, slash_cnt = 0, question_mark_cnt = 0;
+
+	while ((c = src[i++]) != '\0') {
+		if (c == '/') {
+			slash_cnt++;
+		}
+		if (c == '?') {
+			question_mark_cnt++;
+		}
+		if (slash_cnt == 3 || question_mark_cnt == 1) {
+			// hranaté závorky nemůžeme escapovat v authority
+			escape_sq_br = 1;
+		}
+		if (c <= 0x20 ||
+				c == 0x22 ||
+				c == 0x3C ||
+				c == 0x3E ||
+				c == 0x5C ||
+				c == 0x5E ||
+				escape_sq_br && (c == 0x5B || c == 0x5D) ||
+				c == 0x60 ||
+				c >= 0x7B && c <= 0x7D ||
+				c >= 0x7F
+		   ) {
+			sprintf(buf + bp, "%%%2X", c);
+			bp += 3;
+		} else {
+			buf[bp++] = c;
+		}
+	}
+	strcpy(src, buf);
+}

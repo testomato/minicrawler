@@ -308,6 +308,8 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 /** Parsujeme URL
  */
 static void parseurl(struct surl *u) {
+	debugf("[%d] Parse url='%s'\n", u->index, u->rawurl);
+	urlencode(u->rawurl);
 	if (set_new_uri(u, u->rawurl) == 0) {
 		return;
 	}
@@ -1141,6 +1143,8 @@ static void resolvelocation(struct surl *u) {
 	strcpy(ohost, u->host);
 
 	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
+
+	urlencode(u->location);
 
 	// workaround for uriparser bug with resolving URI "/"
 	if (u->location[0] == '/' && (
