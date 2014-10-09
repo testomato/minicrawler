@@ -3,7 +3,7 @@
 
 enum {
 	BUFSIZE = 700*1024,
-	MAXURLSIZE = 4096,
+	MAXURLSIZE = 4095,
 	COOKIESTORAGESIZE = 25,
 };
 
@@ -118,7 +118,7 @@ struct surl {
 
     // ...
 	int index;
-	char rawurl[MAXURLSIZE];
+	char rawurl[MAXURLSIZE + 1];
  
 	UriUriA *uri;
 	char *proto;
@@ -130,7 +130,7 @@ struct surl {
 	char *post;
 
 	// hlavicky	
-	char location[MAXURLSIZE];	// presne to co je v hlavicce Location - pro ucely redirect
+	char location[MAXURLSIZE + 1];	// presne to co je v hlavicce Location - pro ucely redirect
 	char *redirectedto;	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos;

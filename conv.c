@@ -98,13 +98,14 @@ char *put_code(char *dst, const unsigned dst_len, const int code)
 /**
  * Percent-encode chars, that are not allowed in url
  */
-void urlencode(char *src)
+int urlencode(char *src)
 {
-	char buf[MAXURLSIZE];
-	char c;
-	int i = 0, bp = 0, escape_sq_br = 0, slash_cnt = 0, question_mark_cnt = 0;
+	char buf[MAXURLSIZE + 1];
+	char c, *str;
+	int bp = 0, escape_sq_br = 0, slash_cnt = 0, question_mark_cnt = 0;
 
-	while ((c = src[i++]) != '\0') {
+	str = src;
+	while ((c = *str++) != '\0') {
 		if (c == '/') {
 			slash_cnt++;
 		}
@@ -126,11 +127,22 @@ void urlencode(char *src)
 				c >= 0x7B && c <= 0x7D ||
 				c >= 0x7F
 		   ) {
+			if (bp + 3 > MAXURLSIZE) {
+				return 0;
+			}
 			sprintf(buf + bp, "%%%2X", c);
 			bp += 3;
 		} else {
+			if (bp + 1 > MAXURLSIZE) {
+				return 0;
+			}
 			buf[bp++] = c;
 		}
 	}
+	if (bp > MAXURLSIZE) {
+		return 0;
+	}
+	buf[bp] = 0;
 	strcpy(src, buf);
+	return 1;
 }

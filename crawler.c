@@ -309,7 +309,12 @@ static int set_new_uri(struct surl *u, char *rawurl) {
  */
 static void parseurl(struct surl *u) {
 	debugf("[%d] Parse url='%s'\n", u->index, u->rawurl);
-	urlencode(u->rawurl);
+	if (!urlencode(u->rawurl)) {
+		debugf("[%d] Not enough memory for urlencode '%s'\n", u->index, u->rawurl);
+		sprintf(u->error_msg, "URL is too long");
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
+	}
 	if (set_new_uri(u, u->rawurl) == 0) {
 		return;
 	}
@@ -574,9 +579,17 @@ static void empty_handshake(struct surl *u) {
 
 /** strcpy, ktere se ukonci i koncem radku
  */
-static void strcpy_term(char *to, char *from) {
-	for(;*from && *from != '\r' && *from != '\n';) *to++ = *from++;
-	*to = 0;
+static int strcpy_term(char *to, char *from, const size_t size) {
+	int i = 0;
+	for(;*from && *from != '\r' && *from != '\n';i++) {
+		if (i < size)
+			*to++ = *from++;
+		else return 0;
+	}
+	if (i < size)
+		*to = 0;
+	else return 0;
+	return 1;
 }
 
 /** sezere to radku tam, kde ceka informaci o delce chunku
@@ -835,7 +848,7 @@ static char *find_head_end(struct surl *u) {
 /** pozná status a hlavičku http požadavku
  *  FIXME: handle http headers case-insensitive!!
  */
-static void detecthead(struct surl *u) {
+static int detecthead(struct surl *u) {
 	u->status = atoi(u->buf + 9);
 	u->buf[u->bufp] = 0;
 	
@@ -843,7 +856,7 @@ static void detecthead(struct surl *u) {
 
 	if(p == NULL) {
 		debugf("[%d] cannot find end of http header?\n", u->index);
-		return;
+		return 0;
 	}
 	
 	u->headlen = p-u->buf;
@@ -857,13 +870,19 @@ static void detecthead(struct surl *u) {
 
 	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11);
 	if(p!=NULL) {
-		strcpy_term(u->location,p+11);
+		if (!strcpy_term(u->location,p+11,MAXURLSIZE)) {
+			sprintf(u->error_msg, "Redirect URL is too long");
+			set_atomic_int(&u->state, SURL_S_ERROR);
+		}
 		debugf("[%d] Location='%s'\n",u->index,u->location);
 	}
 
 	p=(char*)memmem(u->buf,u->headlen,"\nRefresh: 0;url=",16)?:(char*)memmem(u->buf,u->headlen,"\nrefresh: 0;url=",16);
 	if(p!=NULL) {
-		strcpy_term(u->location,p+16);
+		if (!strcpy_term(u->location,p+16,MAXURLSIZE)) {
+			sprintf(u->error_msg, "Redirect URL is too long");
+			set_atomic_int(&u->state, SURL_S_ERROR);
+		}
 		debugf("[%d] Refresh='%s'\n",u->index,u->location);
 	}
 
@@ -893,6 +912,8 @@ static void detecthead(struct surl *u) {
 	find_content_type(u);
 
 	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
+
+	return 1;
 }
 
 /**
@@ -1144,7 +1165,12 @@ static void resolvelocation(struct surl *u) {
 
 	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
 
-	urlencode(u->location);
+	if (!urlencode(u->location)) {
+		debugf("[%d] Not enough memory for urlencode '%s'\n", u->index, u->location);
+		sprintf(u->error_msg, "URL is too long");
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
+	}
 
 	// workaround for uriparser bug with resolving URI "/"
 	if (u->location[0] == '/' && (
@@ -1237,7 +1263,12 @@ static void resolvelocation(struct surl *u) {
  */
 static void finish(struct surl *u) {
 	if(u->headlen==0) {
-		detecthead(u);	// nespousteli jsme to predtim, tak pustme ted
+		detecthead(u); // nespousteli jsme to predtim, tak pustme ted
+	}
+
+	if (get_atomic_int(&u->state) == SURL_S_ERROR) {
+		// chyba, končíme
+		return;
 	}
 
 	if(u->location[0]) {
@@ -1493,10 +1524,16 @@ static void outputpartial(void) {
  */
 void init_url(struct surl *u, const char *url, const int index, struct cookie *cookies, const int cookiecnt) {
 	// Init the url
-	strcpy(u->rawurl, url);
 	u->index = index;
 	u->state = SURL_S_JUSTBORN;
 	u->redirect_limit = MAX_REDIRECTS;
+	if (strlen(url) > MAXURLSIZE) {
+		*(char*)mempcpy(u->rawurl, url, MAXURLSIZE) = 0;
+		sprintf(u->error_msg, "URL is too long");
+		u->state = SURL_S_ERROR;
+	} else {
+		strcpy(u->rawurl, url);
+	}
 	if (settings.ipv6) {
 		u->addrtype = AF_INET6;
 	} else {
