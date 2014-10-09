@@ -1089,6 +1089,9 @@ static void reset_url(struct surl *u) {
 	u->status = 0;
 	u->location[0] = 0;
 	u->ispost = 0;
+	if (u->post != NULL) {
+		free(u->post);
+	}
 	u->bufp = 0;
 	u->headlen = 0;
 	u->contentlen = -1;
@@ -1522,7 +1525,9 @@ static void outputpartial(void) {
 /**
  * Init URL struct
  */
-void init_url(struct surl *u, const char *url, const int index, struct cookie *cookies, const int cookiecnt) {
+void init_url(struct surl *u, const char *url, const int index, char *post, struct cookie *cookies, const int cookiecnt) {
+	reset_url(u);
+
 	// Init the url
 	u->index = index;
 	u->state = SURL_S_JUSTBORN;
@@ -1538,6 +1543,10 @@ void init_url(struct surl *u, const char *url, const int index, struct cookie *c
 		u->addrtype = AF_INET6;
 	} else {
 		u->addrtype = AF_INET;
+	}
+	if (post != NULL) {
+		u->post = post;
+		u->ispost = 1;
 	}
 	for (int i = 0; i < cookiecnt; i++) {
 		u->cookies[i].name = malloc(strlen(cookies[i].name) + 1);
@@ -1569,8 +1578,6 @@ void init_url(struct surl *u, const char *url, const int index, struct cookie *c
 		send_request:sendrequest,
 		recv_reply:readreply,
 	};
-
-	reset_url(u);
 }
 
 /**

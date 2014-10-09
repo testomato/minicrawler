@@ -19,12 +19,13 @@ struct ssettings settings;
 void initurls(int argc, char *argv[])
 {
 	struct surl *curl, *purl;
-	char *p, *q;
+	char *post, *p, *q;
 	struct cookie cookies[COOKIESTORAGESIZE];
 	int ccnt = 0, i = 0;
 
 	url = (struct surl *)malloc(sizeof(struct surl));
 	curl = url;
+	post = NULL;
 
 	for (int t = 1; t < argc; ++t) {
 
@@ -60,16 +61,16 @@ void initurls(int argc, char *argv[])
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
-			curl->ispost = 1;
-			curl->post = malloc(strlen(argv[t+1]) + 1);
-			memcpy(curl->post, argv[t+1], strlen(argv[t+1]) + 1);
+			post = malloc(strlen(argv[t+1]) + 1);
+			memcpy(post, argv[t+1], strlen(argv[t+1]) + 1);
 			t++;
-			debugf("[%d] POST: %s\n",i,curl->post);
+			debugf("[%d] POST: %s\n",i,post);
 			continue;
 		}
 		if(!strncmp(argv[t], "-C", 2)) {strcpy(curl->customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,curl->customparam);continue;}
 
-		init_url(curl, argv[t], i++, cookies, ccnt);
+		init_url(curl, argv[t], i++, post, cookies, ccnt);
+		post = NULL;
 		purl = curl;
 		curl = (struct surl *)malloc(sizeof(struct surl));
 		purl->next = curl;

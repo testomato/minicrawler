@@ -22,7 +22,7 @@ char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_le
 char *consume_entity(char *s, const char *end, int *code);
 char *put_code(char *dst, const unsigned dst_len, const int code);
 int urlencode(char *src);
-void init_url(struct surl *u, const char *url, const int index, struct cookie *cookies, const int cookiecnt);
+void init_url(struct surl *u, const char *url, const int index, char *post, struct cookie *cookies, const int cookiecnt);
 int gunzip(char *out, int *outlen, char *in, int inlen);
 
 static inline int safe_size_to_int(const size_t sz) {
