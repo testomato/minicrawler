@@ -101,7 +101,7 @@ char *put_code(char *dst, const unsigned dst_len, const int code)
 int urlencode(char *src)
 {
 	char buf[MAXURLSIZE + 1];
-	char c, *str;
+	unsigned char c, *str;
 	int bp = 0, escape_sq_br = 0, slash_cnt = 0, question_mark_cnt = 0;
 
 	str = src;
@@ -130,7 +130,7 @@ int urlencode(char *src)
 			if (bp + 3 > MAXURLSIZE) {
 				return 0;
 			}
-			sprintf(buf + bp, "%%%2X", c);
+			sprintf(buf + bp, "%%%2.2X", c);
 			bp += 3;
 		} else {
 			if (bp + 1 > MAXURLSIZE) {
