@@ -214,6 +214,7 @@ static int check_proto(struct surl *u);
 
 /**
  * Nastaví proto, host, port a path
+ * rawurl musí obsahovat scheme a authority!
  */
 static int set_new_uri(struct surl *u, char *rawurl) {
 	int r;
@@ -259,28 +260,38 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 	u->host = malloc(u->uri->hostText.afterLast - u->uri->hostText.first + 1);
 	*(char*)mempcpy(u->host, u->uri->hostText.first, u->uri->hostText.afterLast-u->uri->hostText.first) = 0;
 
-	const char *path;
 	if (u->uri->portText.first == NULL) {
 		u->port = parse_proto(u->proto);
-		path = u->uri->hostText.afterLast;
 	} else {
 		r = sscanf(u->uri->portText.first, "%d", &u->port);
 		if (r == 0) { // prázdný port
 			u->port = parse_proto(u->proto);
 		}
-		path = u->uri->portText.afterLast;
-	}
-	if (u->uri->hostData.ip6 != NULL) {
-		path++;
 	}
 
+	// recompose path + query
 	if (u->path != NULL) free(u->path);
-	u->path = malloc(strlen(rawurl) - (path-u->uri->scheme.first) + 1 + 1); // +1 na lomítko na začátku
-	strcpy(u->path, path);
-	if (u->path[0] != '/') {
-		memmove(u->path + 1, u->path, strlen(u->path) + 1);
-		u->path[0] = '/';
+	u->path = malloc(strlen(rawurl)); // path nebude delší, než celé URL
+	char *p = u->path;
+	if (u->uri->pathHead != NULL) {
+		UriPathSegmentA *walker = u->uri->pathHead;
+		do {
+			*p++ = '/';
+			const int chars = (int)(walker->text.afterLast - walker->text.first);
+			memcpy(p, walker->text.first, chars);
+			p += chars;
+			walker = walker->next;
+		} while (walker != NULL);
+	} else {
+		*p++ = '/';
 	}
+	if (u->uri->query.first != NULL) {
+		*p++ = '?';
+		const int chars = (int)(u->uri->query.afterLast - u->uri->query.first);
+		memcpy(p, u->uri->query.first, chars);
+		p += chars;
+	}
+	*p = '\0';
 
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 
