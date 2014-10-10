@@ -19,13 +19,12 @@ struct ssettings settings;
 void initurls(int argc, char *argv[])
 {
 	struct surl *curl, *purl;
-	char *post, *p, *q;
+	char *post = NULL, *p, *q;
 	struct cookie cookies[COOKIESTORAGESIZE];
 	int ccnt = 0, i = 0;
 
 	url = (struct surl *)malloc(sizeof(struct surl));
 	curl = url;
-	post = NULL;
 
 	for (int t = 1; t < argc; ++t) {
 

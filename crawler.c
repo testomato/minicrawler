@@ -1102,6 +1102,7 @@ static void reset_url(struct surl *u) {
 	u->ispost = 0;
 	if (u->post != NULL) {
 		free(u->post);
+		u->post = NULL;
 	}
 	u->bufp = 0;
 	u->headlen = 0;
