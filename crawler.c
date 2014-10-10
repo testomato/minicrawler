@@ -1111,9 +1111,11 @@ static void output(struct surl *u) {
 #		endif
 		sprintf(header+strlen(header), "Conversion error: %s\n", err);
 	}
-	char straddr[INET6_ADDRSTRLEN];
-	inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
-	sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=%s; %u)\n",u->lastread - u->downstart, u->downstart, straddr, get_time_slot(u->addr->ip));
+	if (u->addr != NULL) {
+		char straddr[INET6_ADDRSTRLEN];
+		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
+		sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=%s; %u)\n",u->lastread - u->downstart, u->downstart, straddr, get_time_slot(u->addr->ip));
+	}
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
 	write_all(STDOUT_FILENO, header, strlen(header));
