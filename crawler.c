@@ -192,18 +192,38 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 		return;
 	}
 
-	u->addrtype = hostent->h_addrtype;
-	u->addrlength = hostent->h_length;
-	memcpy(u->prev_ip, u->ip, 16);
-	memset(u->ip, 0, 16);
-	memcpy(u->ip, hostent->h_addr, hostent->h_length);
-	
-	debugf("[%d] Resolving %s ended => %s,", u->index, u->host, hostent->h_name);
-	if (u->addrtype == AF_INET6) {
-		debugf("%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%x%x\n", u->ip[0], u->ip[1], u->ip[2], u->ip[3], u->ip[4], u->ip[5], u->ip[6], u->ip[7], u->ip[8], u->ip[9], u->ip[10], u->ip[11], u->ip[12], u->ip[13], u->ip[14], u->ip[15]);
-	} else {
-		debugf("%d.%d.%d.%d\n", u->ip[0], u->ip[1], u->ip[2], u->ip[3]);
+	debugf("[%d] Resolving %s ended => %s", u->index, u->host, hostent->h_name);
+
+	// uvolníme staré struktury
+	if (u->addr != NULL) {
+		free_addr(u->prev_addr);
+		u->prev_addr = u->addr;
+		u->addr = NULL;
 	}
+
+	char **p_addr = hostent->h_addr_list;
+	struct addr *last_addr;
+	do {
+		struct addr *addr;
+		addr = (struct addr*)malloc(sizeof(struct addr));
+		addr->type = hostent->h_addrtype;
+		addr->length = hostent->h_length;
+		memset(addr->ip, 0, 16);
+		memcpy(addr->ip, *p_addr, hostent->h_length);
+		if (u->addr == NULL) {
+			u->addr = addr;
+		} else {
+			last_addr->next = addr;
+		}
+		last_addr = addr;
+
+		if (addr->type == AF_INET6) {
+			debugf(", %x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%x%x:%x%x", addr->ip[0], addr->ip[1], addr->ip[2], addr->ip[3], addr->ip[4], addr->ip[5], addr->ip[6], addr->ip[7], addr->ip[8], addr->ip[9], addr->ip[10], addr->ip[11], addr->ip[12], addr->ip[13], addr->ip[14], addr->ip[15]);
+		} else {
+			debugf(", %d.%d.%d.%d", addr->ip[0], addr->ip[1], addr->ip[2], addr->ip[3]);
+		}
+	} while (*++p_addr != NULL);
+	debugf("\n");
 
 	set_atomic_int(&u->state, SURL_S_GOTIP);
 }
@@ -296,18 +316,21 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 
 	if (u->uri->hostData.ip4 != NULL) {
-		memcpy(u->prev_ip, u->ip, 16);
-		memset(u->ip, 0, 16);
-		memcpy(u->ip, u->uri->hostData.ip4->data, 4);
-		u->addrtype = AF_INET;
-		u->addrlength = 4;
+		free_addr(u->prev_addr);
+		u->prev_addr = u->addr;
+		u->addr = (struct addr*)malloc(sizeof(struct addr));
+		memcpy(u->addr->ip, u->uri->hostData.ip4->data, 4);
+		u->addr->type = AF_INET;
+		u->addr->length = 4;
 		set_atomic_int(&u->state, SURL_S_GOTIP);
 		debugf("[%d] go directly to ipv4\n", u->index);
 	} else if (u->uri->hostData.ip6 != NULL) {
-		memcpy(u->prev_ip, u->ip, 16);
-		memcpy(u->ip, u->uri->hostData.ip6->data, 16);
-		u->addrtype = AF_INET6;
-		u->addrlength = 16;
+		free_addr(u->prev_addr);
+		u->prev_addr = u->addr;
+		u->addr = (struct addr*)malloc(sizeof(struct addr));
+		memcpy(u->addr->ip, u->uri->hostData.ip6->data, 16);
+		u->addr->type = AF_INET6;
+		u->addr->length = 16;
 		set_atomic_int(&u->state, SURL_S_GOTIP);
 		debugf("[%d] go directly to ipv6\n", u->index);
 	} else {
@@ -373,7 +396,15 @@ static void connectsocket(struct surl *u) {
 	socklen_t result_len = sizeof(result);
 	if (getsockopt(u->sockfd, SOL_SOCKET, SO_ERROR, &result, &result_len) < 0) {
 		// error, fail somehow, close socket
-		debugf("%d: Cannot connect, getsoskopt(.) returned error status: %m", u->index);
+		debugf("[%d] Cannot connect, getsoskopt(.) returned error status: %m\n", u->index);
+		if (u->addr->next != NULL) {
+			struct addr *next = u->addr->next;
+			free(u->addr);
+			u->addr = next;
+			debugf("[%d] Trying another ip\n", u->index);
+			set_atomic_int(&u->state, SURL_S_GOTIP);
+			return;
+		}
 		sprintf(u->error_msg, "Failed to connect to host (%m)");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		close(u->sockfd);
@@ -381,7 +412,15 @@ static void connectsocket(struct surl *u) {
 	}
 
 	if (result != 0) {
-		debugf("%d: Cannot connect, attempt to connect failed", u->index);
+		debugf("[%d] Cannot connect, attempt to connect failed\n", u->index);
+		if (u->addr->next != NULL) {
+			struct addr *next = u->addr->next;
+			free(u->addr);
+			u->addr = next;
+			debugf("[%d] Trying another ip\n", u->index);
+			set_atomic_int(&u->state, SURL_S_GOTIP);
+			return;
+		}
 		sprintf(u->error_msg, "Failed to connect to host (%s)", strerror(result));
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		close(u->sockfd);
@@ -416,25 +455,25 @@ static void opensocket(struct surl *u)
 	struct sockaddr_storage addr;
 	socklen_t addrlen;
 
-	u->sockfd = socket(u->addrtype, SOCK_STREAM, 0);
+	u->sockfd = socket(u->addr->type, SOCK_STREAM, 0);
 	flags = fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
 
 	if (settings.debug) {
 		char straddr[INET6_ADDRSTRLEN];
-		inet_ntop(u->addrtype, u->ip, straddr, sizeof(straddr));
-		debugf("[%d] connecting to ip: %s; %d, port: %i (socket %d)\n", u->index, straddr, get_time_slot(u->ip), u->port, u->sockfd);
+		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
+		debugf("[%d] connecting to ip: %s; %d, port: %i (socket %d)\n", u->index, straddr, get_time_slot(u->addr->ip), u->port, u->sockfd);
 	}
 
 	memset(&addr, 0, sizeof(addr));
-	addr.ss_family = u->addrtype;
-	if (u->addrtype == AF_INET6) {
+	addr.ss_family = u->addr->type;
+	if (u->addr->type == AF_INET6) {
 		(*(struct sockaddr_in6 *)&addr).sin6_port = htons(u->port);
-		memcpy(&((*(struct sockaddr_in6 *)&addr).sin6_addr), &(u->ip), u->addrlength);
+		memcpy(&((*(struct sockaddr_in6 *)&addr).sin6_addr), &(u->addr->ip), u->addr->length);
 		addrlen = sizeof(struct sockaddr_in6);
 	} else {
 		(*(struct sockaddr_in *)&addr).sin_port = htons(u->port);
-		memcpy(&((*(struct sockaddr_in *)&addr).sin_addr), &(u->ip), u->addrlength);
+		memcpy(&((*(struct sockaddr_in *)&addr).sin_addr), &(u->addr->ip), u->addr->length);
 		addrlen = sizeof(struct sockaddr_in);
 	}
 	const int t = connect(u->sockfd, (struct sockaddr *)&addr, addrlen);
@@ -1070,8 +1109,8 @@ static void output(struct surl *u) {
 		sprintf(header+strlen(header), "Conversion error: %s\n", err);
 	}
 	char straddr[INET6_ADDRSTRLEN];
-	inet_ntop(u->addrtype, u->ip, straddr, sizeof(straddr));
-	sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=%s; %u)\n",u->lastread - u->downstart, u->downstart, straddr, get_time_slot(u->ip));
+	inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
+	sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=%s; %u)\n",u->lastread - u->downstart, u->downstart, straddr, get_time_slot(u->addr->ip));
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
 	write_all(STDOUT_FILENO, header, strlen(header));
@@ -1253,7 +1292,10 @@ static void resolvelocation(struct surl *u) {
 
 	if (strcmp(u->host, ohost) == 0) {
 		// muzes se pripojit na tu puvodni IP
-		memcpy(u->prev_ip, u->ip, 16);
+		free_addr(u->prev_addr);
+		u->prev_addr = (struct addr*)malloc(sizeof(struct addr));
+		memcpy(u->prev_addr, u->addr, sizeof(u->addr));
+		u->prev_addr->next = NULL;
 		set_atomic_int(&u->state, SURL_S_GOTIP);
 	} else {
 		// zmena host
@@ -1438,7 +1480,7 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_GOTIP:
-		if ( (u->downstart = test_free_channel(u->ip, settings.delay, u->ip == u->prev_ip)) ) {
+		if ( (u->downstart = test_free_channel(u->addr->ip, settings.delay, u->addr->ip == u->prev_addr->ip)) ) {
 			u->f.open_socket(u);
 		}
 		break;

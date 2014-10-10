@@ -28,6 +28,22 @@ struct redirect_info {
 	struct redirect_info *next;
 };
 
+struct addr {
+	int type;
+	int length;
+	unsigned char ip[16];
+	struct addr *next;
+};
+
+static inline void free_addr(struct addr *addr) {
+	while (addr != NULL) {
+		struct addr *next = addr->next;
+		free(addr);
+		addr = next;
+	}
+}
+
+
 enum surl_s {
 	SURL_S_JUSTBORN,
 	SURL_S_PARSEDURL,
@@ -158,10 +174,9 @@ struct surl {
 	
 	// network
 	int sockfd;
+	struct addr *addr;
+	struct addr *prev_addr;
 	int addrtype;
-	int addrlength;
-	unsigned char ip[16];
-	unsigned char prev_ip[16];
 	
 	// obsah
 	char buf[BUFSIZE];
