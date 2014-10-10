@@ -223,6 +223,7 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 			debugf(", %d.%d.%d.%d", addr->ip[0], addr->ip[1], addr->ip[2], addr->ip[3]);
 		}
 	} while (*++p_addr != NULL);
+	last_addr->next = NULL;
 	debugf("\n");
 
 	set_atomic_int(&u->state, SURL_S_GOTIP);
@@ -322,6 +323,7 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 		memcpy(u->addr->ip, u->uri->hostData.ip4->data, 4);
 		u->addr->type = AF_INET;
 		u->addr->length = 4;
+		u->addr->next = NULL;
 		set_atomic_int(&u->state, SURL_S_GOTIP);
 		debugf("[%d] go directly to ipv4\n", u->index);
 	} else if (u->uri->hostData.ip6 != NULL) {
@@ -331,6 +333,7 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 		memcpy(u->addr->ip, u->uri->hostData.ip6->data, 16);
 		u->addr->type = AF_INET6;
 		u->addr->length = 16;
+		u->addr->next = NULL;
 		set_atomic_int(&u->state, SURL_S_GOTIP);
 		debugf("[%d] go directly to ipv6\n", u->index);
 	} else {
