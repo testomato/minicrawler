@@ -1479,6 +1479,17 @@ static void goone(struct surl *u) {
 	debugf("[%d] state = [%s][%d]\n", u->index, state_to_s(state), want_io(state, rw));
 
 	if (want_io(state, rw)) {
+		switch(state) {
+		case SURL_S_HANDSHAKE:
+			if (get_time_int() - u->downstart > 2000) {
+				// after 1000 ms we retry handshake with another protocol
+				debugf("[%d] SSL handshake timeout (2000 ms), closing connection\n", u->index);
+				close(u->sockfd);
+				u->f.handshake(u);
+			}
+			break;
+		}
+
 		return;  // select will look after this state
 	}
 	check_io(state, rw); // Checks that when we need some io, then the socket is in readable/writeable state
