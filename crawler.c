@@ -1130,7 +1130,7 @@ static void output(struct surl *u) {
 	if (u->addr != NULL) {
 		char straddr[INET6_ADDRSTRLEN];
 		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
-		sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=%s; %u)\n",u->lastread - u->downstart, u->downstart, straddr, get_time_slot(u->addr->ip));
+		sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=%s; %u)\n",u->lastread > u->downstart ? u->lastread - u->downstart : get_time_int() - u->downstart, u->downstart, straddr, get_time_slot(u->addr->ip));
 	}
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
