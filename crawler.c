@@ -87,15 +87,29 @@ static void sec_handshake(struct surl *u) {
 	debugf("[%d] Unexpected SSL error (in handshake): %d, %d\n", u->index, err, t);
 	ERR_print_errors_fp(stderr);
 
-	if (SSL_get_options(u->ssl) & SSL_OP_NO_TLSv1) {
+	const long opts = SSL_get_options(u->ssl);
+
+	if (opts & SSL_OP_NO_SSLv3) {
 		sprintf(u->error_msg, "Unexpected SSL error during handshake");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return;
 	}
 	else {
-		// zkusíme ještě jednou bez TLSv1
-		debugf("[%d] Trying to switch to SSLv3\n", u->index);
-		u->ssl_options = u->ssl_options | SSL_OP_NO_TLSv1;
+		// zkusíme ještě jednou s nižším protokolem
+		if (opts & SSL_OP_NO_TLSv1) {
+			u->ssl_options |= SSL_OP_NO_SSLv3;
+			debugf("[%d] Switch to SSLv2\n", u->index);
+		} else if (opts & SSL_OP_NO_TLSv1_1) {
+			u->ssl_options |= SSL_OP_NO_TLSv1;
+			debugf("[%d] Switch to SSLv3\n", u->index);
+		} else if (opts & SSL_OP_NO_TLSv1_2) {
+			u->ssl_options |= SSL_OP_NO_TLSv1_1;
+			debugf("[%d] Switch to TLSv1.0\n", u->index);
+		} else {
+			u->ssl_options |= SSL_OP_NO_TLSv1_2;
+			debugf("[%d] Switch to TLSv1.1\n", u->index);
+		}
+
 		SSL_free(u->ssl);
 		close(u->sockfd);
 		set_atomic_int(&u->state, SURL_S_GOTIP);
