@@ -803,7 +803,6 @@ static void setcookie(struct surl *u,char *str) {
 	}
 
 	// process attributes
-	cookie.secure = 0;
 	int i;
 	for (i = 0; i < att_len; i++) {
 		attr = attributes + i;
@@ -862,11 +861,7 @@ static void setcookie(struct surl *u,char *str) {
 	}
 
 	if (t < sizeof(u->cookies)/sizeof(*u->cookies)) {
-		u->cookies[t].name = cookie.name;
-		u->cookies[t].value = cookie.value;
-		u->cookies[t].domain = cookie.domain;
-		u->cookies[t].secure = cookie.secure;
-		u->cookies[t].host_only = cookie.host_only;
+		memcpy(&u->cookies[t], &cookie, sizeof(cookie));
 		debugf("[%d] Storing cookie #%d: name='%s', value='%s', domain='%s', host_only=%d, secure=%d\n",u->index,t,cookie.name,cookie.value,cookie.domain,cookie.host_only,cookie.secure);
 	} else {
 		u->cookiecnt--;
@@ -1617,6 +1612,7 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 	// Init the url
 	u->index = index;
 	u->state = SURL_S_JUSTBORN;
+	u->redirectedto = NULL;
 	u->redirect_limit = MAX_REDIRECTS;
 	if (strlen(url) > MAXURLSIZE) {
 		*(char*)mempcpy(u->rawurl, url, MAXURLSIZE) = 0;
