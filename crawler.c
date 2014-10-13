@@ -734,6 +734,8 @@ static void setcookie(struct surl *u,char *str) {
 	char *p, *q, *r;
 	int len;
 
+	memset(&cookie, 0, sizeof(struct cookie));
+
 	p = strpbrk(str, ";\r\n");
 	if (p == NULL) return;
 
