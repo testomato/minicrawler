@@ -62,8 +62,6 @@ SSL is blackbox this time for us.
 static void sec_handshake(struct surl *u) {
 	assert(u->ssl);
 
-	SSL_set_tlsext_host_name(u->ssl, u->host);
-
 	const int t = SSL_connect(u->ssl);
     if (t == 1) {
         set_atomic_int(&u->state, SURL_S_GENREQUEST);
@@ -445,6 +443,8 @@ static int maybe_create_ssl(struct surl *u) {
 	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
 	SSL_set_bio(ssl, sbio, sbio);
 	SSL_set_options(ssl, u->ssl_options);
+	SSL_set_tlsext_host_name(ssl, u->host);
+
 	u->ssl = ssl;
 
 	return 1;
