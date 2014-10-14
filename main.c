@@ -40,7 +40,7 @@ void initurls(int argc, char *argv[])
 		if(!strncmp(argv[t], "-t", 2)) {settings.timeout=atoi(argv[t]+2);continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
 		if(!strncmp(argv[t], "-w", 2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
-		if(!strncmp(argv[t], "-A", 2)) {sprintf(settings.customagent,"%.*s", I_LENGTHOF(settings.customagent), argv[t+1]); t++; debugf("Custom agent: %s\n",settings.customagent); continue;}
+		if(!strncmp(argv[t], "-A", 2)) {sprintf(settings.customagent,"%.*s", I_LENGTHOF(settings.customagent), str_replace(argv[t+1], "%version%", VERSION)); t++; debugf("Custom agent: %s\n",settings.customagent); continue;}
 		if(!strncmp(argv[t], "-b", 2)) {
 			p = argv[t+1];
 			while (p[0] != '\0' && ccnt < COOKIESTORAGESIZE) {
@@ -117,7 +117,7 @@ void printusage()
 	         "         -6         resolve host to IPv6 address\n"
 	         "         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)\n"
 	         "\n   urloptions:\n"
-	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
+	         "         -C STRING  parameter which replaces '%%' in the custom header (max 256 bytes)\n"
 	         "         -P STRING  http post parameters\n"
 	         "\n", VERSION);
 }

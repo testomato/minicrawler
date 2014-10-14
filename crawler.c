@@ -515,23 +515,6 @@ static void opensocket(struct surl *u)
 	}
 }
 
-/** neci kod na str_replace (pod free licenci)
- */
-static char *str_replace( const char *string, const char *substr, const char *replacement ) {
-	char *tok = NULL;
-	char *newstr = NULL;
- 
-	tok = strstr( string, substr );
-	if( tok == NULL ) return strdup( string );
-	newstr = malloc( strlen( string ) - strlen( substr ) + strlen( replacement ) + 1 );
-	if( newstr == NULL ) return NULL;
-	memcpy( newstr, string, tok - string );
-	memcpy( newstr + (tok - string), replacement, strlen( replacement ) );
-	memcpy( newstr + (tok - string) + strlen( replacement ), tok + strlen( substr ), strlen( string ) - strlen( substr ) - ( tok - string ) );
-	memset( newstr + strlen( string ) - strlen( substr ) + strlen( replacement ), 0, 1 );
-	return newstr;
-} 
-
 /** socket bezi, posli dotaz
  * cookie header see http://tools.ietf.org/html/rfc6265 section 5.4
  */
