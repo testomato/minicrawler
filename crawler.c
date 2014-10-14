@@ -1455,15 +1455,17 @@ static void selectall(void) {
 static void goone(struct surl *u) {
 	const int state = get_atomic_int(&u->state);
 	const int rw = get_atomic_int(&u->rw);
+	int timeout;
 
 	debugf("[%d] state = [%s][%d]\n", u->index, state_to_s(state), want_io(state, rw));
 
 	if (want_io(state, rw)) {
 		switch(state) {
 		case SURL_S_HANDSHAKE:
-			if (get_time_int() - u->downstart > 2000) {
-				// after 1000 ms we retry handshake with another protocol
-				debugf("[%d] SSL handshake timeout (2000 ms), closing connection\n", u->index);
+			timeout = (settings.timeout > 6 ? settings.timeout / 3 : 2) * 1000;
+			if (get_time_int() - u->handshaketime > timeout) {
+				// we retry handshake with another protocol
+				debugf("[%d] SSL handshake timeout (%d ms), closing connection\n", u->index, timeout);
 				close(u->sockfd);
 				u->f.handshake(u);
 			}
@@ -1500,6 +1502,7 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_HANDSHAKE:
+		u->handshaketime = get_time_int();
 		u->f.handshake(u);
 		break;
 
