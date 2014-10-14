@@ -1597,7 +1597,7 @@ static void outputpartial(void) {
 	curl = url;
 	do {
 		const int url_state = get_atomic_int(&curl->state);
-		if(url_state <= SURL_S_OUTPUTED) {
+		if(url_state < SURL_S_OUTPUTED) {
 			output(curl);
 		}
 	} while ((curl = curl->next) != NULL);
