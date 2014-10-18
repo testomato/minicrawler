@@ -1,4 +1,4 @@
-objs=$(patsubst %.c,o/%.o,$(wildcard *.c))
+objs=$(patsubst src/%.c,o/%.o,$(wildcard src/*.c))
 name=minicrawler
 
 $(name): $(objs)
@@ -8,7 +8,7 @@ $(name): $(objs)
 	mkdir -p o
 	touch .odir.stamp
 
-$(objs): o/%.o: %.c .odir.stamp h/struct.h h/proto.h h/version.h
+$(objs): o/%.o: src/%.c .odir.stamp src/h/struct.h src/h/proto.h src/h/version.h
 	gcc -g -c -std=gnu99 -fnested-functions -I$(HOME)/.minicrawler/include -o $@ $<
 
 install-deps:

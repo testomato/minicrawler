@@ -1,16 +1,15 @@
-objs=$(patsubst %.c,o/%.o,$(wildcard *.c))
+objs=$(patsubst src/%.c,o/%.o,$(wildcard src/*.c))
 
 name=minicrawler
 
 $(name): $(objs)
-#	gcc -g -O3 -o $(name) $(objs) -static -lcares -lrt -lssl -lcrypto -lz -lpthread -lm -lc -ldl
 	gcc -g -O3 -o $(name) $(objs) -lcares -lssl -lcrypto -lz -luriparser
 
 .odir.stamp:
 	mkdir -p o
 	touch .odir.stamp
 
-$(objs): o/%.o: %.c .odir.stamp h/struct.h h/proto.h h/version.h
+$(objs): o/%.o: src/%.c .odir.stamp src/h/struct.h src/h/proto.h src/h/version.h
 	gcc -g -O3 -std=gnu99 -o $@ -c $<
 
 clean:
