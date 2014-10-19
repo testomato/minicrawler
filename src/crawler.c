@@ -596,8 +596,7 @@ static void genrequest(struct surl *u) {
 	// Custom header
 	if (settings.customheader[0]) {
 		if (u->customparam[0]) {
-			char *p = str_replace(settings.customheader, "%", u->customparam);
-			strcpy(r, p);
+			str_replace(r, settings.customheader, "%", u->customparam);
 		} else {
 			strcpy(r, settings.customheader);
 		}
