@@ -519,30 +519,60 @@ static void opensocket(struct surl *u)
  * cookie header see http://tools.ietf.org/html/rfc6265 section 5.4
  */
 static void genrequest(struct surl *u) {
-	const char getrqfmt[] = "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\n%s\r\n";
-	const char postrqfmt[] = "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: %s\r\nContent-Length: %d\r\nContent-Type: application/x-www-form-urlencoded\r\n%s\r\n%s";
+	const char reqfmt[] = "%s %s HTTP/1.1";
+	const char hostheader[] = "Host: ";
+	const char useragentheader[] = "User-Agent: ";
+	const char cookieheader[] = "Cookie: ";
+	const char gzipheader[] = "Accept-Encoding: gzip";
+	const char contentlengthheader[] = "Content-Length: ";
+	const char contenttypeheader[] = "Content-Type: application/x-www-form-urlencoded";
+	const char defaultagent[] = "minicrawler/%s";
 
-	char host[262];
-	char agent[256];
-	char cookiestring[4096];
-	char customheader[4096];
+	free(u->request);
+	u->request = malloc(
+			strlen(reqfmt) + 4 + strlen(u->path) + 2 + // method URL HTTP/1.1\n
+			strlen(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
+			strlen(useragentheader) + (settings.customagent[0] ? strlen(settings.customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
+			strlen(cookieheader) + 1024 * u->cookiecnt + 2 + // Cookie: %s; %s...\n
+			strlen(settings.customheader) + strlen(u->customparam) + 2 +
+			(settings.gzip ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
+			(u->ispost ? strlen(contentlengthheader) + 6 + 2 + strlen(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
+			2 + // end of header
+			(u->ispost ? strlen(u->post) : 0) // body
+	);
 
+	char *r = u->request;
+
+	sprintf(r, reqfmt, u->ispost ? "POST" : "GET", u->path);
+	r += strlen(r);
+	strcpy(r, "\r\n");
+	r += 2;
+
+	// Host
+	strcpy(r, hostheader);
+	strcpy(r + strlen(r), u->host);
 	const int port = parse_proto(u->proto);
-	strcpy(host, u->host);
 	if (port != u->port) {
-		sprintf(host + strlen(u->host), ":%d", u->port);
+		sprintf(r + strlen(r), ":%d", u->port);
 	}
+	r += strlen(r);
+	strcpy(r, "\r\n");
+	r += 2;
 
+	// Uset-Agent
+	strcpy(r, useragentheader);
 	if (settings.customagent[0]) {
-		safe_cpy(agent, settings.customagent, sizeof(agent));
+		strcpy(r + strlen(r), settings.customagent);
 	} else {
-		sprintf(agent, "minicrawler/%s", VERSION);
+		sprintf(r + strlen(r), defaultagent, VERSION);
 	}
+	r += strlen(r);
+	strcpy(r, "\r\n");
+	r += 2;
 
-	// vytvoří si to řetězec cookies a volitelných parametrů
-	cookiestring[0] = 0;
-	char *p;
+	// Cookie
 	for (int t = 0; t < u->cookiecnt; t++) {
+		char *p;
 		// see http://tools.ietf.org/html/rfc6265 section 5.4
 		// TODO: The request-uri's path path-matches the cookie's path.
 		if (
@@ -550,40 +580,61 @@ static void genrequest(struct surl *u) {
 					u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) != NULL && *(p+strlen(u->cookies[t].domain)+1) == '\0') &&
 				(u->cookies[t].secure == 0 || strcmp(u->proto, "https") == 0)
 		) {
-			if (!cookiestring[0]) {
-				sprintf(cookiestring, "Cookie: %s=%s", u->cookies[t].name, u->cookies[t].value);
-			}
-			else {
-				sprintf(cookiestring+strlen(cookiestring), "; %s=%s", u->cookies[t].name, u->cookies[t].value);
+			if (!r[0]) {
+				strcpy(r, cookieheader);
+				sprintf(r + strlen(r), "%s=%s", u->cookies[t].name, u->cookies[t].value);
+			} else {
+				sprintf(r + strlen(r), "; %s=%s", u->cookies[t].name, u->cookies[t].value);
 			}
 		}
 	}
-	if (strlen(cookiestring)) {
-		sprintf(cookiestring + strlen(cookiestring), "\r\n");
+	if (r[0]) {
+		strcpy(r + strlen(r), "\r\n");
 	}
-	if(settings.customheader[0]) {
-		sprintf(customheader,"%s\r\n",settings.customheader);
-		if(u->customparam[0]) {
-			char *p = str_replace(customheader, "%", u->customparam);
-			strcpy(customheader,p);
+	r += strlen(r);
+
+	// Custom header
+	if (settings.customheader[0]) {
+		if (u->customparam[0]) {
+			char *p = str_replace(settings.customheader, "%", u->customparam);
+			strcpy(r, p);
+		} else {
+			strcpy(r, settings.customheader);
 		}
-		strcpy(cookiestring+strlen(cookiestring), customheader);
-	}
-	if (settings.gzip) {
-		strcpy(cookiestring+strlen(cookiestring), "Accept-Encoding: gzip\r\n");
+		r += strlen(r);
+		strcpy(r, "\r\n");
+		r += 2;
 	}
 
-	// FIXME: Check beffers length and vice verse
-	free(u->request);
-	if(!u->ispost) {// GET
-		u->request_len = sizeof(getrqfmt) + strlen(u->path) + strlen(agent) + strlen(host) + strlen(cookiestring);
-		u->request = malloc(u->request_len + 1);
-		sprintf(u->request, getrqfmt, u->path, host, agent, cookiestring);
-	} else { // POST
-		u->request_len = sizeof(postrqfmt) + strlen(u->path) + strlen(agent) + strlen(host) + strlen(cookiestring) + strlen(u->post) + 9; // 9 - dost místa na content-length
-		u->request = malloc(u->request_len + 1);
-		sprintf(u->request, postrqfmt, u->path, host, agent, (int)strlen(u->post), cookiestring, u->post);
+	// gzip
+	if (settings.gzip) {
+		strcpy(r, gzipheader);
+		r += strlen(r);
+		strcpy(r, "\r\n");
+		r += 2;
 	}
+
+	if (u->ispost) {
+		strcpy(r, contentlengthheader);
+		sprintf(r + strlen(r), "%d", strlen(u->post));
+		r += strlen(r);
+		strcpy(r, "\r\n");
+		r += 2;
+		strcpy(r, contenttypeheader);
+		r += strlen(r);
+		strcpy(r, "\r\n");
+		r += 2;
+	}
+
+	// end of header
+	strcpy(r, "\r\n");
+	r += 2;
+
+	// body
+	if (u->ispost) {
+		strcpy(r, u->post);
+	}
+
 	debugf("Request: [%s]", u->request);
 	u->request_len = strlen(u->request);
 	u->request_it = 0;
