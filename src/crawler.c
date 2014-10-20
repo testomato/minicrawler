@@ -377,8 +377,10 @@ static void launchdns(struct surl *u) {
 	debugf("[%d] Resolving %s starts\n", u->index, u->host);
 	t = ares_init(&(u->aresch));
 	if(t) {
-		debugf("ares_init failed\n");
-		exit(-1);
+		debugf("[%d] ares_init failed\n", u->index);
+		sprintf(u->error_msg, "ares init failed");
+		set_atomic_int(&u->state, SURL_S_ERROR);
+		return;
 	}
 
 	set_atomic_int(&u->state, SURL_S_INDNS);
@@ -1073,7 +1075,7 @@ static void output(struct surl *u) {
 			u->bufp = buflen + u->headlen;
 		} else {
 			sprintf(u->error_msg, "Gzip decompression error %d", ret);
-			u->status = -2;
+			u->status = SURL_S_ERROR - SURL_S_DONE;
 			u->bufp = u->headlen;
 		}
 	}
@@ -1207,7 +1209,7 @@ static void reset_url(struct surl *u) {
 static void set_unsupported_protocol(struct surl *u) {
 	debugf("Unsupported protocol: [%s]\n", u->proto);
 	sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
-	set_atomic_int(&u->state, SURL_S_INTERNAL_ERROR);
+	set_atomic_int(&u->state, SURL_S_ERROR);
 }
 
 /** Parse string with the name of the protocol and return default port for that protocol or 0,
@@ -1569,14 +1571,18 @@ static void goone(struct surl *u) {
 		break;
   
 	case SURL_S_ERROR:
-	case SURL_S_INTERNAL_ERROR:
-		u->status = -1;
+		assert(u->status < 0);
 		output(u);
 		break;
 
 	case SURL_S_DONE:
 		output(u);
 		break;
+	}
+
+	const int stateAfter = get_atomic_int(&u->state);
+	if (stateAfter == SURL_S_ERROR) {
+		u->status = state - stateAfter;
 	}
 
 	if (settings.debug) {	

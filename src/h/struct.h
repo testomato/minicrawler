@@ -54,9 +54,8 @@ enum surl_s {
 	SURL_S_GENREQUEST,
 	SURL_S_SENDREQUEST,
 	SURL_S_RECVREPLY,
-	SURL_S_INTERNAL_ERROR,
-	SURL_S_ERROR,
 	SURL_S_DONE,
+	SURL_S_ERROR,
 	SURL_S_OUTPUTED,
 };
 
@@ -80,8 +79,6 @@ static inline const char *state_to_s(const enum surl_s x) {
 			return "SURL_S_SENDREQUEST";
 		case SURL_S_RECVREPLY:
 			return "SURL_S_RECVREPLY";
-		case SURL_S_INTERNAL_ERROR:
-			return "SURL_S_INTERNAL_ERROR";
 		case SURL_S_DONE:
 			return "SURL_S_DONE";
 		case SURL_S_ERROR:

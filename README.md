@@ -40,6 +40,13 @@ Minicrawler puts its own headers into an output with the following meaning
  * **Redirected-To**: Final absolute URL
  * **Redirect-info**: Info about each redirect
  * **Status**: HTTP Status of final response (negative in case of error)
+   * `-10` Invalid input
+   * `-9`, `-8` DNS error
+   * `-7`, `-6` Connection error
+   * `-5` SSL/TLS error
+   * `-4`, `-3` Error during sending a HTTP request
+   * `-2` Error during receiving a HTTP response
+   * `-1` Decoding or converting error
  * **Content-length**: Length of the downloaded content in bytes
  * **Timeout**: Reason of timeout in case of timeout
  * **Error-msg**: Error message in case of error (negative Status)
