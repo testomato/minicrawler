@@ -24,6 +24,7 @@ void initurls(int argc, char *argv[])
 	int ccnt = 0, i = 0;
 
 	url = (struct surl *)malloc(sizeof(struct surl));
+	memset(url, 0, sizeof(struct surl));
 	curl = url;
 
 	for (int t = 1; t < argc; ++t) {

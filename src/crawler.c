@@ -1663,7 +1663,6 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 	// Init the url
 	u->index = index;
 	u->state = SURL_S_JUSTBORN;
-	u->redirectedto = NULL;
 	u->redirect_limit = MAX_REDIRECTS;
 	if (strlen(url) > MAXURLSIZE) {
 		*(char*)mempcpy(u->rawurl, url, MAXURLSIZE) = 0;
