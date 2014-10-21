@@ -67,6 +67,7 @@ void initurls(int argc, char *argv[])
 			continue;
 		}
 		if(!strncmp(argv[t], "-C", 2)) {strcpy(curl->customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,curl->customparam);continue;}
+		if(!strcmp(argv[t], "-X")) {safe_cpy(curl->method, argv[t+1], I_SIZEOF(curl->method)); t++; continue;}
 
 		init_url(curl, argv[t], i++, post, cookies, ccnt);
 		post = NULL;
@@ -119,6 +120,7 @@ void printusage()
 	         "\n   urloptions:\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header (max 256 bytes)\n"
 	         "         -P STRING  HTTP POST parameters\n"
+	         "         -X STRING  custom request HTTP method, no validation performed (max 15 bytes)\n"
 	         "\n", VERSION);
 }
 

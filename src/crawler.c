@@ -532,20 +532,20 @@ static void genrequest(struct surl *u) {
 
 	free(u->request);
 	u->request = malloc(
-			strlen(reqfmt) + 4 + strlen(u->path) + 2 + // method URL HTTP/1.1\n
+			strlen(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
 			strlen(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
 			strlen(useragentheader) + (settings.customagent[0] ? strlen(settings.customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
 			strlen(cookieheader) + 1024 * u->cookiecnt + 2 + // Cookie: %s; %s...\n
 			strlen(settings.customheader) + strlen(u->customparam) + 2 +
 			(settings.gzip ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
-			(u->ispost ? strlen(contentlengthheader) + 6 + 2 + strlen(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
+			(u->post != NULL ? strlen(contentlengthheader) + 6 + 2 + strlen(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
 			2 + // end of header
-			(u->ispost ? strlen(u->post) : 0) // body
+			(u->post != NULL ? strlen(u->post) : 0) // body
 	);
 
 	char *r = u->request;
 
-	sprintf(r, reqfmt, u->ispost ? "POST" : "GET", u->path);
+	sprintf(r, reqfmt, u->method, u->path);
 	r += strlen(r);
 	strcpy(r, "\r\n");
 	r += 2;
@@ -615,7 +615,7 @@ static void genrequest(struct surl *u) {
 		r += 2;
 	}
 
-	if (u->ispost) {
+	if (u->post != NULL) {
 		strcpy(r, contentlengthheader);
 		sprintf(r + strlen(r), "%d", strlen(u->post));
 		r += strlen(r);
@@ -632,7 +632,7 @@ static void genrequest(struct surl *u) {
 	r += 2;
 
 	// body
-	if (u->ispost) {
+	if (u->post != NULL) {
 		strcpy(r, u->post);
 	}
 
@@ -966,6 +966,10 @@ static int detecthead(struct surl *u) {
 		u->contentlen = atoi(p + 16);
 	}
 	debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
+	if (!strcmp(u->method, "HEAD")) { // there will be no content
+		u->contentlen = 0;
+		debugf("[%d] HEAD request, no content\n", u->index);
+	}
 
 	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11);
 	if(p!=NULL) {
@@ -1189,7 +1193,6 @@ static void output(struct surl *u) {
 static void reset_url(struct surl *u) {
 	u->status = 0;
 	u->location[0] = 0;
-	u->ispost = 0;
 	if (u->post != NULL) {
 		free(u->post);
 		u->post = NULL;
@@ -1364,6 +1367,8 @@ static void resolvelocation(struct surl *u) {
 	rinfo->next = u->redirect_info;
 	u->redirect_info = rinfo;
 
+	// GET method after redirect
+	strcpy(u->method, "GET");
 	reset_url(u);
 }
 
@@ -1379,7 +1384,7 @@ static void finish(struct surl *u) {
 		return;
 	}
 
-	if(u->location[0]) {
+	if(u->location[0] && strcmp(u->method, "HEAD")) {
 		resolvelocation(u);
 	} else {
 		set_atomic_int(&u->state, SURL_S_DONE);
@@ -1668,9 +1673,11 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 	} else {
 		u->addrtype = AF_INET;
 	}
+	if (!u->method[0]) {
+		strcpy(u->method, post == NULL ? "GET" : "POST");
+	}
 	if (post != NULL) {
 		u->post = post;
-		u->ispost = 1;
 	}
 	for (int i = 0; i < cookiecnt; i++) {
 		u->cookies[i].name = malloc(strlen(cookies[i].name) + 1);

@@ -139,7 +139,7 @@ struct surl {
 	int port;
 	char *path;
 
-	int ispost;
+	char method[16];
 	char *post;
 
 	// hlavicky	

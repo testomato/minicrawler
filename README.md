@@ -28,6 +28,7 @@ Where
    urloptions:
          -C STRING  parameter which replaces '%' in the custom header (max 256 bytes)
          -P STRING  HTTP POST parameters
+         -X STRING  custom request HTTP method, no validation performed (max 15 bytes)
 ```
 Options can be get by calling minicrawler without any options.
 
