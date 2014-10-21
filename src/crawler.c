@@ -1447,6 +1447,10 @@ static void readreply(struct surl *u) {
 	}
 	
 	if(t == SURL_IO_EOF || t == SURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
+		if (u->ssl != NULL) {
+			SSL_free(u->ssl);
+			u->ssl = NULL;
+		}
 		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
 		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 		finish(u); // u->state is changed here
