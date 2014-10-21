@@ -40,7 +40,7 @@ void initurls(int argc, char *argv[])
 		if(!strcmp(argv[t], "-g")) {settings.gzip=1;continue;}
 		if(!strncmp(argv[t], "-t", 2)) {settings.timeout=atoi(argv[t]+2);continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
-		if(!strncmp(argv[t], "-w", 2)) {strcpy(settings.customheader,argv[t+1]);t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
+		if(!strncmp(argv[t], "-w", 2)) {safe_cpy(settings.customheader, argv[t+1], I_SIZEOF(settings.customheader));t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
 		if(!strncmp(argv[t], "-A", 2)) {str_replace((char *)&settings.customagent, argv[t+1], "%version%", VERSION); t++; debugf("Custom agent: %s\n",settings.customagent); continue;}
 		if(!strncmp(argv[t], "-b", 2)) {
 			p = argv[t+1];
@@ -67,7 +67,7 @@ void initurls(int argc, char *argv[])
 			debugf("[%d] POST: %s\n",i,post);
 			continue;
 		}
-		if(!strncmp(argv[t], "-C", 2)) {strcpy(curl->customparam,argv[t+1]);t++;debugf("[%d] Custom param: %s\n",i,curl->customparam);continue;}
+		if(!strncmp(argv[t], "-C", 2)) {safe_cpy(curl->customparam, argv[t+1], I_SIZEOF(curl->customparam));t++;debugf("[%d] Custom param: %s\n",i,curl->customparam);continue;}
 		if(!strcmp(argv[t], "-X")) {safe_cpy(curl->method, argv[t+1], I_SIZEOF(curl->method)); t++; continue;}
 
 		init_url(curl, argv[t], i++, post, cookies, ccnt);
@@ -109,8 +109,8 @@ void printusage()
 	         "         -h         enable output of HTTP headers\n"
 	         "         -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)\n"
 	         "         -p         output also URLs that timed out and a reason of it\n"
-	         "         -A STRING  custom user agent (max 256 bytes)\n"
-	         "         -w STRING  write this custom header to all requests (max 4096 bytes)\n"
+	         "         -A STRING  custom user agent (max 255 bytes)\n"
+	         "         -w STRING  write this custom header to all requests (max 4095 bytes)\n"
 	         "         -c         convert content to text format (with UTF-8 encoding)\n"
 	         "         -8         convert from page encoding to UTF-8\n"
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)\n"
@@ -119,7 +119,7 @@ void printusage()
 	         "         -6         resolve host to IPv6 address only\n"
 	         "         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)\n"
 	         "\n   urloptions:\n"
-	         "         -C STRING  parameter which replaces '%%' in the custom header (max 256 bytes)\n"
+	         "         -C STRING  parameter which replaces '%%' in the custom header (max 255 bytes)\n"
 	         "         -P STRING  HTTP POST parameters\n"
 	         "         -X STRING  custom request HTTP method, no validation performed (max 15 bytes)\n"
 	         "\n", VERSION);
