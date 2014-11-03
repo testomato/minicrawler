@@ -1164,7 +1164,7 @@ static void output(struct surl *u) {
 	if (u->addr != NULL) {
 		char straddr[INET6_ADDRSTRLEN];
 		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
-		sprintf(header+strlen(header),"Downtime: %dms; %dms (ip=%s; %u)\n",u->lastread > u->downstart ? u->lastread - u->downstart : get_time_int() - u->downstart, u->downstart, straddr, get_time_slot(u->addr->ip));
+		sprintf(header+strlen(header), "Downtime: %dms; %dms (ip=%s; %u)\n", url_state == SURL_S_DONE ? u->lastread - u->downstart : get_time_int() - u->downstart, u->downstart, straddr, get_time_slot(u->addr->ip));
 	}
 	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
 
@@ -1203,6 +1203,10 @@ static void reset_url(struct surl *u) {
 	u->chunked = 0;
 	u->gzipped = 0;
 	u->ssl_options = 0;
+
+	u->downstart = 0;
+	u->lastread = 0;
+	u->handshaketime = 0;
 }
 
 /**
