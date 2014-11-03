@@ -85,10 +85,10 @@ static inline void *mempcpy(void *dest, const void *src, size_t n) {
 	return d;
 }
 
-static inline const char *strchrnul(const char *s, int c) {
+static inline char *strchrnul(const char *s, int c) {
 	for (;; ++s) {
 		if (0 == c || c == *s) {
-			return s;
+			return (char *) s;
 		}
 	}
 }
