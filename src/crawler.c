@@ -752,11 +752,13 @@ static int eatchunked(struct surl *u) {
 	return 0;
 }
 
-char *trim(char *str) {
+static void trim(char *str) {
 	int len = strlen(str);
-	while ((str[0] == ' ' || str[0] == '\t') && str[0] != '\0') str++;
+	char *p = str;
 	while ((str[len-1] == ' ' || str[len-1] == '\t') && len > 0) str[--len] = '\0';
-	return str;
+	while ((*p == ' ' || *p == '\t') && *p != '\0') p++;
+	if (str != p)
+		memmove(str, p, len+1 - (p-str));
 }
 
 /** 
@@ -799,8 +801,8 @@ static void setcookie(struct surl *u,char *str) {
 	*(char*)mempcpy(cookie.name, namevalue, p - namevalue) = 0;
 	*(char*)mempcpy(cookie.value, p + 1, strlen(namevalue) - (p-namevalue) - 1) = 0;
 
-	cookie.name = trim(cookie.name);
-	cookie.value = trim(cookie.value);
+	trim(cookie.name);
+	trim(cookie.value);
 
 	if (strlen(cookie.name) == 0) {
 		debugf("[%d] Cookie string '%s' has empty name\n", u->index, namevalue);
@@ -812,8 +814,8 @@ static void setcookie(struct surl *u,char *str) {
 	struct nv *attr;
 	int att_len = 0;
 	p = attributestr;
-	while (p[0] != '\0') {
-		if (att_len > 10) {
+	while (*p) {
+		if (att_len > 9) {
 			debugf("[%d] Cookie string '%s%s' has more 10 attributes (not enough memory)... skipping the rest\n", u->index, namevalue, attributestr);
 			break;
 		}
@@ -831,8 +833,8 @@ static void setcookie(struct surl *u,char *str) {
 			*(char*)mempcpy(attr->name, p+1, q-(p+1)) = 0;
 			attr->value[0] = '\0';
 		}
-		attr->name = trim(attr->name);
-		attr->value = trim(attr->value);
+		trim(attr->name);
+		trim(attr->value);
 		
 		p = q;
 	}
@@ -851,7 +853,7 @@ static void setcookie(struct surl *u,char *str) {
 
 			// ignore leading '.'
 			if (attr->value[0] == '.') {
-				attr->value++;
+				memmove(attr->value, attr->value + 1, strlen(attr->value));
 			}
 
 			// TODO: ignore public suffixes, see 5.3.5
