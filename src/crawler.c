@@ -1348,7 +1348,7 @@ static void resolvelocation(struct surl *u) {
 		// muzes se pripojit na tu puvodni IP
 		free_addr(u->prev_addr);
 		u->prev_addr = (struct addr*)malloc(sizeof(struct addr));
-		memcpy(u->prev_addr, u->addr, sizeof(u->addr));
+		memcpy(u->prev_addr, u->addr, sizeof(struct addr));
 		u->prev_addr->next = NULL;
 		set_atomic_int(&u->state, SURL_S_GOTIP);
 	} else {
