@@ -2,3 +2,6 @@ minicrawler
 .idea
 o/
 opt/
+
+.odir.stamp
+*.tar.*

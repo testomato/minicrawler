@@ -76,3 +76,20 @@ Then run
 ```
 make
 ```
+
+## OS X
+
+Install follow dependencies:
+
+ * c-ares
+ * zlib
+ * uriparser
+ * openssl
+
+With [homebrew](http://brew.sh/) `brew install c-ares openssl zlib uriparser openssl` or run `make -f Makefile.mac install-deps`. 
+
+Then
+```
+make -f Makefile.mac
+```
+      
