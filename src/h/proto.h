@@ -87,7 +87,7 @@ static inline void *mempcpy(void *dest, const void *src, size_t n) {
 
 static inline char *strchrnul(const char *s, int c) {
 	for (;; ++s) {
-		if (0 == c || c == *s) {
+		if (0 == *s || c == *s) {
 			return (char *) s;
 		}
 	}
