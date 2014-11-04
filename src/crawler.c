@@ -755,8 +755,8 @@ static int eatchunked(struct surl *u) {
 static void trim(char *str) {
 	int len = strlen(str);
 	char *p = str;
-	while ((str[len-1] == ' ' || str[len-1] == '\t') && len > 0) str[--len] = '\0';
-	while ((*p == ' ' || *p == '\t') && *p != '\0') p++;
+	while (len > 0 && (str[len-1] == ' ' || str[len-1] == '\t')) str[--len] = '\0';
+	while (*p != '\0' && (*p == ' ' || *p == '\t')) p++;
 	if (str != p)
 		memmove(str, p, len+1 - (p-str));
 }
