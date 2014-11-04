@@ -77,20 +77,45 @@ static void sec_handshake(struct surl *u) {
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
 		return;
     }
-    if (err == SSL_ERROR_ZERO_RETURN) {
-		debugf("[%d] Connection closed (in handshake)", u->index);
-		sprintf(u->error_msg, "SSL connection closed during handshake");
-		set_atomic_int(&u->state, SURL_S_ERROR);
-		return;
-    }
+	switch (err) {
+		case SSL_ERROR_ZERO_RETURN:
+			debugf("[%d] Connection closed (in handshake)", u->index);
+			sprintf(u->error_msg, "SSL connection closed during handshake");
+			set_atomic_int(&u->state, SURL_S_ERROR);
+			return;
+		case SSL_ERROR_WANT_CONNECT:
+		case SSL_ERROR_WANT_ACCEPT:
+			debugf("[%d] SSL_ERROR_WANT_CONNECT\n", u->index);
+			sprintf(u->error_msg, "Unexpected SSL error during handshake");
+			set_atomic_int(&u->state, SURL_S_ERROR);
+			return;
+		case SSL_ERROR_WANT_X509_LOOKUP:
+			debugf("[%d] SSL_ERROR_WANT_X509_LOOKUP\n", u->index);
+			sprintf(u->error_msg, "Unexpected SSL error during handshake");
+			set_atomic_int(&u->state, SURL_S_ERROR);
+			return;
+		case SSL_ERROR_SYSCALL:
+			debugf("[%d] SSL_ERROR_SYSCALL (%d)\n", u->index, t);
+			sprintf(u->error_msg, "Unexpected SSL error during handshake");
+			set_atomic_int(&u->state, SURL_S_ERROR);
+			return;
+	}
 
-	debugf("[%d] Unexpected SSL error (in handshake): %d, %d\n", u->index, err, t);
-	ERR_print_errors_fp(stderr);
+	// else SSL_ERROR_SSL = protocol error
+	debugf("[%d] SSL protocol error (in handshake): \n", u->index);
+	unsigned long e, last_e = 0;
+	while (e = ERR_get_error()) {
+		debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
+		last_e = e;
+	}
 
 	const long opts = SSL_get_options(u->ssl);
 
 	if (opts & SSL_OP_NO_SSLv3) {
-		sprintf(u->error_msg, "Unexpected SSL error during handshake");
+		sprintf(u->error_msg, "SSL protocol error during handshake");
+		if (last_e) {
+			sprintf(u->error_msg + strlen(u->error_msg), " (%s)", ERR_reason_error_string(last_e));
+		}
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return;
 	}
