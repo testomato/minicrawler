@@ -1453,7 +1453,7 @@ static void readreply(struct surl *u) {
 	if (t == SURL_IO_ERROR) {
 		debugf("read failed: %m");
 	}
-	if(t > 0) {
+	if(t >= 0) {
 		u->bufp += t;
 		u->lastread = get_time_int();
 	}
