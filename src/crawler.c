@@ -55,6 +55,32 @@ static int check_io(const int state, const int rw) {
 	}
 }
 
+/**
+ * Sets lower TSL/SSL protocol
+ */
+static int lower_ssl_protocol(struct surl *u) {
+	const long opts = SSL_get_options(u->ssl);
+
+	if (opts & SSL_OP_NO_SSLv3) {
+		return -1;
+	}
+
+	if (opts & SSL_OP_NO_TLSv1) {
+		u->ssl_options |= SSL_OP_NO_SSLv3;
+		debugf("[%d] Switch to SSLv2\n", u->index);
+	} else if (opts & SSL_OP_NO_TLSv1_1) {
+		u->ssl_options |= SSL_OP_NO_TLSv1;
+		debugf("[%d] Switch to SSLv3\n", u->index);
+	} else if (opts & SSL_OP_NO_TLSv1_2) {
+		u->ssl_options |= SSL_OP_NO_TLSv1_1;
+		debugf("[%d] Switch to TLSv1.0\n", u->index);
+	} else {
+		u->ssl_options |= SSL_OP_NO_TLSv1_2;
+		debugf("[%d] Switch to TLSv1.1\n", u->index);
+	}
+	return 0;
+}
+
 /** Impement handshake over SSL non-blocking socket.
 We may switch between need read/need write for several times.
 SSL is blackbox this time for us.
@@ -111,9 +137,7 @@ static void sec_handshake(struct surl *u) {
 		last_e = e;
 	}
 
-	const long opts = SSL_get_options(u->ssl);
-
-	if (opts & SSL_OP_NO_SSLv3) {
+	if (lower_ssl_protocol(u) < 0) {
 		sprintf(u->error_msg, "SSL protocol error during handshake");
 		if (last_e) {
 			sprintf(u->error_msg + strlen(u->error_msg), " (%s)", ERR_reason_error_string(last_e));
@@ -122,21 +146,7 @@ static void sec_handshake(struct surl *u) {
 		return;
 	}
 	else {
-		// zkusíme ještě jednou s nižším protokolem
-		if (opts & SSL_OP_NO_TLSv1) {
-			u->ssl_options |= SSL_OP_NO_SSLv3;
-			debugf("[%d] Switch to SSLv2\n", u->index);
-		} else if (opts & SSL_OP_NO_TLSv1_1) {
-			u->ssl_options |= SSL_OP_NO_TLSv1;
-			debugf("[%d] Switch to SSLv3\n", u->index);
-		} else if (opts & SSL_OP_NO_TLSv1_2) {
-			u->ssl_options |= SSL_OP_NO_TLSv1_1;
-			debugf("[%d] Switch to TLSv1.0\n", u->index);
-		} else {
-			u->ssl_options |= SSL_OP_NO_TLSv1_2;
-			debugf("[%d] Switch to TLSv1.1\n", u->index);
-		}
-
+		// zkusíme ještě jednou
 		SSL_free(u->ssl);
 		close(u->sockfd);
 		set_atomic_int(&u->state, SURL_S_GOTIP);
@@ -1527,7 +1537,7 @@ static void selectall(void) {
 	} while ((curl = curl->next) != NULL);
 	switch (select(FD_SETSIZE, &set, &writeset, NULL, &timeout)) {
 		case -1:
-			fprintf(stderr, "select failed: %m");
+			fprintf(stderr, "select failed: %m\n");
 			return;
 		case 0:
 			return; // nothing
@@ -1559,9 +1569,13 @@ static void goone(struct surl *u) {
 			timeout = (settings.timeout > 6 ? settings.timeout / 3 : 2) * 1000;
 			if (get_time_int() - u->handshaketime > timeout) {
 				// we retry handshake with another protocol
-				debugf("[%d] SSL handshake timeout (%d ms), closing connection\n", u->index, timeout);
-				close(u->sockfd);
-				u->f.handshake(u);
+				if (lower_ssl_protocol(u) == 0) {
+					debugf("[%d] SSL handshake timeout (%d ms), closing connection\n", u->index, timeout);
+
+					SSL_free(u->ssl);
+					close(u->sockfd);
+					set_atomic_int(&u->state, SURL_S_GOTIP);
+				}
 			}
 			break;
 		}
