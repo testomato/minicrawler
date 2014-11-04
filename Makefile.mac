@@ -15,15 +15,13 @@ install-deps:
 	rm -fr ./opt && mkdir -p ./opt
 
 	wget http://c-ares.haxx.se/download/c-ares-1.10.0.tar.gz -P ./opt
-	cd opt && tar xvf ./c-ares-1.10.0.tar.gz && cd c-ares-1.10.0 && ./configure prefix=$(HOME)/.minicrawler && make -j 8 && make install
-
+	wget http://downloads.sourceforge.net/project/uriparser/Sources/0.8.1/uriparser-0.8.1.tar.bz2  -P ./opt
 	wget http://ftp.gnu.org/gnu/libiconv/libiconv-1.14.tar.gz -P ./opt
-	cd opt && tar xvf ./libiconv-1.14.tar.gz && cd libiconv-1.14 && ./configure prefix=$(HOME)/.minicrawler && make -j 8 && make install
-
-	wget http://downloads.sourceforge.net/project/uriparser/Sources/0.8.1/uriparser-0.8.1.tar.bz2
-	cd opt && tar xvf ./uriparser-0.8.1.tar.bz2 && cd uriparser-0.8.1.tar && ./configure prefix=$(HOME)/.minicrawler && make -j 8 && make install
-
 	wget https://www.openssl.org/source/openssl-1.0.1j.tar.gz -P ./opt
+
+	cd opt && tar xvf ./c-ares-1.10.0.tar.gz && cd c-ares-1.10.0 && ./configure prefix=$(HOME)/.minicrawler && make -j 8 && make install
+	cd opt && tar xvf ./libiconv-1.14.tar.gz && cd libiconv-1.14 && ./configure prefix=$(HOME)/.minicrawler && make -j 8 && make install
+	cd opt && tar xvf ./uriparser-0.8.1.tar.bz2 && cd uriparser-0.8.1 && ./configure prefix=$(HOME)/.minicrawler && make -j 8 && make install
 	cd opt && tar xvf ./openssl-1.0.1j.tar.gz && cd openssl-1.0.1j && ./Configure darwin64-x86_64-cc --prefix=$(HOME)/.minicrawler && make && make install
 
 clean:
