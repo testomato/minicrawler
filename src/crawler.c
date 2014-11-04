@@ -96,9 +96,11 @@ static void sec_handshake(struct surl *u) {
 			return;
 		case SSL_ERROR_SYSCALL:
 			debugf("[%d] SSL_ERROR_SYSCALL (%d)\n", u->index, t);
-			sprintf(u->error_msg, "Unexpected SSL error during handshake");
-			set_atomic_int(&u->state, SURL_S_ERROR);
-			return;
+			if (t < 0) { // t == 0: unexpected EOF
+				sprintf(u->error_msg, "Unexpected SSL error during handshake");
+				set_atomic_int(&u->state, SURL_S_ERROR);
+				return;
+			}
 	}
 
 	// else SSL_ERROR_SSL = protocol error
