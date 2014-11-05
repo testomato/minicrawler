@@ -1181,10 +1181,10 @@ static void output(struct surl *u) {
 	if(settings.convert) {
 		u->bufp=converthtml2text(u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
-	sprintf(header,"URL: %s\n",u->rawurl);
-	if(u->redirectedto != NULL) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
+	sprintf(header,"URL: %s",u->rawurl);
+	if(u->redirectedto != NULL) sprintf(header+strlen(header),"\nRedirected-To: %s",u->redirectedto);
 	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
-		sprintf(header+strlen(header), "Redirect-info: %s %d; ", rinfo->url, rinfo->status);
+		sprintf(header+strlen(header), "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
 		format_timing(header+strlen(header), &rinfo->timing);
 	}
 	sprintf(header+strlen(header),"\nStatus: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
