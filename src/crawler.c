@@ -1536,6 +1536,8 @@ static void selectall(void) {
 	
 	FD_ZERO (&set);
 	FD_ZERO (&writeset);
+
+	int wantio = 0;
 	
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 20000;
@@ -1548,6 +1550,7 @@ static void selectall(void) {
 		if (!want_io(state, rw)) {
 			continue;
 		}
+		wantio = 1;
 		if(rw & 1<<SURL_RW_WANT_READ) {
 			FD_SET(curl->sockfd, &set);
 		}
@@ -1556,6 +1559,10 @@ static void selectall(void) {
 			FD_SET(curl->sockfd, &writeset);
 		}
 	} while ((curl = curl->next) != NULL);
+	if (!wantio) {
+		// nothing can happen
+		return;
+	}
 	switch (select(FD_SETSIZE, &set, &writeset, NULL, &timeout)) {
 		case -1:
 			fprintf(stderr, "select failed: %m\n");
@@ -1821,7 +1828,6 @@ void go(void) {
 			if(settings.impatient) {
 				done = exitprematurely();
 			}
-			usleep(20000);
 		}
 	} while(!done);
 	
