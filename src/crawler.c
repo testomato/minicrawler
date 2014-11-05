@@ -1247,7 +1247,7 @@ static void output(struct surl *u) {
 	// downtime
 	int downtime;
 	if (url_state == SURL_S_DONE) {
-		assert(u->timing.lastread > u->timing.connectionstart);
+		assert(u->timing.lastread >= u->timing.connectionstart);
 		downtime = u->timing.lastread - u->downstart;
 	} else if (u->downstart) {
 		downtime = get_time_int() - u->downstart;
