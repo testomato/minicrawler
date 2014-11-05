@@ -429,6 +429,10 @@ static void checkdns(struct surl *u) {
 	int t;
 	fd_set readfds;
 	fd_set writefds;
+	struct timeval timeout, *tp;
+
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 5000;
 
 	FD_ZERO(&readfds);
 	FD_ZERO(&writefds);
@@ -437,6 +441,8 @@ static void checkdns(struct surl *u) {
 	if(!t) {
 		return;
 	}
+	tp = ares_timeout(u->aresch, &timeout, &timeout);
+	select(t, &readfds, &writefds, NULL, tp);
 
 	ares_process(u->aresch, &readfds, &writefds); // pri uspechu zavola callback sama
 }
