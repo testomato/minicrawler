@@ -111,6 +111,7 @@ SSL_CTX *mossad(void) {
 		berr_exit("Can't read key from memory");
 	}
 	SSL_CTX_use_RSAPrivateKey(ctx, rsa);
+	SSL_CTX_set_cipher_list(ctx, "HIGH:MEDIUM:!COMPLEMENTOFDEFAULT:@STRENGTH");
 	return ctx;
 }
 
