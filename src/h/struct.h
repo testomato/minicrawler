@@ -22,9 +22,21 @@ struct cookie {
 	int secure, host_only, expire;
 };
 
+struct timing {
+	int dnsstart;
+	int connectionstart;
+	int sslstart;
+	int handshakestart;
+	int requeststart;
+	int requestend;
+	int firstbyte;
+	int lastread;
+};
+
 struct redirect_info {
 	char *url;
 	int status;
+	struct timing timing;
 	struct redirect_info *next;
 };
 
@@ -163,10 +175,8 @@ struct surl {
  
 	int state;
 	int rw;
-	int lastread;		// cas posledniho uspesneho cteni
+	struct timing timing;
 	int downstart;		// time downloading start
-	int lastdownstart;  // time of last downloading start
-	int handshaketime;
 
 	// ares
 	struct ares_channeldata *aresch;

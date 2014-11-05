@@ -1104,6 +1104,42 @@ ssize_t plain_write(const struct surl *u, const char *buf, const size_t size) {
 	return SURL_IO_ERROR;
 }
 
+/**
+ * Formats timing data for output
+ */
+static void format_timing(char *dest, struct timing *timing) {
+	int n;
+	const int now = get_time_int();
+	if (timing->dnsstart) {
+		n = sprintf(dest, "DNS Lookup=%d ms", (timing->connectionstart ? timing->connectionstart : now) - timing->dnsstart);
+		if (n > 0) dest += n;
+	}
+	if (timing->connectionstart) {
+		n = sprintf(dest, "; Initial connection=%d ms", (timing->requeststart ? timing->requeststart : now) - timing->connectionstart);
+		if (n > 0) dest += n;
+	}
+	if (timing->sslstart) {
+		n = sprintf(dest, "; SSL=%d ms", (timing->requeststart ? timing->requeststart : now) - timing->sslstart);
+		if (n > 0) dest += n;
+	}
+	if (timing->requeststart) {
+		n = sprintf(dest, "; Request=%d ms", (timing->requestend ? timing->requestend : now) - timing->requeststart);
+		if (n > 0) dest += n;
+	}
+	if (timing->requestend) {
+		n = sprintf(dest, "; Waiting=%d ms", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
+		if (n > 0) dest += n;
+	}
+	if (timing->firstbyte) {
+		n = sprintf(dest, "; Content download=%d ms", (timing->lastread ? timing->lastread : now) - timing->firstbyte);
+		if (n > 0) dest += n;
+	}
+	if (timing->connectionstart) {
+		n = sprintf(dest, "; Total=%d ms", (timing->lastread ? timing->lastread : now) - timing->connectionstart);
+		if (n > 0) dest += n;
+	}
+}
+
 
 /** vypise vystup na standardni vystup
  */
@@ -1147,9 +1183,10 @@ static void output(struct surl *u) {
 	sprintf(header,"URL: %s\n",u->rawurl);
 	if(u->redirectedto != NULL) sprintf(header+strlen(header),"Redirected-To: %s\n",u->redirectedto);
 	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
-		sprintf(header+strlen(header), "Redirect-info: %s %d\n", rinfo->url, rinfo->status);
+		sprintf(header+strlen(header), "Redirect-info: %s %d; ", rinfo->url, rinfo->status);
+		format_timing(header+strlen(header), &rinfo->timing);
 	}
-	sprintf(header+strlen(header),"Status: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
+	sprintf(header+strlen(header),"\nStatus: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
 
 	const int url_state = get_atomic_int(&u->state);
 	if (url_state <= SURL_S_RECVREPLY) {
@@ -1162,7 +1199,7 @@ static void output(struct surl *u) {
 			case SURL_S_INDNS:
 				strcpy(timeouterr, "Timeout while resolving host"); break;
 			case SURL_S_GOTIP:
-				if (u->downstart) {
+				if (u->timing.connectionstart) {
 					strcpy(timeouterr, "Connection timed out");
 				} else {
 					strcpy(timeouterr, "Waiting for download slot");
@@ -1207,26 +1244,24 @@ static void output(struct surl *u) {
 	}
 
 	// downtime
-	int downtime, lastdowntime;
+	int downtime;
 	if (url_state == SURL_S_DONE) {
-		assert(u->lastread > u->lastdownstart);
-		downtime = u->lastread - u->downstart;
-		lastdowntime = u->lastread - u->lastdownstart;
-	} else if (u->lastdownstart) {
-		downtime = lastdowntime = get_time_int();
-		downtime -= u->downstart;
-		lastdowntime -= u->lastdownstart;
+		assert(u->timing.lastread > u->timing.connectionstart);
+		downtime = u->timing.lastread - u->downstart;
+	} else if (u->downstart) {
+		downtime = get_time_int() - u->downstart;
 	} else {
-		downtime = lastdowntime = get_time_int();
-		lastdowntime -= u->lastread;
+		downtime = get_time_int();
 	}
-	sprintf(header+strlen(header), "Downtime: %dms; %dms; %dms", downtime, lastdowntime, u->downstart);
+	sprintf(header+strlen(header), "Downtime: %dms; %dms", downtime, u->downstart);
 	if (u->addr != NULL) {
 		char straddr[INET6_ADDRSTRLEN];
 		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
 		sprintf(header+strlen(header), " (ip=%s; %u)", straddr, get_time_slot(u->addr->ip));
 	}
-	sprintf(header+strlen(header),"\nIndex: %d\n\n",u->index);
+	sprintf(header+strlen(header), "\nTiming: ");
+	format_timing(header+strlen(header), &u->timing);
+	sprintf(header+strlen(header), "\nIndex: %d\n\n",u->index);
 
 	write_all(STDOUT_FILENO, header, strlen(header));
 	if(settings.writehead) {
@@ -1264,9 +1299,7 @@ static void reset_url(struct surl *u) {
 	u->gzipped = 0;
 	u->ssl_options = 0;
 
-	u->lastdownstart = 0;
-	u->lastread = 0;
-	u->handshaketime = 0;
+	memset(&u->timing, 0, sizeof(u->timing));
 }
 
 /**
@@ -1428,6 +1461,7 @@ static void resolvelocation(struct surl *u) {
 	rinfo->url = malloc(strlen(u->location)+1);
 	strcpy(rinfo->url, u->location);
 	rinfo->status = u->status;
+	memcpy(&rinfo->timing, &u->timing, sizeof(u->timing));
 	rinfo->next = u->redirect_info;
 	u->redirect_info = rinfo;
 
@@ -1486,9 +1520,12 @@ static void readreply(struct surl *u) {
 	if (t == SURL_IO_ERROR) {
 		debugf("read failed: %m");
 	}
-	if(t >= 0) {
+	if (t >= 0) {
 		u->bufp += t;
-		u->lastread = get_time_int();
+		u->timing.lastread = get_time_int();
+	}
+	if (t > 0 && !u->timing.firstbyte) {
+		u->timing.firstbyte = u->timing.lastread;
 	}
 
 	debugf("}1 bufp = %d; buf = [%.*s]\n", u->bufp, u->bufp, u->buf);
@@ -1595,7 +1632,7 @@ static void goone(struct surl *u) {
 		switch(state) {
 		case SURL_S_HANDSHAKE:
 			timeout = (settings.timeout > 6 ? settings.timeout / 3 : 2) * 1000;
-			if (get_time_int() - u->handshaketime > timeout) {
+			if (get_time_int() - u->timing.handshakestart > timeout) {
 				// we retry handshake with another protocol
 				if (lower_ssl_protocol(u) == 0) {
 					debugf("[%d] SSL handshake timeout (%d ms), closing connection\n", u->index, timeout);
@@ -1612,7 +1649,7 @@ static void goone(struct surl *u) {
 	}
 	check_io(state, rw); // Checks that when we need some io, then the socket is in readable/writeable state
 
-	const int tim = get_time_int();
+	const int time = get_time_int();
 
 	switch(state) {  
 	case SURL_S_JUSTBORN:
@@ -1620,6 +1657,7 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_PARSEDURL:
+		if (!u->timing.dnsstart) u->timing.dnsstart = time;
 		u->f.launch_dns(u);
 		break;
   
@@ -1628,8 +1666,9 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_GOTIP:
-		if ( (u->lastdownstart = test_free_channel(u->addr->ip, settings.delay, u->prev_addr && !strcmp(u->addr->ip, u->prev_addr->ip))) ) {
-			if (!u->downstart) u->downstart = u->lastdownstart;
+		if (test_free_channel(u->addr->ip, settings.delay, u->prev_addr && !strcmp(u->addr->ip, u->prev_addr->ip))) {
+			if (!u->timing.connectionstart) u->timing.connectionstart = time;
+			if (!u->downstart) u->downstart = time;
 			u->f.open_socket(u);
 		}
 		break;
@@ -1639,7 +1678,8 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_HANDSHAKE:
-		u->handshaketime = get_time_int();
+		u->timing.handshakestart = time;
+		if (!u->timing.sslstart) u->timing.sslstart = time;
 		u->f.handshake(u);
 		break;
 
@@ -1648,10 +1688,12 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_SENDREQUEST:
+		if (!u->timing.requeststart) u->timing.requeststart = time;
 		u->f.send_request(u);
 		break;
 
 	case SURL_S_RECVREPLY:
+		if (!u->timing.requestend) u->timing.requestend = time;
 		u->f.recv_reply(u);
 		break;
   
@@ -1671,7 +1713,7 @@ static void goone(struct surl *u) {
 	}
 
 	if (settings.debug) {	
-		const int duration = get_time_int() - tim;
+		const int duration = get_time_int() - time;
 		if(duration > 200) {
 			debugf("[%d] State %d (->%d) took too long (%d ms)\n", u->index, state, get_atomic_int(&u->state), duration);
 		}
@@ -1696,8 +1738,8 @@ static int exitprematurely(void) {
 		if(url_state<SURL_S_DONE) {
 			notdone++;
 		}
-		if(curl->lastread>lastread) {
-			lastread=curl->lastread;
+		if(curl->timing.lastread>lastread) {
+			lastread=curl->timing.lastread;
 		}
 		cnt++;
 	} while ((curl = curl->next) != NULL);

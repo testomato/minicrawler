@@ -53,7 +53,8 @@ Minicrawler puts its own headers into an output with the following meaning
  * **Error-msg**: Error message in case of error (negative Status)
  * **Content-type**: Correct content type of outputed content
  * **Cookies**: Number of cookies followed by that number of lines of parsed cookies in Netscape/Mozilla file format
- * **Downtime**: Length of an interval between time of initiating connection and time of the last received byte (for all redirects); length of the same interval of the last request; time of the start of the first connection
+ * **Downtime**: Length of an interval between time of the first connection and time of the last received byte; time of the start of the first connection
+ * **Timing**: Timing of request (DNS lookup, Initial connection, SSL, Request, Waiting, Content download, Total)
  * **Index**: Index of URL from command line
 
 ## Dependencies
