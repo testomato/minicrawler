@@ -24,6 +24,7 @@ struct cookie {
 
 struct timing {
 	int dnsstart;
+	int dnsend;
 	int connectionstart;
 	int sslstart;
 	int handshakestart;

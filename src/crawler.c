@@ -272,6 +272,7 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	last_addr->next = NULL;
 	debugf("\n");
 
+	u->timing.dnsend = get_time_int();
 	set_atomic_int(&u->state, SURL_S_GOTIP);
 }
 
@@ -1111,7 +1112,7 @@ static void format_timing(char *dest, struct timing *timing) {
 	int n;
 	const int now = get_time_int();
 	if (timing->dnsstart) {
-		n = sprintf(dest, "DNS Lookup=%d ms", (timing->connectionstart ? timing->connectionstart : now) - timing->dnsstart);
+		n = sprintf(dest, "DNS Lookup=%d ms", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
 		if (n > 0) dest += n;
 	}
 	if (timing->connectionstart) {
