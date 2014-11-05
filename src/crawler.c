@@ -1197,12 +1197,28 @@ static void output(struct surl *u) {
 #		endif
 		sprintf(header+strlen(header), "Conversion error: %s\n", err);
 	}
+
+	// downtime
+	int downtime, lastdowntime;
+	if (url_state == SURL_S_DONE) {
+		assert(u->lastread > u->lastdownstart);
+		downtime = u->lastread - u->downstart;
+		lastdowntime = u->lastread - u->lastdownstart;
+	} else if (u->lastdownstart) {
+		downtime = lastdowntime = get_time_int();
+		downtime -= u->downstart;
+		lastdowntime -= u->lastdownstart;
+	} else {
+		downtime = lastdowntime = get_time_int();
+		lastdowntime -= u->lastread;
+	}
+	sprintf(header+strlen(header), "Downtime: %dms; %dms; %dms", downtime, lastdowntime, u->downstart);
 	if (u->addr != NULL) {
 		char straddr[INET6_ADDRSTRLEN];
 		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
-		sprintf(header+strlen(header), "Downtime: %dms; %dms (ip=%s; %u)\n", url_state == SURL_S_DONE ? u->lastread - u->downstart : get_time_int() - u->downstart, u->downstart, straddr, get_time_slot(u->addr->ip));
+		sprintf(header+strlen(header), " (ip=%s; %u)", straddr, get_time_slot(u->addr->ip));
 	}
-	sprintf(header+strlen(header),"Index: %d\n\n",u->index);
+	sprintf(header+strlen(header),"\nIndex: %d\n\n",u->index);
 
 	write_all(STDOUT_FILENO, header, strlen(header));
 	if(settings.writehead) {
@@ -1240,7 +1256,7 @@ static void reset_url(struct surl *u) {
 	u->gzipped = 0;
 	u->ssl_options = 0;
 
-	u->downstart = 0;
+	u->lastdownstart = 0;
 	u->lastread = 0;
 	u->handshaketime = 0;
 }
@@ -1597,7 +1613,8 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_GOTIP:
-		if ( (u->downstart = test_free_channel(u->addr->ip, settings.delay, u->addr->ip == u->prev_addr->ip)) ) {
+		if ( (u->lastdownstart = test_free_channel(u->addr->ip, settings.delay, u->addr->ip == u->prev_addr->ip)) ) {
+			if (!u->downstart) u->downstart = u->lastdownstart;
 			u->f.open_socket(u);
 		}
 		break;

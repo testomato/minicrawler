@@ -53,7 +53,7 @@ Minicrawler puts its own headers into an output with the following meaning
  * **Error-msg**: Error message in case of error (negative Status)
  * **Content-type**: Correct content type of outputed content
  * **Cookies**: Number of cookies followed by that number of lines of parsed cookies in Netscape/Mozilla file format
- * **Downtime**: Interval between time of initiating connection and time of the last received byte
+ * **Downtime**: Length of an interval between time of initiating connection and time of the last received byte (for all redirects); length of the same interval of the last request; time of the start of the first connection
  * **Index**: Index of URL from command line
 
 ## Dependencies
@@ -92,4 +92,3 @@ Then
 ```
 make -f Makefile.mac
 ```
-      

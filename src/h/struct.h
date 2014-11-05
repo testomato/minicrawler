@@ -165,6 +165,7 @@ struct surl {
 	int rw;
 	int lastread;		// cas posledniho uspesneho cteni
 	int downstart;		// time downloading start
+	int lastdownstart;  // time of last downloading start
 	int handshaketime;
 
 	// ares
