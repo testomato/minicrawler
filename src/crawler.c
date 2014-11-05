@@ -252,9 +252,9 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	do {
 		struct addr *addr;
 		addr = (struct addr*)malloc(sizeof(struct addr));
+		memset(addr, 0, sizeof(struct addr));
 		addr->type = hostent->h_addrtype;
 		addr->length = hostent->h_length;
-		memset(addr->ip, 0, 16);
 		memcpy(addr->ip, *p_addr, hostent->h_length);
 		if (u->addr == NULL) {
 			u->addr = addr;
@@ -366,6 +366,7 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
 		u->addr = (struct addr*)malloc(sizeof(struct addr));
+		memset(u->addr, 0, sizeof(struct addr));
 		memcpy(u->addr->ip, u->uri->hostData.ip4->data, 4);
 		u->addr->type = AF_INET;
 		u->addr->length = 4;
@@ -376,6 +377,7 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
 		u->addr = (struct addr*)malloc(sizeof(struct addr));
+		memset(u->addr, 0, sizeof(struct addr));
 		memcpy(u->addr->ip, u->uri->hostData.ip6->data, 16);
 		u->addr->type = AF_INET6;
 		u->addr->length = 16;
@@ -1613,7 +1615,7 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_GOTIP:
-		if ( (u->lastdownstart = test_free_channel(u->addr->ip, settings.delay, u->addr->ip == u->prev_addr->ip)) ) {
+		if ( (u->lastdownstart = test_free_channel(u->addr->ip, settings.delay, u->prev_addr && !strcmp(u->addr->ip, u->prev_addr->ip))) ) {
 			if (!u->downstart) u->downstart = u->lastdownstart;
 			u->f.open_socket(u);
 		}
