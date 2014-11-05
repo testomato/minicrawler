@@ -61,14 +61,11 @@ static int check_io(const int state, const int rw) {
 static int lower_ssl_protocol(struct surl *u) {
 	const long opts = SSL_get_options(u->ssl);
 
-	if (opts & SSL_OP_NO_SSLv3) {
+	if (opts & SSL_OP_NO_TLSv1) {
 		return -1;
 	}
 
-	if (opts & SSL_OP_NO_TLSv1) {
-		u->ssl_options |= SSL_OP_NO_SSLv3;
-		debugf("[%d] Switch to SSLv2\n", u->index);
-	} else if (opts & SSL_OP_NO_TLSv1_1) {
+	if (opts & SSL_OP_NO_TLSv1_1) {
 		u->ssl_options |= SSL_OP_NO_TLSv1;
 		debugf("[%d] Switch to SSLv3\n", u->index);
 	} else if (opts & SSL_OP_NO_TLSv1_2) {
