@@ -1,9 +1,7 @@
 #include "h/struct.h"
 #include "h/proto.h"
 
-#ifdef __APPLE__
-#	include<sys/time.h>
-#endif 
+#include <time.h>
 #include <stdio.h>
 #include <limits.h>
 #include <assert.h>
@@ -24,21 +22,18 @@ static long long get_uptime(void)
 }
 #else
 /**
- * Time that is provided with gettimeofday(.) can be decreasing.
- *   Let's have a look at /proc/... .
+ * monotonic time since some unspecified starting point
  */
 static long long get_uptime(void)
 {
-	static const char file_name[] = "/proc/uptime";
-	double duptime;
-	FILE *f = fopen(file_name, "r");
-	if (!f)
-		return 0ULL;
-	const int ret = fscanf(f, "%lf", &duptime);
-        fclose(f);
-        if (ret != 1)
-		return 0ULL;
-	return (long long)(duptime * 1000.0);
+	struct timespec tm;
+	long long uptime;
+	if (clock_gettime(CLOCK_MONOTONIC, &tm) == -1) {
+		return 0LL;
+	}
+	uptime = tm.tv_sec * 1000LL + tm.tv_nsec/1000000;
+	if (tm.tv_nsec % 1000000 >= 500000) uptime++; // rounding
+	return uptime;
 }
 #endif
 
