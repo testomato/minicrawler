@@ -1112,31 +1112,31 @@ static void format_timing(char *dest, struct timing *timing) {
 	int n;
 	const int now = get_time_int();
 	if (timing->dnsstart) {
-		n = sprintf(dest, "DNS Lookup=%d ms", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
+		n = sprintf(dest, "DNS Lookup=%d ms; ", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
 		if (n > 0) dest += n;
 	}
 	if (timing->connectionstart) {
-		n = sprintf(dest, "; Initial connection=%d ms", (timing->requeststart ? timing->requeststart : now) - timing->connectionstart);
+		n = sprintf(dest, "Initial connection=%d ms; ", (timing->requeststart ? timing->requeststart : now) - timing->connectionstart);
 		if (n > 0) dest += n;
 	}
 	if (timing->sslstart) {
-		n = sprintf(dest, "; SSL=%d ms", (timing->requeststart ? timing->requeststart : now) - timing->sslstart);
+		n = sprintf(dest, "SSL=%d ms; ", (timing->requeststart ? timing->requeststart : now) - timing->sslstart);
 		if (n > 0) dest += n;
 	}
 	if (timing->requeststart) {
-		n = sprintf(dest, "; Request=%d ms", (timing->requestend ? timing->requestend : now) - timing->requeststart);
+		n = sprintf(dest, "Request=%d ms; ", (timing->requestend ? timing->requestend : now) - timing->requeststart);
 		if (n > 0) dest += n;
 	}
 	if (timing->requestend) {
-		n = sprintf(dest, "; Waiting=%d ms", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
+		n = sprintf(dest, "Waiting=%d ms; ", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
 		if (n > 0) dest += n;
 	}
 	if (timing->firstbyte) {
-		n = sprintf(dest, "; Content download=%d ms", (timing->lastread ? timing->lastread : now) - timing->firstbyte);
+		n = sprintf(dest, "Content download=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->firstbyte);
 		if (n > 0) dest += n;
 	}
 	if (timing->connectionstart) {
-		n = sprintf(dest, "; Total=%d ms", (timing->lastread ? timing->lastread : now) - timing->connectionstart);
+		n = sprintf(dest, "Total=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->connectionstart);
 		if (n > 0) dest += n;
 	}
 }
