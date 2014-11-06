@@ -1022,6 +1022,7 @@ static int detecthead(struct surl *u) {
 			sprintf(u->error_msg, "Redirect URL is too long");
 			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
+		u->contentlen = 0; // do not need content - some servers returns no content-length and keeps conection open
 		debugf("[%d] Location='%s'\n",u->index,u->location);
 	}
 
@@ -1031,6 +1032,7 @@ static int detecthead(struct surl *u) {
 			sprintf(u->error_msg, "Redirect URL is too long");
 			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
+		u->contentlen = 0; // do not need content
 		debugf("[%d] Refresh='%s'\n",u->index,u->location);
 	}
 
