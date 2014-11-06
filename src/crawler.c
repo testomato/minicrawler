@@ -1520,9 +1520,6 @@ static void readreply(struct surl *u) {
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
 		return;
 	}
-	if (t == SURL_IO_ERROR) {
-		debugf("read failed: %m");
-	}
 	if (t >= 0) {
 		u->bufp += t;
 		u->timing.lastread = get_time_int();
@@ -1557,7 +1554,14 @@ static void readreply(struct surl *u) {
 		}
 		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
 		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
-		finish(u); // u->state is changed here
+
+		if (t == SURL_IO_ERROR) {
+			debugf("[%d] read failed: %m\n", u->index);
+			sprintf(u->error_msg, "Downloading content failed (%m)");
+			set_atomic_int(&u->state, SURL_S_ERROR);
+		} else {
+			finish(u); // u->state is changed here
+		}
 	} else {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
 		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
@@ -1788,7 +1792,7 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 	if (strlen(url) > MAXURLSIZE) {
 		*(char*)mempcpy(u->rawurl, url, MAXURLSIZE) = 0;
 		sprintf(u->error_msg, "URL is too long");
-		u->state = SURL_S_ERROR;
+		set_atomic_int(&u->state, SURL_S_ERROR);
 	} else {
 		strcpy(u->rawurl, url);
 	}
