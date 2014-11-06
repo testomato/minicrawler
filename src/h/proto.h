@@ -60,7 +60,7 @@ static inline char *str_replace( char *dest,  const char *string, const char *su
 	char *tok = NULL;
 
 	tok = strstr( string, substr );
-	if( tok == NULL ) return strdup( string );
+	if( tok == NULL ) return strcpy( dest, string );
 	memcpy( dest, string, tok - string );
 	memcpy( dest + (tok - string), replacement, strlen( replacement ) );
 	memcpy( dest + (tok - string) + strlen( replacement ), tok + strlen( substr ), strlen( string ) - strlen( substr ) - ( tok - string ) );
