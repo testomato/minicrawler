@@ -122,8 +122,8 @@ enum surl_io {
 struct surl;
 
 typedef void (*surl_callback)(struct surl*);
-typedef ssize_t (*read_callback)(const struct surl *u, char *buf, const size_t size);
-typedef ssize_t (*write_callback)(const struct surl *u, const char *buf, const size_t size);
+typedef ssize_t (*read_callback)(const struct surl *u, char *buf, const size_t size, char *errbuf);
+typedef ssize_t (*write_callback)(const struct surl *u, const char *buf, const size_t size, char *errbuf);
 
 struct surl_func {
 	read_callback read;

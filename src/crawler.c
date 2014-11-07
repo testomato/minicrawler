@@ -156,7 +156,7 @@ NOTE: We must read as much as possible, because select(.) may
 not notify us that other data are available.
 From select(.)'s point of view they are read but in fact they are in SSL buffers.
 */
-static ssize_t sec_read(const struct surl *u, char *buf, const size_t size) {
+static ssize_t sec_read(const struct surl *u, char *buf, const size_t size, char *errbuf) {
 	assert(u->ssl);
 
 	const int t = SSL_read(u->ssl, buf, size);
@@ -173,20 +173,43 @@ static ssize_t sec_read(const struct surl *u, char *buf, const size_t size) {
 		return (ssize_t)t;
 	}
 	const int err = SSL_get_error(u->ssl, t);
-	if (err == SSL_ERROR_WANT_WRITE) {
-		return SURL_IO_WRITE;
+	switch (err) {
+		case SSL_ERROR_WANT_WRITE:
+			return SURL_IO_WRITE;
+		case SSL_ERROR_WANT_READ:
+			return SURL_IO_READ;
+		case SSL_ERROR_ZERO_RETURN:
+			return SURL_IO_EOF;
+		case SSL_ERROR_SYSCALL:
+			debugf("[%d] SSL read failed: SSL_ERROR_SYSCALL (%d)\n", u->index, t);
+			if (t < 0) { // t == 0: unexpected EOF
+				sprintf(errbuf, "Downloading content failed (%m)");
+				return SURL_IO_ERROR;
+			}
+		case SSL_ERROR_SSL:
+			debugf("[%d] SSL read failed: protocol error: \n", u->index);
+			unsigned long e, last_e = 0;
+			while (e = ERR_get_error()) {
+				debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
+				last_e = e;
+			}
+			const int n = sprintf(errbuf, "Downloading content failed");
+			if (last_e && n > 0) {
+				sprintf(errbuf + n, " (%s)", ERR_reason_error_string(last_e));
+			}
+			return SURL_IO_ERROR;
+		default:
+			debugf("[%d] SSL read failed: %d (WANT_X509_LOOKUP: 4, WANT_CONNECT: 7, WANT_ACCEPT: 8)\n", u->index, err);
+			sprintf(errbuf, "Downloading content failed (unexpected SSL error)");
+			return SURL_IO_ERROR;
 	}
-	if (err == SSL_ERROR_WANT_READ) {
-		return SURL_IO_READ;
-	}
-	return SURL_IO_ERROR;
 }
 
 /** Write some data to SSL socket.
 NOTE: We must write as much as possible otherwise
 select(.) would not notify us that socket is writable again.
 */
-static ssize_t sec_write(const struct surl *u, const char *buf, const size_t size) {
+static ssize_t sec_write(const struct surl *u, const char *buf, const size_t size, char *errbuf) {
     assert(u->ssl);
 
 	const int t = SSL_write(u->ssl, buf, size);
@@ -195,13 +218,36 @@ static ssize_t sec_write(const struct surl *u, const char *buf, const size_t siz
 	}
 
 	const int err = SSL_get_error(u->ssl, t);
-	if (err == SSL_ERROR_WANT_READ) {
-		return SURL_IO_READ;
+	switch (err) {
+		case SSL_ERROR_WANT_READ:
+			return SURL_IO_READ;
+		case SSL_ERROR_WANT_WRITE:
+			return SURL_IO_WRITE;
+		case SSL_ERROR_ZERO_RETURN:
+			return SURL_IO_EOF;
+		case SSL_ERROR_SYSCALL:
+			debugf("[%d] SSL write failed: SSL_ERROR_SYSCALL (%d)\n", u->index, t);
+			if (t < 0) { // t == 0: unexpected EOF
+				sprintf(errbuf, "Sending request failed (%m)");
+				return SURL_IO_ERROR;
+			}
+		case SSL_ERROR_SSL:
+			debugf("[%d] SSL write failed: protocol error: \n", u->index);
+			unsigned long e, last_e = 0;
+			while (e = ERR_get_error()) {
+				debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
+				last_e = e;
+			}
+			const int n = sprintf(errbuf, "Sending request failed");
+			if (last_e && n > 0) {
+				sprintf(errbuf + n, " (%s)", ERR_reason_error_string(last_e));
+			}
+			return SURL_IO_ERROR;
+		default:
+			debugf("[%d] SSL write failed: %d (WANT_X509_LOOKUP: 4, WANT_CONNECT: 7, WANT_ACCEPT: 8)\n", u->index, err);
+			sprintf(errbuf, "Sending request failed (unexpected SSL error)");
+			return SURL_IO_ERROR;
 	}
-	if (err == SSL_ERROR_WANT_WRITE) {
-		return SURL_IO_WRITE;
-	}
-	return SURL_IO_ERROR;
 }
 
 /** callback funkce, kterou zavola ares
@@ -679,7 +725,7 @@ static void genrequest(struct surl *u) {
 		strcpy(r, u->post);
 	}
 
-	debugf("Request: [%s]", u->request);
+	debugf("[%d] Request: [%s]", u->index, u->request);
 	u->request_len = strlen(u->request);
 	u->request_it = 0;
 
@@ -692,11 +738,10 @@ GEN_REQUEST.
 */
 static void sendrequest(struct surl *u) {
 	if (u->request_it < u->request_len) {
-		const ssize_t ret = u->f.write(u, &u->request[u->request_it], u->request_len - u->request_it);
+		const ssize_t ret = u->f.write(u, &u->request[u->request_it], u->request_len - u->request_it, (char *)&u->error_msg);
 		if (ret == SURL_IO_ERROR || ret == SURL_IO_EOF) {
-			debugf("[%d] Error when writing to socket: %m\n", u->index);
-			sprintf(u->error_msg, "Connection to host lost (%m)");
 			set_atomic_int(&u->state, SURL_S_ERROR);
+			return;
 		}
 		else if (ret == SURL_IO_WRITE) {
 			set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
@@ -1004,7 +1049,6 @@ static int detecthead(struct surl *u) {
 	}
 	
 	u->headlen = p-u->buf;
-	debugf("[%d] buf='%s'\n", u->index, u->buf);
 	
 	p=(char*)memmem(u->buf, u->headlen, "Content-Length: ", 16)?:(char*)memmem(u->buf, u->headlen, "Content-length: ", 16)?:(char*)memmem(u->buf, u->headlen, "content-length: ", 16);
 	if(p != NULL) {
@@ -1073,7 +1117,7 @@ Length of the read data is not limited if possible.
 Unread data may remain in SSL buffers and select(.) may not notify us about it,
 because from its point of view they were read.
 */
-ssize_t plain_read(const struct surl *u, char *buf, const size_t size) {
+ssize_t plain_read(const struct surl *u, char *buf, const size_t size, char *errbuf) {
 	const int fd = u->sockfd;
 	const ssize_t res = read(fd, buf, size);
 	if (0 < res) {
@@ -1087,10 +1131,12 @@ ssize_t plain_read(const struct surl *u, char *buf, const size_t size) {
 			return SURL_IO_READ;
 		}
 	}
+	debugf("[%d] read failed: %m\n", u->index);
+	sprintf(errbuf, "Downloading content failed (%m)");
 	return SURL_IO_ERROR;
 }
 
-ssize_t plain_write(const struct surl *u, const char *buf, const size_t size) {
+ssize_t plain_write(const struct surl *u, const char *buf, const size_t size, char *errbuf) {
 	const int fd = u->sockfd;
 	const ssize_t res = write(fd, buf, size);
 	if (0 < res) {
@@ -1104,6 +1150,8 @@ ssize_t plain_write(const struct surl *u, const char *buf, const size_t size) {
 			return SURL_IO_WRITE;
 		}
 	}
+	debugf("[%d] write failed: %m\n", u->index);
+	sprintf(errbuf, "Sending request failed (%m)");
 	return SURL_IO_ERROR;
 }
 
@@ -1502,14 +1550,12 @@ static ssize_t try_read(struct surl *u) {
 		return 0;
 	}
 
-	return u->f.read(u, u->buf + u->bufp, left);
+	return u->f.read(u, u->buf + u->bufp, left, (char *)&u->error_msg);
 }
 
 /** cti odpoved
  */
 static void readreply(struct surl *u) {
-	debugf("} bufp = %d\n", u->bufp);
-
 	const ssize_t t = try_read(u);
 	assert(t >= SURL_IO_WRITE);
 	if (t == SURL_IO_READ) {
@@ -1528,13 +1574,10 @@ static void readreply(struct surl *u) {
 		u->timing.firstbyte = u->timing.lastread;
 	}
 
-	debugf("}1 bufp = %d; buf = [%.*s]\n", u->bufp, u->bufp, u->buf);
+	debugf("[%d] Read %zd bytes; bufp = %d; chunked = %d; data = [%.*s]\n", u->index, t, u->bufp, !!u->chunked, t, u->buf + u->bufp - t);
 	if (u->headlen == 0 && find_head_end(u)) {
 		detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
 	}
-	debugf("}2 bufp = %d\n", u->bufp);
-
-	debugf("[%d] Read %zd bytes; bufp = %d; chunked=%d\n", u->index, t, u->bufp, !!u->chunked);
 	
 	// u->chunked is set in detecthead()
 	if(t > 0 && u->chunked) {
@@ -1556,8 +1599,6 @@ static void readreply(struct surl *u) {
 		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 
 		if (t == SURL_IO_ERROR) {
-			debugf("[%d] read failed: %m\n", u->index);
-			sprintf(u->error_msg, "Downloading content failed (%m)");
 			set_atomic_int(&u->state, SURL_S_ERROR);
 		} else {
 			finish(u); // u->state is changed here
