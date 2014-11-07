@@ -144,6 +144,7 @@ static void sec_handshake(struct surl *u) {
 	}
 	else {
 		// zkusíme ještě jednou
+		SSL_shutdown(u->ssl);
 		SSL_free(u->ssl);
 		close(u->sockfd);
 		set_atomic_int(&u->state, SURL_S_GOTIP);
