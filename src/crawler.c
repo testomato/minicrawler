@@ -85,8 +85,11 @@ SSL is blackbox this time for us.
 static void sec_handshake(struct surl *u) {
 	assert(u->ssl);
 
+	if (!u->timing.sslstart) u->timing.sslstart = get_time_int();
+
 	const int t = SSL_connect(u->ssl);
     if (t == 1) {
+		u->timing.sslend = get_time_int();
         set_atomic_int(&u->state, SURL_S_GENREQUEST);
         return;
     }
@@ -1171,7 +1174,7 @@ static void format_timing(char *dest, struct timing *timing) {
 		if (n > 0) dest += n;
 	}
 	if (timing->sslstart) {
-		n = sprintf(dest, "SSL=%d ms; ", (timing->requeststart ? timing->requeststart : now) - timing->sslstart);
+		n = sprintf(dest, "SSL=%d ms; ", (timing->sslend ? timing->sslend : now) - timing->sslstart);
 		if (n > 0) dest += n;
 	}
 	if (timing->requeststart) {
@@ -1739,7 +1742,6 @@ static void goone(struct surl *u) {
 
 	case SURL_S_HANDSHAKE:
 		u->timing.handshakestart = time;
-		if (!u->timing.sslstart) u->timing.sslstart = time;
 		u->f.handshake(u);
 		break;
 

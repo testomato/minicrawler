@@ -26,8 +26,9 @@ struct timing {
 	int dnsstart;
 	int dnsend;
 	int connectionstart;
-	int sslstart;
 	int handshakestart;
+	int sslstart;
+	int sslend;
 	int requeststart;
 	int requestend;
 	int firstbyte;
