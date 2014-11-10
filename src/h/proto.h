@@ -15,14 +15,12 @@ void free_mossad(void);
 int get_time_int(void);
 unsigned get_time_slot(const unsigned char key[16]);
 int test_free_channel(const unsigned char u_ip[16], const unsigned milis, const int force);
-void go(void);
 int converthtml2text(char *s, int len);
 void conv_charset(struct surl *u);
 char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_len);
 char *consume_entity(char *s, const char *end, int *code);
 char *put_code(char *dst, const unsigned dst_len, const int code);
 int urlencode(char *src);
-void init_url(struct surl *u, const char *url, const int index, char *post, struct cookie *cookies, const int cookiecnt);
 int gunzip(char *out, int *outlen, char *in, int inlen);
 
 static inline int safe_size_to_int(const size_t sz) {

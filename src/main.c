@@ -2,23 +2,19 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <sys/time.h>
-#include <time.h>
 #include <signal.h>
 
-#include "h/struct.h"
+#include "h/minicrawler.h"
 #include "h/proto.h"
 #include "h/version.h"
-
-struct surl *url;
 
 struct ssettings settings;
 
 /** nacte url z prikazove radky do struktur
  */
-void initurls(int argc, char *argv[])
+struct surl *initurls(int argc, char *argv[])
 {
-	struct surl *curl, *purl;
+	struct surl *url, *curl, *purl;
 	char *post = NULL, *p, *q;
 	struct cookie cookies[COOKIESTORAGESIZE];
 	int ccnt = 0, i = 0;
@@ -86,6 +82,8 @@ void initurls(int argc, char *argv[])
 		free(cookies[t].domain);
 		free(cookies[t].path);
 	}
+
+	return url;
 }
 
 /** zpracuje signál (vypíše ho a ukončí program s -1)
@@ -140,8 +138,9 @@ int main(int argc, char *argv[]) {
 	settings.timeout=DEFAULT_TIMEOUT;
 	settings.delay=DEFAULT_DELAY;
 	
-	initurls(argc, argv);
-	go();
+	struct surl *url;
+	url = initurls(argc, argv);
+	go(url);
  
 	exit(0);
 }

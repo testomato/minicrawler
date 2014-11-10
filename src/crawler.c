@@ -1572,7 +1572,7 @@ static void readreply(struct surl *u) {
 
 /** provede systemovy select nad vsemi streamy
  */
-static void selectall(void) {
+static void selectall(struct surl *url) {
 	fd_set set;
 	fd_set writeset;
 	struct timeval timeout;	
@@ -1729,7 +1729,7 @@ static void goone(struct surl *u) {
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
  */
-static int exitprematurely(void) {
+static int exitprematurely(struct surl *url) {
 	int tim;
 	int cnt = 0, notdone = 0, lastread = 0;
 	struct surl *curl;
@@ -1767,7 +1767,7 @@ static int exitprematurely(void) {
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-static void outputpartial(void) {
+static void outputpartial(struct surl *url) {
 	struct surl *curl;
 
 	curl = url;
@@ -1842,7 +1842,7 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 /**
  * hlavni smycka
  */
-void go(void) {
+void go(struct surl *url) {
 	int done;
 	int change;
 	struct surl *curl;
@@ -1850,7 +1850,7 @@ void go(void) {
 		done = 1;
 		change = 0;
 		
-		selectall();
+		selectall(url);
 		curl = url;
 		do {
 			//debugf("%d: %d\n",t,curl->state);
@@ -1869,13 +1869,13 @@ void go(void) {
 		if(t > settings.timeout*1000) {
 			debugf("Timeout (%d ms elapsed). The end.\n", t);
 			if(settings.partial) {
-				outputpartial();
+				outputpartial(url);
 			}
 			break;
 		}
 		if(!change && !done) {
 			if(settings.impatient) {
-				done = exitprematurely();
+				done = exitprematurely(url);
 			}
 		}
 	} while(!done);
