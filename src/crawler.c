@@ -1362,7 +1362,7 @@ static void reset_url(struct surl *u) {
  * we have been requested to download url with unsupported protocol.
  */
 static void set_unsupported_protocol(struct surl *u) {
-	debugf("Unsupported protocol: [%s]\n", u->proto);
+	debugf("[%d] Unsupported protocol: [%s]\n", u->index, u->proto);
 	sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
 	set_atomic_int(&u->state, SURL_S_ERROR);
 }
@@ -1396,6 +1396,7 @@ static int check_proto(struct surl *u) {
 		case 443:
 			if (settings.non_ssl) {
 				set_unsupported_protocol(u);
+				return -1;
 			} else {
 				u->f.read = sec_read;
 				u->f.write = sec_write;
@@ -1405,7 +1406,7 @@ static int check_proto(struct surl *u) {
 
 		default:
 			set_unsupported_protocol(u);
-			break;
+			return -1;
 	}
 	return port;
 }
