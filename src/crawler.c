@@ -1678,9 +1678,20 @@ static void goone(struct surl *u) {
 	debugf("[%d] state = [%s][%d]\n", u->index, state_to_s(state), want_io(state, rw));
 
 	if (want_io(state, rw)) {
+		timeout = (settings.timeout > 6 ? settings.timeout / 3 : 2) * 1000;
+
 		switch(state) {
+		case SURL_S_CONNECT:
+			if (u->addr->next && get_time_int() - u->timing.connectionstart > timeout) {
+				struct addr *next = u->addr->next;
+				free(u->addr);
+				u->addr = next;
+				debugf("[%d] Connection timeout (%d ms), trying another ip\n", u->index, timeout);
+				close(u->sockfd);
+				set_atomic_int(&u->state, SURL_S_GOTIP);
+			}
+			break;
 		case SURL_S_HANDSHAKE:
-			timeout = (settings.timeout > 6 ? settings.timeout / 3 : 2) * 1000;
 			if (get_time_int() - u->timing.handshakestart > timeout) {
 				// we retry handshake with another protocol
 				if (lower_ssl_protocol(u) == 0) {
