@@ -1828,6 +1828,12 @@ static void outputpartial(struct surl *url, const struct ssettings *settings) {
 	} while ((curl = curl->next) != NULL);
 }
 
+void init_settings(struct ssettings *settings) {
+	memset(settings, 0, sizeof(struct ssettings));
+	settings->timeout = DEFAULT_TIMEOUT;
+	settings->delay = DEFAULT_DELAY;
+}
+
 /**
  * Init URL struct
  */

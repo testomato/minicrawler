@@ -23,10 +23,8 @@ int main(int argc, char *argv[]) {
 	
 	struct surl *url;
 	struct ssettings settings;
-	memset(&settings, 0, sizeof(struct ssettings));
-	settings.timeout = DEFAULT_TIMEOUT;
-	settings.delay = DEFAULT_DELAY;
 
+	init_settings(&settings);
 	initurls(argc, argv, &url, &settings);
 	go(url, &settings);
  
