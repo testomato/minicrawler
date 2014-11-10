@@ -26,7 +26,7 @@ Where
          -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)
 
    urloptions:
-         -C STRING  parameter which replaces '%' in the custom header (max 256 bytes)
+         -C STRING  parameter which replaces '%' in the custom header
          -P STRING  HTTP POST parameters
          -X STRING  custom request HTTP method, no validation performed (max 15 bytes)
 ```

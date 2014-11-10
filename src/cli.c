@@ -27,7 +27,7 @@ void printusage()
 	         "         -6         resolve host to IPv6 address only\n"
 	         "         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)\n"
 	         "\n   urloptions:\n"
-	         "         -C STRING  parameter which replaces '%%' in the custom header (max 255 bytes)\n"
+	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
 	         "         -P STRING  HTTP POST parameters\n"
 	         "         -X STRING  custom request HTTP method, no validation performed (max 15 bytes)\n"
 	         "\n", VERSION);
@@ -39,6 +39,9 @@ struct surl *initurls(int argc, char *argv[])
 {
 	struct surl *url, *curl, *purl;
 	char *post = NULL, *p, *q;
+	long options = 0;
+	char customheader[4096];
+	char customagent[256];
 	struct cookie cookies[COOKIESTORAGESIZE];
 	int ccnt = 0, i = 0;
 
@@ -50,17 +53,17 @@ struct surl *initurls(int argc, char *argv[])
 
 		// options
 		if(!strcmp(argv[t], "-d")) {settings.debug=1;continue;}
-		if(!strcmp(argv[t], "-S")) {settings.non_ssl=1;continue;}
+		if(!strcmp(argv[t], "-S")) {options |= 1<<SURL_OPT_NONSSL; continue;}
 		if(!strcmp(argv[t], "-h")) {settings.writehead=1;continue;}
 		if(!strcmp(argv[t], "-i")) {settings.impatient=1;continue;}
 		if(!strcmp(argv[t], "-p")) {settings.partial=1;continue;}
-		if(!strcmp(argv[t], "-c")) {settings.convert=settings.convert_to_utf=1;continue;}
-		if(!strcmp(argv[t], "-8")) {settings.convert_to_utf=1;continue;}
-		if(!strcmp(argv[t], "-g")) {settings.gzip=1;continue;}
+		if(!strcmp(argv[t], "-c")) {options |= 1<<SURL_OPT_CONVERT_TO_TEXT | 1<<SURL_OPT_CONVERT_TO_UTF8; continue;}
+		if(!strcmp(argv[t], "-8")) {options |= 1<<SURL_OPT_CONVERT_TO_UTF8; continue;}
+		if(!strcmp(argv[t], "-g")) {options |= 1<<SURL_OPT_GZIP; continue;}
 		if(!strncmp(argv[t], "-t", 2)) {settings.timeout=atoi(argv[t]+2);continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
-		if(!strncmp(argv[t], "-w", 2)) {safe_cpy(settings.customheader, argv[t+1], I_SIZEOF(settings.customheader));t++;debugf("Custom header for all: %s\n",settings.customheader);continue;}
-		if(!strncmp(argv[t], "-A", 2)) {str_replace((char *)&settings.customagent, argv[t+1], "%version%", VERSION); t++; debugf("Custom agent: %s\n",settings.customagent); continue;}
+		if(!strncmp(argv[t], "-w", 2)) {safe_cpy(customheader, argv[t+1], I_SIZEOF(customheader)); t++; continue;}
+		if(!strncmp(argv[t], "-A", 2)) {str_replace(customagent, argv[t+1], "%version%", VERSION); t++; continue;}
 		if(!strncmp(argv[t], "-b", 2)) {
 			p = argv[t+1];
 			while (p[0] != '\0' && ccnt < COOKIESTORAGESIZE) {
@@ -76,7 +79,7 @@ struct surl *initurls(int argc, char *argv[])
 			t++;
 			continue;
 		}
-		if(!strcmp(argv[t], "-6")) {settings.ipv6=1;continue;}
+		if(!strcmp(argv[t], "-6")) {options |= 1<<SURL_OPT_IPV6; continue;}
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
@@ -86,9 +89,20 @@ struct surl *initurls(int argc, char *argv[])
 			debugf("[%d] POST: %s\n",i,post);
 			continue;
 		}
-		if(!strncmp(argv[t], "-C", 2)) {safe_cpy(curl->customparam, argv[t+1], I_SIZEOF(curl->customparam));t++;debugf("[%d] Custom param: %s\n",i,curl->customparam);continue;}
+		if(!strncmp(argv[t], "-C", 2)) {
+			if (customheader[0]) {
+				str_replace(curl->customheader, customheader, "%", argv[t+1]);
+			}
+			t++;
+			continue;
+		}
 		if(!strcmp(argv[t], "-X")) {safe_cpy(curl->method, argv[t+1], I_SIZEOF(curl->method)); t++; continue;}
 
+		strcpy(curl->customagent, customagent);
+		if (!curl->customheader[0]) {
+			strcpy(curl->customheader, customheader);
+		}
+		curl->options = options;
 		init_url(curl, argv[t], i++, post, cookies, ccnt);
 		post = NULL;
 		purl = curl;

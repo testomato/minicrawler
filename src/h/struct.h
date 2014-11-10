@@ -140,6 +140,14 @@ struct surl_func {
 	surl_callback recv_reply;
 };
 
+enum surl_options {
+	SURL_OPT_NONSSL,
+	SURL_OPT_CONVERT_TO_TEXT,
+	SURL_OPT_CONVERT_TO_UTF8,
+	SURL_OPT_GZIP,
+	SURL_OPT_IPV6,
+};
+
 struct surl {
 	struct surl_func f;
 
@@ -163,7 +171,8 @@ struct surl {
 	int nextchunkedpos;
 	struct cookie cookies[COOKIESTORAGESIZE];
 	int cookiecnt;
-	char customparam[256];		// parametr do custom headeru
+	char customagent[256];
+	char customheader[4096];
 	char charset[32];
 	int gzipped;
 
@@ -205,20 +214,15 @@ struct surl {
 	long ssl_options;
 
 	struct surl *next; // linked list
+
+	long options;
 };
 
 struct ssettings {
 	int debug;
-	int non_ssl;
 	int timeout;
 	int writehead;
 	int impatient;
 	int partial;
-	int convert;		// 1 pokud se má konvertovat do textu
-	int convert_to_utf;     // 1 pokud se ma konvertovat do utf8
-	int delay;		// zpozdeni pri stahovani ze stejne ip, default je 100ms
-	int gzip;
-	int ipv6;
-	char customagent[256];
-	char customheader[4096];
+	int delay;
 };

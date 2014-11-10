@@ -627,10 +627,10 @@ static void genrequest(struct surl *u) {
 	u->request = malloc(
 			strlen(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
 			strlen(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
-			strlen(useragentheader) + (settings.customagent[0] ? strlen(settings.customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
+			strlen(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
 			strlen(cookieheader) + 1024 * u->cookiecnt + 2 + // Cookie: %s; %s...\n
-			strlen(settings.customheader) + strlen(u->customparam) + 2 +
-			(settings.gzip ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
+			strlen(u->customheader) + 2 +
+			(u->options & 1<<SURL_OPT_GZIP ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
 			(u->post != NULL ? strlen(contentlengthheader) + 6 + 2 + strlen(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
 			2 + // end of header
 			(u->post != NULL ? strlen(u->post) : 0) // body
@@ -656,8 +656,8 @@ static void genrequest(struct surl *u) {
 
 	// Uset-Agent
 	strcpy(r, useragentheader);
-	if (settings.customagent[0]) {
-		strcpy(r + strlen(r), settings.customagent);
+	if (u->customagent[0]) {
+		strcpy(r + strlen(r), u->customagent);
 	} else {
 		sprintf(r + strlen(r), defaultagent, VERSION);
 	}
@@ -689,19 +689,15 @@ static void genrequest(struct surl *u) {
 	r += strlen(r);
 
 	// Custom header
-	if (settings.customheader[0]) {
-		if (u->customparam[0]) {
-			str_replace(r, settings.customheader, "%", u->customparam);
-		} else {
-			strcpy(r, settings.customheader);
-		}
+	if (u->customheader[0]) {
+		strcpy(r, u->customheader);
 		r += strlen(r);
 		strcpy(r, "\r\n");
 		r += 2;
 	}
 
 	// gzip
-	if (settings.gzip) {
+	if (u->options & 1<<SURL_OPT_GZIP) {
 		strcpy(r, gzipheader);
 		r += strlen(r);
 		strcpy(r, "\r\n");
@@ -1229,10 +1225,10 @@ static void output(struct surl *u) {
 	if (!*u->charset) {
 		strcpy(u->charset, "unknown");
 	}
-	if (*u->charset && settings.convert_to_utf) {
+	if (*u->charset && u->options & 1<<SURL_OPT_CONVERT_TO_UTF8) {
 		conv_charset(u);
 	}
-	if(settings.convert) {
+	if (u->options & 1<<SURL_OPT_CONVERT_TO_TEXT) {
 		u->bufp=converthtml2text(u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
 	sprintf(header,"URL: %s",u->rawurl);
@@ -1394,7 +1390,7 @@ static int check_proto(struct surl *u) {
 			break;
 
 		case 443:
-			if (settings.non_ssl) {
+			if (u->options & 1<<SURL_OPT_NONSSL) {
 				set_unsupported_protocol(u);
 				return -1;
 			} else {
@@ -1852,7 +1848,7 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 	} else {
 		strcpy(u->rawurl, url);
 	}
-	if (settings.ipv6) {
+	if (u->options & 1<<SURL_OPT_IPV6) {
 		u->addrtype = AF_INET6;
 	} else {
 		u->addrtype = AF_INET;
