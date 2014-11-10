@@ -1,20 +1,31 @@
 objs=$(patsubst src/%.c,o/%.o,$(wildcard src/*.c))
+objs-so=$(patsubst o/%.o,so/%.o,$(filter-out o/main.o o/cli.o, $(objs)))
 
+version=0
 name=minicrawler
+libname=lib$(name).so.3.$(version)
 
 $(name): $(objs)
-	gcc -g -O3 -o $(name) $(objs) -lcares -lssl -lcrypto -lz -luriparser
+	gcc -g -O3 -o $(name) $^ -lcares -lssl -lcrypto -lz -luriparser
 
-lib: $(objs)
-	gcc -g -O3 -shared -o lib$(name).so $(objs) -lcares -lssl -lcrypto -lz -luriparser
+lib: $(libname)
+$(libname): $(objs-so)
+	gcc -g -O3 -shared -Wl,-soname,$(libname:.$(version)=) -o $(libname) $^ -lcares -lssl -lcrypto -lz -luriparser
 
 .odir.stamp:
 	mkdir -p o
+	mkdir -p so
 	touch .odir.stamp
 
-$(objs): o/%.o: src/%.c .odir.stamp src/h/struct.h src/h/proto.h src/h/version.h
+o/%.o: src/%.c .odir.stamp src/h/struct.h src/h/proto.h src/h/version.h
+	gcc -g -O3 -std=gnu99 -o $@ -c $<
+
+so/%.o: src/%.c .odir.stamp src/h/struct.h src/h/proto.h src/h/version.h
 	gcc -g -O3 -std=gnu99 -fpic -o $@ -c $<
 
 clean:
 	rm -f $(objs)
+	rm -f $(objs-so)
 	rm -f .odir.stamp
+
+.PHONY: clean lib
