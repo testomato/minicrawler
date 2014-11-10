@@ -1,11 +1,9 @@
 #include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "h/cli.h"
-#include "h/minicrawler.h"
-
-struct ssettings settings;
 
 void sighandler(int signum)
 {
@@ -22,13 +20,15 @@ int main(int argc, char *argv[]) {
 	signal(SIGUSR1,sighandler);
 	signal(SIGPIPE,sighandler);
 //	signal(SIGSEGV,sighandler);
-
-	settings.timeout=DEFAULT_TIMEOUT;
-	settings.delay=DEFAULT_DELAY;
 	
 	struct surl *url;
-	url = initurls(argc, argv);
-	go(url);
+	struct ssettings settings;
+	memset(&settings, 0, sizeof(struct ssettings));
+	settings.timeout = DEFAULT_TIMEOUT;
+	settings.delay = DEFAULT_DELAY;
+
+	initurls(argc, argv, &url, &settings);
+	go(url, &settings);
  
 	exit(0);
 }

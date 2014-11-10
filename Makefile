@@ -1,3 +1,4 @@
+headers=$(wildcard src/h/*.h)
 objs=$(patsubst src/%.c,o/%.o,$(wildcard src/*.c))
 objs-so=$(patsubst o/%.o,so/%.o,$(filter-out o/main.o o/cli.o, $(objs)))
 
@@ -17,10 +18,10 @@ $(libname): $(objs-so)
 	mkdir -p so
 	touch .odir.stamp
 
-o/%.o: src/%.c .odir.stamp src/h/struct.h src/h/proto.h src/h/version.h
+o/%.o: src/%.c .odir.stamp $(headers)
 	gcc -g -O3 -std=gnu99 -o $@ -c $<
 
-so/%.o: src/%.c .odir.stamp src/h/struct.h src/h/proto.h src/h/version.h
+so/%.o: src/%.c .odir.stamp $(headers)
 	gcc -g -O3 -std=gnu99 -fpic -o $@ -c $<
 
 clean:

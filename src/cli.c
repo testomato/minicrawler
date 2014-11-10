@@ -1,5 +1,7 @@
 #define _GNU_SOURCE // memmem(.), strchrnul needs this :-(
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "h/minicrawler.h"
 #include "h/version.h"
@@ -35,9 +37,9 @@ void printusage()
 
 /** nacte url z prikazove radky do struktur
  */
-struct surl *initurls(int argc, char *argv[])
+void initurls(int argc, char *argv[], struct surl **url, struct ssettings *settings)
 {
-	struct surl *url, *curl, *purl;
+	struct surl *curl, *purl;
 	char *post = NULL, *p, *q;
 	long options = 0;
 	char customheader[4096];
@@ -45,23 +47,23 @@ struct surl *initurls(int argc, char *argv[])
 	struct cookie cookies[COOKIESTORAGESIZE];
 	int ccnt = 0, i = 0;
 
-	url = (struct surl *)malloc(sizeof(struct surl));
-	memset(url, 0, sizeof(struct surl));
-	curl = url;
+	*url = (struct surl *)malloc(sizeof(struct surl));
+	memset(*url, 0, sizeof(struct surl));
+	curl = *url;
 
 	for (int t = 1; t < argc; ++t) {
 
 		// options
-		if(!strcmp(argv[t], "-d")) {settings.debug=1;continue;}
+		if(!strcmp(argv[t], "-d")) {settings->debug=1; continue;}
 		if(!strcmp(argv[t], "-S")) {options |= 1<<SURL_OPT_NONSSL; continue;}
-		if(!strcmp(argv[t], "-h")) {settings.writehead=1;continue;}
-		if(!strcmp(argv[t], "-i")) {settings.impatient=1;continue;}
-		if(!strcmp(argv[t], "-p")) {settings.partial=1;continue;}
+		if(!strcmp(argv[t], "-h")) {settings->writehead=1; continue;}
+		if(!strcmp(argv[t], "-i")) {settings->impatient=1; continue;}
+		if(!strcmp(argv[t], "-p")) {settings->partial=1; continue;}
 		if(!strcmp(argv[t], "-c")) {options |= 1<<SURL_OPT_CONVERT_TO_TEXT | 1<<SURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-8")) {options |= 1<<SURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-g")) {options |= 1<<SURL_OPT_GZIP; continue;}
-		if(!strncmp(argv[t], "-t", 2)) {settings.timeout=atoi(argv[t]+2);continue;}
-		if(!strncmp(argv[t], "-D", 2)) {settings.delay=atoi(argv[t]+2);debugf("Delay time: %d\n",settings.delay);continue;}
+		if(!strncmp(argv[t], "-t", 2)) {settings->timeout = atoi(argv[t]+2); continue;}
+		if(!strncmp(argv[t], "-D", 2)) {settings->delay = atoi(argv[t]+2); continue;}
 		if(!strncmp(argv[t], "-w", 2)) {safe_cpy(customheader, argv[t+1], I_SIZEOF(customheader)); t++; continue;}
 		if(!strncmp(argv[t], "-A", 2)) {str_replace(customagent, argv[t+1], "%version%", VERSION); t++; continue;}
 		if(!strncmp(argv[t], "-b", 2)) {
@@ -119,7 +121,5 @@ struct surl *initurls(int argc, char *argv[])
 		free(cookies[t].domain);
 		free(cookies[t].path);
 	}
-
-	return url;
 }
 

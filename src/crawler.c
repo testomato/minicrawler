@@ -21,6 +21,8 @@
 #include "h/proto.h"
 #include "h/version.h"
 
+int debug = 0;
+
 /**
 Atomic setter for integer. Library c-ares uses threads and it can cause
 non-defined state when we touch variables in non-atomic way inside it.
@@ -571,7 +573,7 @@ static void opensocket(struct surl *u)
 	flags = fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
 
-	if (settings.debug) {
+	if (debug) {
 		char straddr[INET6_ADDRSTRLEN];
 		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
 		debugf("[%d] connecting to ip: %s; %d, port: %i (socket %d)\n", u->index, straddr, get_time_slot(u->addr->ip), u->port, u->sockfd);
@@ -1194,7 +1196,7 @@ static void format_timing(char *dest, struct timing *timing) {
 
 /** vypise vystup na standardni vystup
  */
-static void output(struct surl *u) {
+static void output(struct surl *u, const struct ssettings *settings) {
 	unsigned char header[16384];
 
 	if (u->gzipped) {
@@ -1315,7 +1317,7 @@ static void output(struct surl *u) {
 	sprintf(header+strlen(header), "\nIndex: %d\n\n",u->index);
 
 	write_all(STDOUT_FILENO, header, strlen(header));
-	if(settings.writehead) {
+	if(settings->writehead) {
 		debugf("[%d] outputting header %dB - %d %d %d %d\n",u->index,u->headlen,u->buf[u->headlen-4],u->buf[u->headlen-3],u->buf[u->headlen-2],u->buf[u->headlen-1]);
 		write_all(STDOUT_FILENO, u->buf, u->headlen);
 		if (0 == u->headlen) {
@@ -1670,7 +1672,7 @@ static void selectall(struct surl *url) {
 
 /** provede jeden krok pro dane url
  */
-static void goone(struct surl *u) {
+static void goone(struct surl *u, const struct ssettings *settings) {
 	const int state = get_atomic_int(&u->state);
 	const int rw = get_atomic_int(&u->rw);
 	int timeout;
@@ -1678,7 +1680,7 @@ static void goone(struct surl *u) {
 	debugf("[%d] state = [%s][%d]\n", u->index, state_to_s(state), want_io(state, rw));
 
 	if (want_io(state, rw)) {
-		timeout = (settings.timeout > 6 ? settings.timeout / 3 : 2) * 1000;
+		timeout = (settings->timeout > 6 ? settings->timeout / 3 : 2) * 1000;
 
 		switch(state) {
 		case SURL_S_CONNECT:
@@ -1726,7 +1728,7 @@ static void goone(struct surl *u) {
 		break;
 
 	case SURL_S_GOTIP:
-		if (test_free_channel(u->addr->ip, settings.delay, u->prev_addr && !strcmp(u->addr->ip, u->prev_addr->ip))) {
+		if (test_free_channel(u->addr->ip, settings->delay, u->prev_addr && !strcmp(u->addr->ip, u->prev_addr->ip))) {
 			if (!u->timing.connectionstart) u->timing.connectionstart = time;
 			if (!u->downstart) u->downstart = time;
 			u->f.open_socket(u);
@@ -1758,11 +1760,11 @@ static void goone(struct surl *u) {
   
 	case SURL_S_ERROR:
 		assert(u->status < 0);
-		output(u);
+		output(u, settings);
 		break;
 
 	case SURL_S_DONE:
-		output(u);
+		output(u, settings);
 		break;
 	}
 
@@ -1771,7 +1773,7 @@ static void goone(struct surl *u) {
 		u->status = state - stateAfter;
 	}
 
-	if (settings.debug) {	
+	if (debug) {
 		const int duration = get_time_int() - time;
 		if(duration > 200) {
 			debugf("[%d] State %d (->%d) took too long (%d ms)\n", u->index, state, get_atomic_int(&u->state), duration);
@@ -1785,11 +1787,6 @@ static int exitprematurely(struct surl *url) {
 	int tim;
 	int cnt = 0, notdone = 0, lastread = 0;
 	struct surl *curl;
-	
-	tim=get_time_int();
-	if(tim<settings.timeout*1000-1000) {
-		return 0; // jeste je brzy
-	}
 	
 	curl = url;
 	do {
@@ -1819,14 +1816,14 @@ static int exitprematurely(struct surl *url) {
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-static void outputpartial(struct surl *url) {
+static void outputpartial(struct surl *url, const struct ssettings *settings) {
 	struct surl *curl;
 
 	curl = url;
 	do {
 		const int url_state = get_atomic_int(&curl->state);
 		if(url_state < SURL_S_OUTPUTED) {
-			output(curl);
+			output(curl, settings);
 		}
 	} while ((curl = curl->next) != NULL);
 }
@@ -1894,10 +1891,12 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 /**
  * hlavni smycka
  */
-void go(struct surl *url) {
+void go(struct surl *url, const struct ssettings *settings) {
 	int done;
 	int change;
 	struct surl *curl;
+
+	debug = settings->debug;
 	do {
 		done = 1;
 		change = 0;
@@ -1908,7 +1907,7 @@ void go(struct surl *url) {
 			//debugf("%d: %d\n",t,curl->state);
 			const int state = get_atomic_int(&curl->state);
 			if(state < SURL_S_OUTPUTED) {
-				goone(curl);
+				goone(curl, settings);
 				done = 0;
 			}
 			// curl->state can change inside goone
@@ -1918,15 +1917,15 @@ void go(struct surl *url) {
 		} while ((curl = curl->next) != NULL);
 
 		const int t = get_time_int();
-		if(t > settings.timeout*1000) {
+		if(t > settings->timeout*1000) {
 			debugf("Timeout (%d ms elapsed). The end.\n", t);
-			if(settings.partial) {
-				outputpartial(url);
+			if(settings->partial) {
+				outputpartial(url, settings);
 			}
 			break;
 		}
 		if(!change && !done) {
-			if(settings.impatient) {
+			if (settings->impatient && t >= settings->timeout*1000-1000) {
 				done = exitprematurely(url);
 			}
 		}

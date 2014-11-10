@@ -1,4 +1,5 @@
+#include "minicrawler.h"
 
 void printusage();
 
-struct surl *initurls(int argc, char *argv[]);
+void initurls(int argc, char *argv[], struct surl **url, struct ssettings *settings);
