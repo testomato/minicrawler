@@ -5,7 +5,7 @@
 
 #include "h/minicrawler.h"
 #include "h/version.h"
-#include "h/proto.h"
+#include "h/string.h"
 
 /** vypise napovedu
  */
@@ -88,7 +88,6 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 			post = malloc(strlen(argv[t+1]) + 1);
 			memcpy(post, argv[t+1], strlen(argv[t+1]) + 1);
 			t++;
-			debugf("[%d] POST: %s\n",i,post);
 			continue;
 		}
 		if(!strncmp(argv[t], "-C", 2)) {

@@ -2,7 +2,6 @@
 #include <openssl/err.h>
 #include <assert.h>
 
-#include "h/struct.h"
 #include "h/proto.h"
 
 /**

@@ -1,11 +1,9 @@
-#include "h/struct.h"
-#include "h/proto.h"
-
 #include <time.h>
 #include <stdio.h>
 #include <limits.h>
 #include <assert.h>
 
+#include "h/proto.h"
 
 /**
  * It seems that cats' OSes cannot provide non-decreasing time. :-(

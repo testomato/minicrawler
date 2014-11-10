@@ -17,7 +17,7 @@
 #include <openssl/err.h>
 #include <uriparser/Uri.h>
 
-#include "h/struct.h"
+#include "h/string.h"
 #include "h/proto.h"
 #include "h/version.h"
 

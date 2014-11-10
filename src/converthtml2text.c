@@ -4,7 +4,6 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "h/struct.h"
 #include "h/proto.h"
 
 enum HtmlElement {
