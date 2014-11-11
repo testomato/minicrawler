@@ -768,21 +768,6 @@ static void empty_handshake(struct surl *u) {
 	set_atomic_int(&u->state, SURL_S_GENREQUEST);
 }
 
-/** strcpy, ktere se ukonci i koncem radku
- */
-static int strcpy_term(char *to, char *from, const size_t size) {
-	int i = 0;
-	for(;*from && *from != '\r' && *from != '\n';i++) {
-		if (i < size)
-			*to++ = *from++;
-		else return 0;
-	}
-	if (i < size)
-		*to = 0;
-	else return 0;
-	return 1;
-}
-
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
  *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
@@ -839,15 +824,6 @@ static int eatchunked(struct surl *u) {
 	}
 	
 	return 0;
-}
-
-static void trim(char *str) {
-	int len = strlen(str);
-	char *p = str;
-	while (len > 0 && (str[len-1] == ' ' || str[len-1] == '\t')) str[--len] = '\0';
-	while (*p != '\0' && (*p == ' ' || *p == '\t')) p++;
-	if (str != p)
-		memmove(str, p, len+1 - (p-str));
 }
 
 /** 
