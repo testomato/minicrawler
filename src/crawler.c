@@ -833,10 +833,13 @@ static int eatchunked(struct surl *u) {
  */
 static void setcookie(struct surl *u,char *str) {
 	struct cookie cookie;
+	struct nv attributes[10];
+	int att_len = 0;
 	char *p, *q, *r;
-	int len;
+	int i;
 
 	memset(&cookie, 0, sizeof(struct cookie));
+	memset(attributes, 0, sizeof(attributes));
 
 	p = strpbrk(str, ";\r\n");
 	if (p == NULL) return;
@@ -858,7 +861,7 @@ static void setcookie(struct surl *u,char *str) {
 	// parse name and value
 	if ((p = strchr(namevalue, '=')) == NULL) {
 		debugf("[%d] Cookie string '%s' lacks a '=' character\n", u->index, namevalue);
-		return;
+		goto fail;
 	}
 
 	cookie.name = malloc(p - namevalue + 1);
@@ -871,13 +874,11 @@ static void setcookie(struct surl *u,char *str) {
 
 	if (strlen(cookie.name) == 0) {
 		debugf("[%d] Cookie string '%s' has empty name\n", u->index, namevalue);
-		return;
+		goto fail;
 	}
 	
 	// parse cookie attributes
-	struct nv attributes[10];
 	struct nv *attr;
-	int att_len = 0;
 	p = attributestr;
 	while (*p) {
 		if (att_len > 9) {
@@ -905,7 +906,6 @@ static void setcookie(struct surl *u,char *str) {
 	}
 
 	// process attributes
-	int i;
 	for (i = 0; i < att_len; i++) {
 		attr = attributes + i;
 
@@ -913,7 +913,7 @@ static void setcookie(struct surl *u,char *str) {
 		if (!strcasecmp(attr->name, "Domain")) {
 			if (strlen(attr->value) == 0) {
 				debugf("[%d] Cookie string '%s%s' has empty value for domain attribute... ignoring\n", u->index, namevalue, attributestr);
-				return;
+				goto fail;
 			}
 
 			// ignore leading '.'
@@ -926,7 +926,7 @@ static void setcookie(struct surl *u,char *str) {
 			// match request host
 			if ((p = strcasestr(u->host, attr->value)) == NULL || *(p+strlen(attr->value)+1) != '\0') {
 				debugf("[%d] Domain in cookie string '%s%s' does not match request host '%s'... ignoring\n", u->index, namevalue, attributestr, u->host);
-				return;
+				goto fail;
 			}
 
 			cookie.domain = malloc(strlen(attr->value)+1);
@@ -954,9 +954,7 @@ static void setcookie(struct surl *u,char *str) {
 	}
 
 	if (t<u->cookiecnt) { // už tam byla
-		free(u->cookies[t].name);
-		free(u->cookies[t].value);
-		free(u->cookies[t].domain);
+		free_cookie(&u->cookies[t]);
 		debugf("[%d] Changed cookie\n",u->index);
 	} else {
 		u->cookiecnt++;
@@ -965,11 +963,19 @@ static void setcookie(struct surl *u,char *str) {
 	if (t < sizeof(u->cookies)/sizeof(*u->cookies)) {
 		memcpy(&u->cookies[t], &cookie, sizeof(cookie));
 		debugf("[%d] Storing cookie #%d: name='%s', value='%s', domain='%s', host_only=%d, secure=%d\n",u->index,t,cookie.name,cookie.value,cookie.domain,cookie.host_only,cookie.secure);
+		goto free_struct;
 	} else {
 		u->cookiecnt--;
 		debugf("[%d] Not enough memory for storing cookies\n",u->index);
 	}
 
+fail:
+	free_cookie(&cookie);
+free_struct:
+	free(attributestr);
+	for (i = 0; i < att_len; i++) {
+		free_nv(&attributes[i]);
+	}
 }
 
 /** Find string with content type inside the http head.

@@ -10,6 +10,11 @@ struct nv {
     char *name, *value;
 };
 
+static inline void free_nv(struct nv *nv) {
+	if (nv->name) free(nv->name);
+	if (nv->value) free(nv->value);
+}
+
 enum {
 	SURL_STATES_IO = 1<<SURL_S_CONNECT | 1<<SURL_S_HANDSHAKE | 1<<SURL_S_SENDREQUEST | 1<<SURL_S_RECVREPLY,
 };

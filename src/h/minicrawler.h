@@ -42,6 +42,13 @@ static inline void free_addr(struct addr *addr) {
 	}
 }
 
+static inline void free_cookie(struct cookie *cookie) {
+	if (cookie->name) free(cookie->name);
+	if (cookie->value) free(cookie->value);
+	if (cookie->domain) free(cookie->domain);
+	if (cookie->path) free(cookie->path);
+}
+
 enum surl_s {
 	SURL_S_JUSTBORN,
 	SURL_S_PARSEDURL,
