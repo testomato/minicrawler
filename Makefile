@@ -24,9 +24,17 @@ o/%.o: src/%.c .odir.stamp $(headers)
 so/%.o: src/%.c .odir.stamp $(headers)
 	gcc -g -O3 -std=gnu99 -fpic -o $@ -c $<
 
+install: $(name) $(libname)
+	cp $(name) /usr/bin
+	test -d /usr/lib/$(name) || mkdir /usr/lib/$(name) && \
+		cp $(libname) /usr/lib/$(name) && \
+		ldconfig -n /usr/lib/$(name)
+	test -d /usr/include/$(name) || mkdir /usr/include/$(name) && \
+		cp src/h/minicrawler.h /usr/include/$(name)
+
 clean:
 	rm -f $(objs)
 	rm -f $(objs-so)
 	rm -f .odir.stamp
 
-.PHONY: clean lib
+.PHONY: install clean lib

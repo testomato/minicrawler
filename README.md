@@ -76,6 +76,7 @@ Install following dependencies:
 Then run
 ```
 make
+sudo make install
 ```
 
 ## OS X
