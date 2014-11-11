@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <arpa/inet.h>
 
 #include "h/minicrawler.h"
 #include "h/version.h"
@@ -35,6 +36,8 @@ void printusage()
 	         "\n", VERSION);
 }
 
+static int writehead = 0;
+
 /** nacte url z prikazove radky do struktur
  */
 void initurls(int argc, char *argv[], struct surl **url, struct ssettings *settings)
@@ -56,7 +59,7 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 		// options
 		if(!strcmp(argv[t], "-d")) {settings->debug=1; continue;}
 		if(!strcmp(argv[t], "-S")) {options |= 1<<SURL_OPT_NONSSL; continue;}
-		if(!strcmp(argv[t], "-h")) {settings->writehead=1; continue;}
+		if(!strcmp(argv[t], "-h")) {writehead=1; continue;}
 		if(!strcmp(argv[t], "-i")) {settings->impatient=1; continue;}
 		if(!strcmp(argv[t], "-p")) {settings->partial=1; continue;}
 		if(!strcmp(argv[t], "-c")) {options |= 1<<SURL_OPT_CONVERT_TO_TEXT | 1<<SURL_OPT_CONVERT_TO_UTF8; continue;}
@@ -122,3 +125,137 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 	}
 }
 
+/**
+ * Formats timing data for output
+ */
+static void format_timing(char *dest, struct timing *timing) {
+	int n;
+	const int now = timing->done;
+	if (timing->dnsstart) {
+		n = sprintf(dest, "DNS Lookup=%d ms; ", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
+		if (n > 0) dest += n;
+	}
+	if (timing->connectionstart) {
+		n = sprintf(dest, "Initial connection=%d ms; ", (timing->requeststart ? timing->requeststart : now) - timing->connectionstart);
+		if (n > 0) dest += n;
+	}
+	if (timing->sslstart) {
+		n = sprintf(dest, "SSL=%d ms; ", (timing->sslend ? timing->sslend : now) - timing->sslstart);
+		if (n > 0) dest += n;
+	}
+	if (timing->requeststart) {
+		n = sprintf(dest, "Request=%d ms; ", (timing->requestend ? timing->requestend : now) - timing->requeststart);
+		if (n > 0) dest += n;
+	}
+	if (timing->requestend) {
+		n = sprintf(dest, "Waiting=%d ms; ", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
+		if (n > 0) dest += n;
+	}
+	if (timing->firstbyte) {
+		n = sprintf(dest, "Content download=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->firstbyte);
+		if (n > 0) dest += n;
+	}
+	if (timing->connectionstart) {
+		n = sprintf(dest, "Total=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->connectionstart);
+		if (n > 0) dest += n;
+	}
+}
+
+void output(struct surl *u) {
+	unsigned char header[16384];
+
+	sprintf(header,"URL: %s",u->rawurl);
+	if(u->redirectedto != NULL) sprintf(header+strlen(header),"\nRedirected-To: %s",u->redirectedto);
+	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
+		sprintf(header+strlen(header), "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
+		format_timing(header+strlen(header), &rinfo->timing);
+	}
+	sprintf(header+strlen(header),"\nStatus: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
+
+	const int url_state = u->state;
+	if (url_state <= SURL_S_RECVREPLY) {
+		char timeouterr[50];
+		switch (url_state) {
+			case SURL_S_JUSTBORN:
+				strcpy(timeouterr, "Process has not started yet"); break;
+			case SURL_S_PARSEDURL:
+				strcpy(timeouterr, "Timeout while contacting DNS servers"); break;
+			case SURL_S_INDNS:
+				strcpy(timeouterr, "Timeout while resolving host"); break;
+			case SURL_S_GOTIP:
+				if (u->timing.connectionstart) {
+					strcpy(timeouterr, "Connection timed out");
+				} else {
+					strcpy(timeouterr, "Waiting for download slot");
+				}
+				break;
+			case SURL_S_CONNECT:
+				strcpy(timeouterr, "Connection timed out"); break;
+			case SURL_S_HANDSHAKE:
+				strcpy(timeouterr, "Timeout during SSL handshake"); break;
+			case SURL_S_GENREQUEST:
+				strcpy(timeouterr, "Timeout while generating HTTP request"); break;
+			case SURL_S_SENDREQUEST:
+				strcpy(timeouterr, "Timeout while sending HTTP request"); break;
+			case SURL_S_RECVREPLY:
+				strcpy(timeouterr, "HTTP server timed out"); break;
+		}
+
+		sprintf(header+strlen(header), "Timeout: %d (%s); %s\n", url_state, state_to_s(url_state), timeouterr);
+	}
+	if (*u->error_msg) {
+		sprintf(header+strlen(header), "Error-msg: %s\n", u->error_msg);
+	}
+	if (*u->charset) {
+		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
+	}
+	if (u->cookiecnt) {
+		sprintf(header+strlen(header), "Cookies: %d\n", u->cookiecnt);
+		// netscape cookies.txt format
+		// @see http://www.cookiecentral.com/faq/#3.5
+		for (int t = 0; t < u->cookiecnt; t++) {
+			sprintf(header+strlen(header), "%s\t%d\t/\t%d\t0\t%s\t%s\n", u->cookies[t].domain, u->cookies[t].host_only/*, u->cookies[t].path*/, u->cookies[t].secure/*, u->cookies[t].expiration*/, u->cookies[t].name, u->cookies[t].value);
+		}
+	}
+	if (u->conv_errno) {
+		char err_buf[128];
+#		ifdef __APPLE__
+		char *err = !strerror_r(u->conv_errno, err_buf, sizeof(err_buf)) ? err_buf : "Unknown error";
+#		else
+		char *err = strerror_r(u->conv_errno, err_buf, sizeof(err_buf));
+#		endif
+		sprintf(header+strlen(header), "Conversion error: %s\n", err);
+	}
+
+	// downtime
+	int downtime;
+	if (url_state == SURL_S_DOWNLOADED) {
+		assert(u->timing.lastread >= u->timing.connectionstart);
+		downtime = u->timing.lastread - u->downstart;
+	} else if (u->downstart) {
+		downtime = u->timing.done - u->downstart;
+	} else {
+		downtime = u->timing.done;
+	}
+	sprintf(header+strlen(header), "Downtime: %dms; %dms", downtime, u->downstart);
+	if (u->addr != NULL) {
+		char straddr[INET6_ADDRSTRLEN];
+		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
+		sprintf(header+strlen(header), " (ip=%s)", straddr);
+	}
+	sprintf(header+strlen(header), "\nTiming: ");
+	format_timing(header+strlen(header), &u->timing);
+	sprintf(header+strlen(header), "\nIndex: %d\n\n",u->index);
+
+	write_all(STDOUT_FILENO, header, strlen(header));
+	if (writehead) {
+		write_all(STDOUT_FILENO, u->buf, u->headlen);
+		if (0 == u->headlen) {
+			write_all(STDOUT_FILENO, "\n", 1); // PHP library expects one empty line at the end of headers, in normal circumstances it is contained
+						      // within u->buf[0 .. u->headlen] .
+		}
+	}
+
+	write_all(STDOUT_FILENO, u->buf+u->headlen, u->bufp-u->headlen);
+	write_all(STDOUT_FILENO, "\n", 1); // jinak se to vývojářům v php špatně parsuje
+}

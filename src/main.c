@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
 
 	init_settings(&settings);
 	initurls(argc, argv, &url, &settings);
-	go(url, &settings);
+	go(url, &settings, output);
  
 	exit(0);
 }

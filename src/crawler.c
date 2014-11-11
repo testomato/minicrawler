@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <ares.h>
@@ -1157,47 +1156,7 @@ ssize_t plain_write(const struct surl *u, const char *buf, const size_t size, ch
 	return SURL_IO_ERROR;
 }
 
-/**
- * Formats timing data for output
- */
-static void format_timing(char *dest, struct timing *timing) {
-	int n;
-	const int now = get_time_int();
-	if (timing->dnsstart) {
-		n = sprintf(dest, "DNS Lookup=%d ms; ", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
-		if (n > 0) dest += n;
-	}
-	if (timing->connectionstart) {
-		n = sprintf(dest, "Initial connection=%d ms; ", (timing->requeststart ? timing->requeststart : now) - timing->connectionstart);
-		if (n > 0) dest += n;
-	}
-	if (timing->sslstart) {
-		n = sprintf(dest, "SSL=%d ms; ", (timing->sslend ? timing->sslend : now) - timing->sslstart);
-		if (n > 0) dest += n;
-	}
-	if (timing->requeststart) {
-		n = sprintf(dest, "Request=%d ms; ", (timing->requestend ? timing->requestend : now) - timing->requeststart);
-		if (n > 0) dest += n;
-	}
-	if (timing->requestend) {
-		n = sprintf(dest, "Waiting=%d ms; ", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
-		if (n > 0) dest += n;
-	}
-	if (timing->firstbyte) {
-		n = sprintf(dest, "Content download=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->firstbyte);
-		if (n > 0) dest += n;
-	}
-	if (timing->connectionstart) {
-		n = sprintf(dest, "Total=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->connectionstart);
-		if (n > 0) dest += n;
-	}
-}
-
-
-/** vypise vystup na standardni vystup
- */
-static void output(struct surl *u, const struct ssettings *settings) {
-	unsigned char header[16384];
+static void finish(struct surl *u, surl_callback callback) {
 
 	if (u->gzipped) {
 		char *buf;
@@ -1212,7 +1171,7 @@ static void output(struct surl *u, const struct ssettings *settings) {
 			u->bufp = buflen + u->headlen;
 		} else {
 			sprintf(u->error_msg, "Gzip decompression error %d", ret);
-			u->status = SURL_S_ERROR - SURL_S_DONE;
+			u->status = SURL_S_DOWNLOADED - SURL_S_ERROR;
 			u->bufp = u->headlen;
 		}
 	}
@@ -1233,106 +1192,13 @@ static void output(struct surl *u, const struct ssettings *settings) {
 	if (u->options & 1<<SURL_OPT_CONVERT_TO_TEXT) {
 		u->bufp=converthtml2text(u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
-	sprintf(header,"URL: %s",u->rawurl);
-	if(u->redirectedto != NULL) sprintf(header+strlen(header),"\nRedirected-To: %s",u->redirectedto);
-	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
-		sprintf(header+strlen(header), "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
-		format_timing(header+strlen(header), &rinfo->timing);
-	}
-	sprintf(header+strlen(header),"\nStatus: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
 
-	const int url_state = get_atomic_int(&u->state);
-	if (url_state <= SURL_S_RECVREPLY) {
-		char timeouterr[50];
-		switch (url_state) {
-			case SURL_S_JUSTBORN:
-				strcpy(timeouterr, "Process has not started yet"); break;
-			case SURL_S_PARSEDURL:
-				strcpy(timeouterr, "Timeout while contacting DNS servers"); break;
-			case SURL_S_INDNS:
-				strcpy(timeouterr, "Timeout while resolving host"); break;
-			case SURL_S_GOTIP:
-				if (u->timing.connectionstart) {
-					strcpy(timeouterr, "Connection timed out");
-				} else {
-					strcpy(timeouterr, "Waiting for download slot");
-				}
-				break;
-			case SURL_S_CONNECT:
-				strcpy(timeouterr, "Connection timed out"); break;
-			case SURL_S_HANDSHAKE:
-				strcpy(timeouterr, "Timeout during SSL handshake"); break;
-			case SURL_S_GENREQUEST:
-				strcpy(timeouterr, "Timeout while generating HTTP request"); break;
-			case SURL_S_SENDREQUEST:
-				strcpy(timeouterr, "Timeout while sending HTTP request"); break;
-			case SURL_S_RECVREPLY:
-				strcpy(timeouterr, "HTTP server timed out"); break;
-		}
+	u->timing.done = get_time_int();
 
-		sprintf(header+strlen(header), "Timeout: %d (%s); %s\n", url_state, state_to_s(url_state), timeouterr);
-	}
-	if (*u->error_msg) {
-		sprintf(header+strlen(header), "Error-msg: %s\n", u->error_msg);
-	}
-	if (*u->charset) {
-		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
-	}
-	if (u->cookiecnt) {
-		sprintf(header+strlen(header), "Cookies: %d\n", u->cookiecnt);
-		// netscape cookies.txt format
-		// @see http://www.cookiecentral.com/faq/#3.5
-		for (int t = 0; t < u->cookiecnt; t++) {
-			sprintf(header+strlen(header), "%s\t%d\t/\t%d\t0\t%s\t%s\n", u->cookies[t].domain, u->cookies[t].host_only/*, u->cookies[t].path*/, u->cookies[t].secure/*, u->cookies[t].expiration*/, u->cookies[t].name, u->cookies[t].value);
-		}
-	}
-	if (u->conv_errno) {
-		char err_buf[128];
-#		ifdef __APPLE__
-		char *err = !strerror_r(u->conv_errno, err_buf, sizeof(err_buf)) ? err_buf : "Unknown error";
-#		else
-		char *err = strerror_r(u->conv_errno, err_buf, sizeof(err_buf));
-#		endif
-		sprintf(header+strlen(header), "Conversion error: %s\n", err);
-	}
+	callback(u);
 
-	// downtime
-	int downtime;
-	if (url_state == SURL_S_DONE) {
-		assert(u->timing.lastread >= u->timing.connectionstart);
-		downtime = u->timing.lastread - u->downstart;
-	} else if (u->downstart) {
-		downtime = get_time_int() - u->downstart;
-	} else {
-		downtime = get_time_int();
-	}
-	sprintf(header+strlen(header), "Downtime: %dms; %dms", downtime, u->downstart);
-	if (u->addr != NULL) {
-		char straddr[INET6_ADDRSTRLEN];
-		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
-		sprintf(header+strlen(header), " (ip=%s; %u)", straddr, get_time_slot(u->addr->ip));
-	}
-	sprintf(header+strlen(header), "\nTiming: ");
-	format_timing(header+strlen(header), &u->timing);
-	sprintf(header+strlen(header), "\nIndex: %d\n\n",u->index);
-
-	write_all(STDOUT_FILENO, header, strlen(header));
-	if(settings->writehead) {
-		debugf("[%d] outputting header %dB - %d %d %d %d\n",u->index,u->headlen,u->buf[u->headlen-4],u->buf[u->headlen-3],u->buf[u->headlen-2],u->buf[u->headlen-1]);
-		write_all(STDOUT_FILENO, u->buf, u->headlen);
-		if (0 == u->headlen) {
-			write_all(STDOUT_FILENO, "\n", 1); // PHP library expects one empty line at the end of headers, in normal circumstances it is contained
-						      // within u->buf[0 .. u->headlen] .
-		}
-	}
-
-	write_all(STDOUT_FILENO, u->buf+u->headlen, u->bufp-u->headlen);
-	write_all(STDOUT_FILENO, "\n", 1); // jinak se to vývojářům v php špatně parsuje
-
-	if(u->chunked) debugf("[%d] bufp=%d nextchunkedpos=%d\n",u->index,u->bufp,u->nextchunkedpos);
-
-	debugf("[%d] Outputed.\n",u->index);
-	set_atomic_int(&u->state, SURL_S_OUTPUTED);
+	debugf("[%d] Done.\n",u->index);
+	set_atomic_int(&u->state, SURL_S_DONE);
 }
 
 /**
@@ -1524,26 +1390,6 @@ static void resolvelocation(struct surl *u) {
 	reset_url(u);
 }
 
-/** uz mame cely vstup - bud ho vypis nebo vyres presmerovani
- */
-static void finish(struct surl *u) {
-	if(u->headlen==0) {
-		detecthead(u); // nespousteli jsme to predtim, tak pustme ted
-	}
-
-	if (get_atomic_int(&u->state) == SURL_S_ERROR) {
-		// chyba, končíme
-		return;
-	}
-
-	if(u->location[0] && strcmp(u->method, "HEAD")) {
-		resolvelocation(u);
-	} else {
-		set_atomic_int(&u->state, SURL_S_DONE);
-		debugf("[%d] Done.\n",u->index);
-	}
-}
-
 /**
 Try read some data from the socket, check that we have some available place in the buffer.
 */
@@ -1603,8 +1449,12 @@ static void readreply(struct surl *u) {
 
 		if (t == SURL_IO_ERROR) {
 			set_atomic_int(&u->state, SURL_S_ERROR);
-		} else {
-			finish(u); // u->state is changed here
+		} else if (get_atomic_int(&u->state) != SURL_S_ERROR) {
+			set_atomic_int(&u->state, SURL_S_DOWNLOADED);
+			debugf("[%d] Downloaded.\n",u->index);
+			if (u->location[0] && strcmp(u->method, "HEAD")) {
+				resolvelocation(u);
+			}
 		}
 	} else {
 		set_atomic_int(&u->state, SURL_S_RECVREPLY);
@@ -1672,7 +1522,7 @@ static void selectall(struct surl *url) {
 
 /** provede jeden krok pro dane url
  */
-static void goone(struct surl *u, const struct ssettings *settings) {
+static void goone(struct surl *u, const struct ssettings *settings, surl_callback callback) {
 	const int state = get_atomic_int(&u->state);
 	const int rw = get_atomic_int(&u->rw);
 	int timeout;
@@ -1757,14 +1607,14 @@ static void goone(struct surl *u, const struct ssettings *settings) {
 		if (!u->timing.requestend) u->timing.requestend = time;
 		u->f.recv_reply(u);
 		break;
+
+	case SURL_S_DOWNLOADED:
+		finish(u, callback);
+		break;
   
 	case SURL_S_ERROR:
 		assert(u->status < 0);
-		output(u, settings);
-		break;
-
-	case SURL_S_DONE:
-		output(u, settings);
+		finish(u, callback);
 		break;
 	}
 
@@ -1816,14 +1666,14 @@ static int exitprematurely(struct surl *url) {
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-static void outputpartial(struct surl *url, const struct ssettings *settings) {
+static void outputpartial(struct surl *url, surl_callback callback) {
 	struct surl *curl;
 
 	curl = url;
 	do {
 		const int url_state = get_atomic_int(&curl->state);
-		if(url_state < SURL_S_OUTPUTED) {
-			output(curl, settings);
+		if(url_state < SURL_S_DONE) {
+			finish(curl, callback);
 		}
 	} while ((curl = curl->next) != NULL);
 }
@@ -1897,7 +1747,7 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 /**
  * hlavni smycka
  */
-void go(struct surl *url, const struct ssettings *settings) {
+void go(struct surl *url, const struct ssettings *settings, surl_callback callback) {
 	int done;
 	int change;
 	struct surl *curl;
@@ -1912,8 +1762,8 @@ void go(struct surl *url, const struct ssettings *settings) {
 		do {
 			//debugf("%d: %d\n",t,curl->state);
 			const int state = get_atomic_int(&curl->state);
-			if(state < SURL_S_OUTPUTED) {
-				goone(curl, settings);
+			if(state < SURL_S_DONE) {
+				goone(curl, settings, callback);
 				done = 0;
 			}
 			// curl->state can change inside goone
@@ -1926,7 +1776,7 @@ void go(struct surl *url, const struct ssettings *settings) {
 		if(t > settings->timeout*1000) {
 			debugf("Timeout (%d ms elapsed). The end.\n", t);
 			if(settings->partial) {
-				outputpartial(url, settings);
+				outputpartial(url, callback);
 			}
 			break;
 		}
