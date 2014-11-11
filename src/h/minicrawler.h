@@ -1,6 +1,14 @@
 #include <openssl/ssl.h>
 #include <uriparser/Uri.h>
 
+struct ssettings {
+	int debug;
+	int timeout;
+	int impatient;
+	int partial;
+	int delay;
+};
+
 struct cookie {
     char *name, *value, *domain, *path;
 	int secure, host_only, expire;
@@ -47,6 +55,21 @@ static inline void free_cookie(struct cookie *cookie) {
 	if (cookie->value) free(cookie->value);
 	if (cookie->domain) free(cookie->domain);
 	if (cookie->path) free(cookie->path);
+}
+
+static inline void cp_cookie(struct cookie *dst, const struct cookie *src) {
+	dst->name = malloc(strlen(src->name) + 1);
+	dst->value = malloc(strlen(src->value) + 1);
+	dst->domain = malloc(strlen(src->domain) + 1);
+	dst->path = malloc(strlen(src->path) + 1);
+
+	strcpy(dst->name, src->name);
+	strcpy(dst->value, src->value);
+	strcpy(dst->domain, src->domain);
+	strcpy(dst->path, src->path);
+	dst->host_only = src->host_only;
+	dst->secure = src->secure;
+	dst->expire = src->expire;
 }
 
 enum surl_s {
@@ -197,16 +220,8 @@ struct surl {
 	long options;
 };
 
-struct ssettings {
-	int debug;
-	int timeout;
-	int impatient;
-	int partial;
-	int delay;
-};
-
 void init_settings(struct ssettings *settings);
 
-void init_url(struct surl *u, const char *url, const int index, char *post, struct cookie *cookies, const int cookiecnt);
+void init_url(struct surl *u, const char *url);
 
 void go(struct surl *url, const struct ssettings *settings, surl_callback callback);

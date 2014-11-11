@@ -470,9 +470,16 @@ static void launchdns(struct surl *u) {
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return;
 	}
+	if (!u->addrtype) {
+		if (u->options & 1<<SURL_OPT_IPV6) {
+			u->addrtype = AF_INET6;
+		} else {
+			u->addrtype = AF_INET;
+		}
+	}
 
 	set_atomic_int(&u->state, SURL_S_INDNS);
-	ares_gethostbyname(u->aresch,u->host,u->addrtype,(ares_host_callback)&dnscallback,u);
+	ares_gethostbyname(u->aresch, u->host, u->addrtype, (ares_host_callback)&dnscallback, u);
 }
 
 /** uz je ares hotovy?
@@ -1669,11 +1676,7 @@ void init_settings(struct ssettings *settings) {
 /**
  * Init URL struct
  */
-void init_url(struct surl *u, const char *url, const int index, char *post, struct cookie *cookies, const int cookiecnt) {
-	reset_url(u);
-
-	// Init the url
-	u->index = index;
+void init_url(struct surl *u, const char *url) {
 	u->state = SURL_S_JUSTBORN;
 	u->redirect_limit = MAX_REDIRECTS;
 	if (strlen(url) > MAXURLSIZE) {
@@ -1683,32 +1686,7 @@ void init_url(struct surl *u, const char *url, const int index, char *post, stru
 	} else {
 		strcpy(u->rawurl, url);
 	}
-	if (u->options & 1<<SURL_OPT_IPV6) {
-		u->addrtype = AF_INET6;
-	} else {
-		u->addrtype = AF_INET;
-	}
-	if (!u->method[0]) {
-		strcpy(u->method, post == NULL ? "GET" : "POST");
-	}
-	if (post != NULL) {
-		u->post = post;
-	}
-	for (int i = 0; i < cookiecnt; i++) {
-		u->cookies[i].name = malloc(strlen(cookies[i].name) + 1);
-		u->cookies[i].value = malloc(strlen(cookies[i].value) + 1);
-		u->cookies[i].domain = malloc(strlen(cookies[i].domain) + 1);
-		u->cookies[i].path = malloc(strlen(cookies[i].path) + 1);
-
-		strcpy(u->cookies[i].name, cookies[i].name);
-		strcpy(u->cookies[i].value, cookies[i].value);
-		strcpy(u->cookies[i].domain, cookies[i].domain);
-		strcpy(u->cookies[i].path, cookies[i].path);
-		u->cookies[i].host_only = cookies[i].host_only;
-		u->cookies[i].secure = cookies[i].secure;
-		u->cookies[i].expire = cookies[i].expire;
-	}
-	u->cookiecnt = cookiecnt;
+	u->contentlen = -1;
 
 	// init callbacks
 	u->f = (struct surl_func) {

@@ -43,7 +43,7 @@ static int writehead = 0;
 void initurls(int argc, char *argv[], struct surl **url, struct ssettings *settings)
 {
 	struct surl *curl, *purl;
-	char *post = NULL, *p, *q;
+	char *p, *q;
 	long options = 0;
 	char customheader[4096];
 	char customagent[256];
@@ -88,8 +88,8 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
-			post = malloc(strlen(argv[t+1]) + 1);
-			memcpy(post, argv[t+1], strlen(argv[t+1]) + 1);
+			curl->post = malloc(strlen(argv[t+1]) + 1);
+			memcpy(curl->post, argv[t+1], strlen(argv[t+1]) + 1);
 			t++;
 			continue;
 		}
@@ -102,13 +102,22 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 		}
 		if(!strcmp(argv[t], "-X")) {safe_cpy(curl->method, argv[t+1], I_SIZEOF(curl->method)); t++; continue;}
 
+		// init url
+		init_url(curl, argv[t]);
+		curl->index = i++;
+		if (!curl->method[0]) {
+			strcpy(curl->method, curl->post ? "GET" : "POST");
+		}
+		for (int i = 0; i < ccnt; i++) {
+			cp_cookie(&curl->cookies[i], &cookies[i]);
+		}
+		curl->cookiecnt = ccnt;
 		strcpy(curl->customagent, customagent);
 		if (!curl->customheader[0]) {
 			strcpy(curl->customheader, customheader);
 		}
 		curl->options = options;
-		init_url(curl, argv[t], i++, post, cookies, ccnt);
-		post = NULL;
+
 		purl = curl;
 		curl = (struct surl *)malloc(sizeof(struct surl));
 		purl->next = curl;
@@ -118,10 +127,7 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 	purl->next = NULL;
 
 	for (int t = 0; t < ccnt; t++) {
-		free(cookies[t].name);
-		free(cookies[t].value);
-		free(cookies[t].domain);
-		free(cookies[t].path);
+		free_cookie(&cookies[t]);
 	}
 }
 
