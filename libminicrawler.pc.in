@@ -1,0 +1,11 @@
+prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libminicrawler
+Description: Single-threaded multi-socket HTTP(S) client
+
+Version: @VERSION@
+URL: https://github.com/testomato/minicrawler
+Libs: -L${libdir} -lminicrawler
+Cflags: -I${includedir}

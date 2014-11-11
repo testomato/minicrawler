@@ -65,32 +65,22 @@ Minicrawler puts its own headers into an output with the following meaning
  * TLS/SSL - [OpenSSL](https://www.openssl.org/)
 
 ## Build
-### Linux
 
-Install following dependencies:
- * libc-ares-dev
- * zlib1g-dev
- * liburiparser-dev
- * libssl-dev
+Tested platforms: Debian Linux, OS X
+
+Install following dependencies (including header files):
+ * c-ares
+ * zlib1g
+ * uriparser
+ * OpenSSL
+
+With apt-get: `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
+With [homebrew](http://brew.sh/): `brew install c-ares zlib uriparser openssl`
 
 Then run
 ```
+./autogen.sh
+./configure
 make
 sudo make install
-```
-
-## OS X
-
-Install follow dependencies:
-
- * c-ares
- * zlib
- * uriparser
- * openssl
-
-With [homebrew](http://brew.sh/) `brew install c-ares openssl zlib uriparser openssl` or run `make -f Makefile.mac install-deps`. 
-
-Then
-```
-make -f Makefile.mac
 ```

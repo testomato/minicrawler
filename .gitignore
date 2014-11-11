@@ -1,7 +1,24 @@
-minicrawler
-.idea
-o/
-opt/
+# build files
+.deps
+.dirstamp
+.libs
+*.o
+*.lo
+*.la
+config.h*
+stamp-h*
+/minicrawler
+/libminicrawler.pc
 
-.odir.stamp
-*.tar.*
+# GNU Build System
+/autom4te.cache
+/aclocal.m4
+/build-aux
+/config.guess
+/config.log
+/config.status
+/configure
+/libtool
+/m4
+Makefile
+Makefile.in
