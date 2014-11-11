@@ -1667,7 +1667,7 @@ static void outputpartial(struct surl *url, surl_callback callback) {
 	} while ((curl = curl->next) != NULL);
 }
 
-void init_settings(struct ssettings *settings) {
+void mcrawler_init_settings(struct ssettings *settings) {
 	memset(settings, 0, sizeof(struct ssettings));
 	settings->timeout = DEFAULT_TIMEOUT;
 	settings->delay = DEFAULT_DELAY;
@@ -1676,7 +1676,7 @@ void init_settings(struct ssettings *settings) {
 /**
  * Init URL struct
  */
-void init_url(struct surl *u, const char *url) {
+void mcrawler_init_url(struct surl *u, const char *url) {
 	u->state = SURL_S_JUSTBORN;
 	u->redirect_limit = MAX_REDIRECTS;
 	if (strlen(url) > MAXURLSIZE) {
@@ -1707,7 +1707,7 @@ void init_url(struct surl *u, const char *url) {
 /**
  * hlavni smycka
  */
-void go(struct surl *url, const struct ssettings *settings, surl_callback callback) {
+void mcrawler_go(struct surl *url, const struct ssettings *settings, surl_callback callback) {
 	int done;
 	int change;
 	struct surl *curl;

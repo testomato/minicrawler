@@ -220,8 +220,8 @@ struct surl {
 	long options;
 };
 
-void init_settings(struct ssettings *settings);
+void mcrawler_init_settings(struct ssettings *settings);
 
-void init_url(struct surl *u, const char *url);
+void mcrawler_init_url(struct surl *u, const char *url);
 
-void go(struct surl *url, const struct ssettings *settings, surl_callback callback);
+void mcrawler_go(struct surl *url, const struct ssettings *settings, surl_callback callback);

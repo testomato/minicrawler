@@ -103,7 +103,7 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 		if(!strcmp(argv[t], "-X")) {safe_cpy(curl->method, argv[t+1], I_SIZEOF(curl->method)); t++; continue;}
 
 		// init url
-		init_url(curl, argv[t]);
+		mcrawler_init_url(curl, argv[t]);
 		curl->index = i++;
 		if (!curl->method[0]) {
 			strcpy(curl->method, curl->post ? "GET" : "POST");

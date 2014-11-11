@@ -24,9 +24,9 @@ int main(int argc, char *argv[]) {
 	struct surl *url;
 	struct ssettings settings;
 
-	init_settings(&settings);
+	mcrawler_init_settings(&settings);
 	initurls(argc, argv, &url, &settings);
-	go(url, &settings, output);
+	mcrawler_go(url, &settings, output);
  
 	exit(0);
 }
