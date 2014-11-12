@@ -32,3 +32,20 @@ enum surl_io {
 	SURL_IO_ERROR = -1,
 	SURL_IO_EOF = 0,
 };
+
+typedef ssize_t (*read_callback)(const struct surl *u, char *buf, const size_t size, char *errbuf);
+typedef ssize_t (*write_callback)(const struct surl *u, const char *buf, const size_t size, char *errbuf);
+
+struct surl_func {
+	read_callback read;
+	write_callback write;
+	surl_callback parse_url;
+	surl_callback launch_dns;
+	surl_callback check_dns;
+	surl_callback open_socket;
+	surl_callback connect_socket;
+	surl_callback handshake;
+	surl_callback gen_request;
+	surl_callback send_request;
+	surl_callback recv_reply;
+};

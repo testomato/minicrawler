@@ -1,5 +1,3 @@
-#include <openssl/ssl.h>
-#include <uriparser/Uri.h>
 
 struct ssettings {
 	int debug;
@@ -119,22 +117,6 @@ static inline const char *state_to_s(const enum surl_s x) {
 struct surl;
 
 typedef void (*surl_callback)(struct surl*);
-typedef ssize_t (*read_callback)(const struct surl *u, char *buf, const size_t size, char *errbuf);
-typedef ssize_t (*write_callback)(const struct surl *u, const char *buf, const size_t size, char *errbuf);
-
-struct surl_func {
-	read_callback read;
-	write_callback write;
-	surl_callback parse_url;
-	surl_callback launch_dns;
-	surl_callback check_dns;
-	surl_callback open_socket;
-	surl_callback connect_socket;
-	surl_callback handshake;
-	surl_callback gen_request;
-	surl_callback send_request;
-	surl_callback recv_reply;
-};
 
 enum surl_options {
 	SURL_OPT_NONSSL,
@@ -151,13 +133,11 @@ enum {
 };
 
 struct surl {
-	struct surl_func f;
 
-    // ...
 	int index;
 	char rawurl[MAXURLSIZE + 1];
 
-	UriUriA *uri;
+	void *uri;
 	char *proto;
 	char *host;
 	int port;
@@ -192,7 +172,7 @@ struct surl {
 	int downstart;		// time downloading start
 
 	// ares
-	struct ares_channeldata *aresch;
+	void *aresch;
 
 	// network
 	int sockfd;
@@ -212,12 +192,14 @@ struct surl {
 	int conv_errno;		// set in case of wrong conversion
 
 	// SSL support
-	SSL *ssl;
+	void *ssl;
 	long ssl_options;
 
 	struct surl *next; // linked list
 
 	long options;
+
+	void *f;
 };
 
 void mcrawler_init_settings(struct ssettings *settings);

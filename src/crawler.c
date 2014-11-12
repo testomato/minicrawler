@@ -341,6 +341,7 @@ static int check_proto(struct surl *u);
  */
 static int set_new_uri(struct surl *u, char *rawurl) {
 	int r;
+	UriUriA *uri;
 
 	if (u->uri != NULL) {
 		uriFreeUriMembersA(u->uri);
@@ -349,8 +350,8 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 
 	UriParserStateA state;
 
-	u->uri = (UriUriA *)malloc(sizeof(UriUriA));
-	state.uri = u->uri;
+	u->uri = uri = (UriUriA *)malloc(sizeof(UriUriA));
+	state.uri = uri;
 
 	if (uriParseUriA(&state, rawurl) != URI_SUCCESS) {
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, rawurl);
@@ -359,34 +360,34 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 		return 0;
 	}
 
-	if (u->uri->scheme.first == NULL) {
+	if (uri->scheme.first == NULL) {
 		debugf("[%d] error: url='%s' has no scheme\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no scheme");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return 0;
 	}
 	if (u->proto != NULL) free(u->proto);
-	u->proto = malloc(u->uri->scheme.afterLast - u->uri->scheme.first + 1);
-	*(char*)mempcpy(u->proto, u->uri->scheme.first, u->uri->scheme.afterLast-u->uri->scheme.first) = 0;
+	u->proto = malloc(uri->scheme.afterLast - uri->scheme.first + 1);
+	*(char*)mempcpy(u->proto, uri->scheme.first, uri->scheme.afterLast-uri->scheme.first) = 0;
 
 	if (check_proto(u) == -1) {
 		return 0;
 	}
 
-	if (u->uri->hostText.first == NULL) {
+	if (uri->hostText.first == NULL) {
 		debugf("[%d] error: url='%s' has no host\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no host");
 		set_atomic_int(&u->state, SURL_S_ERROR);
 		return 0;
 	}
 	if (u->host != NULL) free(u->host);
-	u->host = malloc(u->uri->hostText.afterLast - u->uri->hostText.first + 1);
-	*(char*)mempcpy(u->host, u->uri->hostText.first, u->uri->hostText.afterLast-u->uri->hostText.first) = 0;
+	u->host = malloc(uri->hostText.afterLast - uri->hostText.first + 1);
+	*(char*)mempcpy(u->host, uri->hostText.first, uri->hostText.afterLast-uri->hostText.first) = 0;
 
-	if (u->uri->portText.first == NULL) {
+	if (uri->portText.first == NULL) {
 		u->port = parse_proto(u->proto);
 	} else {
-		r = sscanf(u->uri->portText.first, "%d", &u->port);
+		r = sscanf(uri->portText.first, "%d", &u->port);
 		if (r == 0) { // prázdný port
 			u->port = parse_proto(u->proto);
 		}
@@ -396,8 +397,8 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 	if (u->path != NULL) free(u->path);
 	u->path = malloc(strlen(rawurl)); // path nebude delší, než celé URL
 	char *p = u->path;
-	if (u->uri->pathHead != NULL) {
-		UriPathSegmentA *walker = u->uri->pathHead;
+	if (uri->pathHead != NULL) {
+		UriPathSegmentA *walker = uri->pathHead;
 		do {
 			*p++ = '/';
 			const int chars = (int)(walker->text.afterLast - walker->text.first);
@@ -408,33 +409,33 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 	} else {
 		*p++ = '/';
 	}
-	if (u->uri->query.first != NULL) {
+	if (uri->query.first != NULL) {
 		*p++ = '?';
-		const int chars = (int)(u->uri->query.afterLast - u->uri->query.first);
-		memcpy(p, u->uri->query.first, chars);
+		const int chars = (int)(uri->query.afterLast - uri->query.first);
+		memcpy(p, uri->query.first, chars);
 		p += chars;
 	}
 	*p = '\0';
 
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 
-	if (u->uri->hostData.ip4 != NULL) {
+	if (uri->hostData.ip4 != NULL) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
 		u->addr = (struct addr*)malloc(sizeof(struct addr));
 		memset(u->addr, 0, sizeof(struct addr));
-		memcpy(u->addr->ip, u->uri->hostData.ip4->data, 4);
+		memcpy(u->addr->ip, uri->hostData.ip4->data, 4);
 		u->addr->type = AF_INET;
 		u->addr->length = 4;
 		u->addr->next = NULL;
 		set_atomic_int(&u->state, SURL_S_GOTIP);
 		debugf("[%d] go directly to ipv4\n", u->index);
-	} else if (u->uri->hostData.ip6 != NULL) {
+	} else if (uri->hostData.ip6 != NULL) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
 		u->addr = (struct addr*)malloc(sizeof(struct addr));
 		memset(u->addr, 0, sizeof(struct addr));
-		memcpy(u->addr->ip, u->uri->hostData.ip6->data, 16);
+		memcpy(u->addr->ip, uri->hostData.ip6->data, 16);
 		u->addr->type = AF_INET6;
 		u->addr->length = 16;
 		u->addr->next = NULL;
@@ -467,7 +468,7 @@ static void launchdns(struct surl *u) {
 	int t;
 
 	debugf("[%d] Resolving %s starts\n", u->index, u->host);
-	t = ares_init(&(u->aresch));
+	t = ares_init((ares_channel *)&u->aresch);
 	if(t) {
 		debugf("[%d] ares_init failed\n", u->index);
 		sprintf(u->error_msg, "ares init failed");
@@ -750,7 +751,7 @@ GEN_REQUEST.
 */
 static void sendrequest(struct surl *u) {
 	if (u->request_it < u->request_len) {
-		const ssize_t ret = u->f.write(u, &u->request[u->request_it], u->request_len - u->request_it, (char *)&u->error_msg);
+		const ssize_t ret = ((struct surl_func *)u->f)->write(u, &u->request[u->request_it], u->request_len - u->request_it, (char *)&u->error_msg);
 		if (ret == SURL_IO_ERROR || ret == SURL_IO_EOF) {
 			set_atomic_int(&u->state, SURL_S_ERROR);
 			return;
@@ -1243,11 +1244,12 @@ static int parse_proto(const char *s) {
  */
 static int check_proto(struct surl *u) {
 	const int port = parse_proto(u->proto);
+	struct surl_func *f = u->f;
 	switch (port) {
 		case 80:
-			u->f.read = plain_read;
-			u->f.write = plain_write;
-			u->f.handshake = empty_handshake;
+			f->read = plain_read;
+			f->write = plain_write;
+			f->handshake = empty_handshake;
 			break;
 
 		case 443:
@@ -1255,9 +1257,9 @@ static int check_proto(struct surl *u) {
 				set_unsupported_protocol(u);
 				return -1;
 			} else {
-				u->f.read = sec_read;
-				u->f.write = sec_write;
-				u->f.handshake = sec_handshake;
+				f->read = sec_read;
+				f->write = sec_write;
+				f->handshake = sec_handshake;
 			}
 			break;
 
@@ -1317,8 +1319,8 @@ static void resolvelocation(struct surl *u) {
 	// méně striktní resolvování url ve tvaru http:g
 	// see http://tools.ietf.org/html/rfc3986#section-5 section 5.4.2
 	if (locUri.scheme.first != NULL && locUri.hostText.first == NULL && locUri.pathHead != NULL && locUri.pathHead->text.first != NULL) {
-		locUri.hostText = u->uri->hostText;
-		locUri.hostData = u->uri->hostData;
+		locUri.hostText = ((UriUriA *)u->uri)->hostText;
+		locUri.hostData = ((UriUriA *)u->uri)->hostData;
 	}
 
 	uri = (UriUriA *)malloc(sizeof(UriUriA));
@@ -1392,7 +1394,7 @@ static ssize_t try_read(struct surl *u) {
 		return 0;
 	}
 
-	return u->f.read(u, u->buf + u->bufp, left, (char *)&u->error_msg);
+	return ((struct surl_func *)u->f)->read(u, u->buf + u->bufp, left, (char *)&u->error_msg);
 }
 
 /** cti odpoved
@@ -1555,50 +1557,51 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 	check_io(state, rw); // Checks that when we need some io, then the socket is in readable/writeable state
 
 	const int time = get_time_int();
+	struct surl_func *f = u->f;
 
 	switch(state) {  
 	case SURL_S_JUSTBORN:
-		u->f.parse_url(u);
+		f->parse_url(u);
 		break;
 
 	case SURL_S_PARSEDURL:
 		if (!u->timing.dnsstart) u->timing.dnsstart = time;
-		u->f.launch_dns(u);
+		f->launch_dns(u);
 		break;
   
 	case SURL_S_INDNS:
-		u->f.check_dns(u);
+		f->check_dns(u);
 		break;
 
 	case SURL_S_GOTIP:
 		if (test_free_channel(u->addr->ip, settings->delay, u->prev_addr && !strcmp(u->addr->ip, u->prev_addr->ip))) {
 			if (!u->timing.connectionstart) u->timing.connectionstart = time;
 			if (!u->downstart) u->downstart = time;
-			u->f.open_socket(u);
+			f->open_socket(u);
 		}
 		break;
   
 	case SURL_S_CONNECT:
-		u->f.connect_socket(u);
+		f->connect_socket(u);
 		break;
 
 	case SURL_S_HANDSHAKE:
 		u->timing.handshakestart = time;
-		u->f.handshake(u);
+		f->handshake(u);
 		break;
 
 	case SURL_S_GENREQUEST:
-		u->f.gen_request(u);
+		f->gen_request(u);
 		break;
 
 	case SURL_S_SENDREQUEST:
 		if (!u->timing.requeststart) u->timing.requeststart = time;
-		u->f.send_request(u);
+		f->send_request(u);
 		break;
 
 	case SURL_S_RECVREPLY:
 		if (!u->timing.requestend) u->timing.requestend = time;
-		u->f.recv_reply(u);
+		f->recv_reply(u);
 		break;
 
 	case SURL_S_DOWNLOADED:
@@ -1693,7 +1696,7 @@ void mcrawler_init_url(struct surl *u, const char *url) {
 	u->contentlen = -1;
 
 	// init callbacks
-	u->f = (struct surl_func) {
+	struct surl_func f = (struct surl_func) {
 		read:plain_read,
 		write:plain_write,
 		parse_url:parseurl,
@@ -1706,6 +1709,8 @@ void mcrawler_init_url(struct surl *u, const char *url) {
 		send_request:sendrequest,
 		recv_reply:readreply,
 	};
+	u->f = (struct surl_func*)malloc(sizeof(struct surl_func));
+	memcpy(u->f, &f, sizeof(struct surl_func));
 }
 
 /**
