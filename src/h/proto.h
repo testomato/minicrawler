@@ -1,12 +1,17 @@
-#include <openssl/ssl.h>
+#include <stdio.h>
 
+#include "config.h"
 #include "struct.h"
 
 extern int debug;
 #define debugf(...)   {if(debug) fprintf(stderr, __VA_ARGS__);}
 
+#ifdef HAVE_LIBSSL
+# include <openssl/ssl.h>
+
 SSL_CTX *mossad(void);
 void free_mossad(void);
+#endif
 
 int get_time_int(void);
 unsigned get_time_slot(const unsigned char key[16]);

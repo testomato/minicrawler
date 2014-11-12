@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <string.h>
 
 struct ssettings {
 	int debug;
@@ -41,7 +43,7 @@ struct addr {
 };
 
 static inline void free_addr(struct addr *addr) {
-	while (addr != NULL) {
+	while (addr) {
 		struct addr *next = addr->next;
 		free(addr);
 		addr = next;

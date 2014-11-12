@@ -25,7 +25,9 @@ void printusage()
 	         "         -c         convert content to text format (with UTF-8 encoding)\n"
 	         "         -8         convert from page encoding to UTF-8\n"
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)\n"
+#ifdef HAVE_LIBSSL
 	         "         -S         disable SSL/TLS support\n"
+#endif
 	         "         -g         accept gzip encoding\n"
 	         "         -6         resolve host to IPv6 address only\n"
 	         "         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)\n"

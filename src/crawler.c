@@ -14,11 +14,13 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
-#include <openssl/ssl.h>
-#ifndef SSL_OP_NO_TLSv1_2
-#error "please install OpenSSL 1.0.1"
+#ifdef HAVE_LIBSSL
+# include <openssl/ssl.h>
+# ifndef SSL_OP_NO_TLSv1_2
+#  error "please install OpenSSL 1.0.1"
+# endif
+# include <openssl/err.h>
 #endif
-#include <openssl/err.h>
 #include <uriparser/Uri.h>
 
 #include "h/string.h"
@@ -60,6 +62,7 @@ static int check_io(const int state, const int rw) {
 	}
 }
 
+#ifdef HAVE_LIBSSL
 /**
  * Sets lower TSL/SSL protocol
  */
@@ -258,6 +261,7 @@ static ssize_t sec_write(const struct surl *u, const char *buf, const size_t siz
 			return SURL_IO_ERROR;
 	}
 }
+#endif
 
 /** callback funkce, kterou zavola ares
  */
@@ -557,6 +561,7 @@ static void connectsocket(struct surl *u) {
 /** Allocate ssl objects for ssl connection. Do nothing for plain connection.
 */
 static int maybe_create_ssl(struct surl *u) {
+#ifdef HAVE_LIBSSL
 	if (0 != strcmp(u->proto, "https")) {
 		return 1;
 	}
@@ -568,7 +573,7 @@ static int maybe_create_ssl(struct surl *u) {
 	SSL_set_tlsext_host_name(ssl, u->host);
 
 	u->ssl = ssl;
-
+#endif
 	return 1;
 }
 
@@ -1251,7 +1256,7 @@ static int check_proto(struct surl *u) {
 			f->write = plain_write;
 			f->handshake = empty_handshake;
 			break;
-
+#ifdef HAVE_LIBSSL
 		case 443:
 			if (u->options & 1<<SURL_OPT_NONSSL) {
 				set_unsupported_protocol(u);
@@ -1262,7 +1267,7 @@ static int check_proto(struct surl *u) {
 				f->handshake = sec_handshake;
 			}
 			break;
-
+#endif
 		default:
 			set_unsupported_protocol(u);
 			return -1;
@@ -1435,10 +1440,12 @@ static void readreply(struct surl *u) {
 	}
 	
 	if(t == SURL_IO_EOF || t == SURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
+#ifdef HAVE_LIBSSL
 		if (u->ssl != NULL) {
 			SSL_free(u->ssl);
 			u->ssl = NULL;
 		}
+#endif
 		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
 		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 
@@ -1539,6 +1546,7 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 			}
 			break;
 		case SURL_S_HANDSHAKE:
+#ifdef HAVE_LIBSSL
 			if (get_time_int() - u->timing.handshakestart > timeout) {
 				// we retry handshake with another protocol
 				if (lower_ssl_protocol(u) == 0) {
@@ -1549,6 +1557,7 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 					set_atomic_int(&u->state, SURL_S_GOTIP);
 				}
 			}
+#endif
 			break;
 		}
 

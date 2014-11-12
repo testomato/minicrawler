@@ -2,10 +2,10 @@
 
 #include <assert.h>
 #ifdef HAVE_LIMITS_H
-#include <limits.h>
+# include <limits.h>
 #else
-#define INT_MAX 2147483647
-#define INT_MIN (-INT_MAX - 1)
+# define INT_MAX 2147483647
+# define INT_MIN (-INT_MAX - 1)
 #endif
 
 #include "h/proto.h"

@@ -1,3 +1,7 @@
+#include "h/config.h"
+
+#ifdef HAVE_LIBSSL
+#ifdef HAVE_LIBCRYPTO
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <assert.h>
@@ -121,3 +125,5 @@ void free_mossad(void) {
 	SSL_CTX_free(ctx);
 	ctx = NULL;
 }
+#endif
+#endif

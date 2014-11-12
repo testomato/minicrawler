@@ -17,11 +17,16 @@ AC_PROG_LIBTOOL
 
 # Checks for libraries.
 AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares]))
-AC_CHECK_LIB([crypto], [ERR_get_error], [], AC_MSG_ERROR([please install OpenSSL]))
-AC_CHECK_LIB([ssl], [SSL_new], [], AC_MSG_ERROR([please install OpenSSL]))
 AC_CHECK_LIB([uriparser], [uriParseUriA], [], AC_MSG_ERROR([please install uriparser]))
 AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([please install zlib]))
 AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv]))
+AC_ARG_WITH([ssl],
+			[AS_HELP_STRING([--without-ssl], [disable support for https])],
+			[],
+			[with_ssl=check])
+AS_IF([test "${with_ssl}" != "no"],
+			[AC_CHECK_LIB([crypto], [ERR_get_error], [], AC_MSG_ERROR([please install OpenSSL or use option --without-ssl]))
+			AC_CHECK_LIB([ssl], [SSL_new], [], AC_MSG_ERROR([please install OpenSSL or use option --without-ssl]))])
 
 # Checks for header files.
 AC_CHECK_HEADERS([limits.h])
