@@ -15,6 +15,9 @@
 #include <errno.h>
 #include <assert.h>
 #include <openssl/ssl.h>
+#ifndef SSL_OP_NO_TLSv1_2
+#error "please install OpenSSL 1.0.1"
+#endif
 #include <openssl/err.h>
 #include <uriparser/Uri.h>
 
