@@ -1,3 +1,5 @@
+#include "h/config.h"
+
 #define _GNU_SOURCE // memmem(.) needs this :-(
 #include <stdio.h>
 #include <string.h>
@@ -18,7 +20,6 @@
 
 #include "h/string.h"
 #include "h/proto.h"
-#include "h/version.h"
 
 int debug = 0;
 

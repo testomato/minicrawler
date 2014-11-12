@@ -1,24 +1,17 @@
-#include <time.h>
-#include <stdio.h>
-#include <limits.h>
+#include "h/config.h"
+
 #include <assert.h>
+#ifdef HAVE_LIMITS_H
+#include <limits.h>
+#else
+#define INT_MAX 2147483647
+#define INT_MIN (-INT_MAX - 1)
+#endif
 
 #include "h/proto.h"
 
-/**
- * It seems that cats' OSes cannot provide non-decreasing time. :-(
- * Good job Mr. Jobs.
- */
-#ifdef __APPLE__
-static long long get_uptime(void)
-{
-	struct timeval tmval;
-	if (gettimeofday(&tmval, NULL) == -1) {
-		return 0LL;
-	}
-	return (long long)(tmval.tv_sec*1000LL + tmval.tv_usec/1000);
-}
-#else
+#ifdef HAVE_CLOCK_GETTIME
+#include <time.h>
 /**
  * monotonic time since some unspecified starting point
  */
@@ -33,6 +26,18 @@ static long long get_uptime(void)
 	if (tm.tv_nsec % 1000000 >= 500000) uptime++; // rounding
 	return uptime;
 }
+#else
+#ifdef HAVE_GETTIMEOFDAY
+#include <sys/time.h>
+static long long get_uptime(void)
+{
+	struct timeval tmval;
+	if (gettimeofday(&tmval, NULL) == -1) {
+		return 0LL;
+	}
+	return (long long)(tmval.tv_sec*1000LL + tmval.tv_usec/1000);
+}
+#endif
 #endif
 
 static long long birth;

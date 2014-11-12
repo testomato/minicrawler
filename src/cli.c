@@ -5,7 +5,7 @@
 #include <arpa/inet.h>
 
 #include "h/minicrawler.h"
-#include "h/version.h"
+#include "h/config.h"
 #include "h/string.h"
 
 /** vypise napovedu
@@ -224,13 +224,7 @@ void output(struct surl *u) {
 		}
 	}
 	if (u->conv_errno) {
-		char err_buf[128];
-#		ifdef __APPLE__
-		char *err = !strerror_r(u->conv_errno, err_buf, sizeof(err_buf)) ? err_buf : "Unknown error";
-#		else
-		char *err = strerror_r(u->conv_errno, err_buf, sizeof(err_buf));
-#		endif
-		sprintf(header+strlen(header), "Conversion error: %s\n", err);
+		sprintf(header+strlen(header), "Conversion error: %s\n", strerror(u->conv_errno));
 	}
 
 	// downtime

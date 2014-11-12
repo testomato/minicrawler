@@ -1,3 +1,5 @@
+#include "config.h"
+
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>
@@ -69,12 +71,7 @@ static inline void trim(char *str) {
 		memmove(str, p, len+1 - (p-str));
 }
 
-#ifdef __APPLE__
-
-#include <stddef.h>
-
-void *memmem(const void *big, size_t big_len, const void *little, size_t little_len);
-
+#ifndef HAVE_MEMPCPY
 static inline void *mempcpy(void *dest, const void *src, size_t n) {
 	if (!n)
 		return dest;
@@ -85,7 +82,9 @@ static inline void *mempcpy(void *dest, const void *src, size_t n) {
 	} while (--n);
 	return d;
 }
+#endif
 
+#ifndef HAVE_STRCHRNUL
 static inline char *strchrnul(const char *s, int c) {
 	for (;; ++s) {
 		if (0 == *s || c == *s) {
@@ -93,5 +92,4 @@ static inline char *strchrnul(const char *s, int c) {
 		}
 	}
 }
-
 #endif
