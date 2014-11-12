@@ -9,6 +9,10 @@ AC_CONFIG_SRCDIR([src/crawler.c])
 
 # Checks for programs.
 AC_PROG_CC
+AC_PROG_CC_C99
+if test "${ac_cv_prog_cc_c99}" = "no"; then
+	AC_MSG_ERROR([your compiler does not support ISO Standard C 99])
+fi
 AC_PROG_LIBTOOL
 
 # Checks for libraries.
