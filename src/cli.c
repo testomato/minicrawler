@@ -108,7 +108,7 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 		mcrawler_init_url(curl, argv[t]);
 		curl->index = i++;
 		if (!curl->method[0]) {
-			strcpy(curl->method, curl->post ? "GET" : "POST");
+			strcpy(curl->method, curl->post ? "POST" : "GET");
 		}
 		for (int i = 0; i < ccnt; i++) {
 			cp_cookie(&curl->cookies[i], &cookies[i]);
