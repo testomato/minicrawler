@@ -56,9 +56,6 @@ static const char *elems_names[] = {
 	[OTHER] = NULL,
 };
 
-static char test_elems_number[OTHER < 32 ? 0 : -1]; // Static assert
-static char test_elems_names[sizeof(elems_names) == (OTHER + 1)*sizeof(*elems_names) ? 0 : -1]; // Static assert
-
 struct ElemDesc {
   unsigned id;
   unsigned begin : 1;
@@ -91,15 +88,6 @@ Skips all spaces in string `s'. Pointer `end' points after the end of the string
 static char *consume_spaces(char *s, const char *end)
 {
 	for (; s < end && crawler_is_space(*s); ++s);
-	return s;
-}
-
-/**
-Skips all non-space characters in s. Pointer `end' points after the end of the string.
-*/
-static char *consume_nonspaces(char *s, const char *end)
-{
-	for (; s < end && !crawler_is_space(*s); ++s);
 	return s;
 }
 
