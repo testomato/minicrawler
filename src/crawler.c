@@ -1584,7 +1584,7 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 		break;
 
 	case SURL_S_GOTIP:
-		if (test_free_channel(u->addr->ip, settings->delay, u->prev_addr && !strcmp(u->addr->ip, u->prev_addr->ip))) {
+		if (test_free_channel(u->addr->ip, settings->delay, u->prev_addr && !memcmp(u->addr->ip, u->prev_addr->ip, sizeof(u->addr->ip)))) {
 			if (!u->timing.connectionstart) u->timing.connectionstart = time;
 			if (!u->downstart) u->downstart = time;
 			f->open_socket(u);
