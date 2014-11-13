@@ -33,8 +33,8 @@ enum surl_io {
 	SURL_IO_EOF = 0,
 };
 
-typedef ssize_t (*read_callback)(const struct surl *u, char *buf, const size_t size, char *errbuf);
-typedef ssize_t (*write_callback)(const struct surl *u, const char *buf, const size_t size, char *errbuf);
+typedef ssize_t (*read_callback)(const struct surl *u, unsigned char *buf, const size_t size, char *errbuf);
+typedef ssize_t (*write_callback)(const struct surl *u, const unsigned char *buf, const size_t size, char *errbuf);
 
 struct surl_func {
 	read_callback read;

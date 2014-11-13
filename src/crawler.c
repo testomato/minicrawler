@@ -168,7 +168,7 @@ NOTE: We must read as much as possible, because select(.) may
 not notify us that other data are available.
 From select(.)'s point of view they are read but in fact they are in SSL buffers.
 */
-static ssize_t sec_read(const struct surl *u, char *buf, const size_t size, char *errbuf) {
+static ssize_t sec_read(const struct surl *u, unsigned char *buf, const size_t size, char *errbuf) {
 	assert(u->ssl);
 
 	const int t = SSL_read(u->ssl, buf, size);
@@ -221,7 +221,7 @@ static ssize_t sec_read(const struct surl *u, char *buf, const size_t size, char
 NOTE: We must write as much as possible otherwise
 select(.) would not notify us that socket is writable again.
 */
-static ssize_t sec_write(const struct surl *u, const char *buf, const size_t size, char *errbuf) {
+static ssize_t sec_write(const struct surl *u, const unsigned char *buf, const size_t size, char *errbuf) {
     assert(u->ssl);
 
 	const int t = SSL_write(u->ssl, buf, size);
@@ -651,37 +651,36 @@ static void genrequest(struct surl *u) {
 			(u->options & 1<<SURL_OPT_GZIP ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
 			(u->post != NULL ? strlen(contentlengthheader) + 6 + 2 + strlen(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
 			2 + // end of header
-			(u->post != NULL ? strlen(u->post) : 0) // body
+			u->postlen + // body
+			1 // \0
 	);
 
-	char *r = u->request;
+	char *r = (char *)u->request;
+	int s;
 
-	sprintf(r, reqfmt, u->method, u->path);
-	r += strlen(r);
-	strcpy(r, "\r\n");
-	r += 2;
+	s = sprintf(r, reqfmt, u->method, u->path);
+	if (s > 0) r += s;
+	r = stpcpy(r, "\r\n");
 
 	// Host
-	strcpy(r, hostheader);
-	strcpy(r + strlen(r), u->host);
+	r = stpcpy(r, hostheader);
+	r = stpcpy(r, u->host);
 	const int port = parse_proto(u->proto);
 	if (port != u->port) {
-		sprintf(r + strlen(r), ":%d", u->port);
+		s = sprintf(r, ":%d", u->port);
+		if (s > 0) r += s;
 	}
-	r += strlen(r);
-	strcpy(r, "\r\n");
-	r += 2;
+	r = stpcpy(r, "\r\n");
 
 	// Uset-Agent
-	strcpy(r, useragentheader);
+	r = stpcpy(r, useragentheader);
 	if (u->customagent[0]) {
-		strcpy(r + strlen(r), u->customagent);
+		r = stpcpy(r + strlen(r), u->customagent);
 	} else {
-		sprintf(r + strlen(r), defaultagent, VERSION);
+		s = sprintf(r + strlen(r), defaultagent, VERSION);
+		if (s > 0) r += s;
 	}
-	r += strlen(r);
-	strcpy(r, "\r\n");
-	r += 2;
+	r = stpcpy(r, "\r\n");
 
 	// Cookie
 	for (int t = 0; t < u->cookiecnt; t++) {
@@ -708,43 +707,36 @@ static void genrequest(struct surl *u) {
 
 	// Custom header
 	if (u->customheader[0]) {
-		strcpy(r, u->customheader);
-		r += strlen(r);
-		strcpy(r, "\r\n");
-		r += 2;
+		r = stpcpy(r, u->customheader);
+		r = stpcpy(r, "\r\n");
 	}
 
 	// gzip
 	if (u->options & 1<<SURL_OPT_GZIP) {
-		strcpy(r, gzipheader);
-		r += strlen(r);
-		strcpy(r, "\r\n");
-		r += 2;
+		r = stpcpy(r, gzipheader);
+		r = stpcpy(r, "\r\n");
 	}
 
 	if (u->post != NULL) {
-		strcpy(r, contentlengthheader);
-		sprintf(r + strlen(r), "%d", strlen(u->post));
-		r += strlen(r);
-		strcpy(r, "\r\n");
-		r += 2;
-		strcpy(r, contenttypeheader);
-		r += strlen(r);
-		strcpy(r, "\r\n");
-		r += 2;
+		r = stpcpy(r, contentlengthheader);
+		s = sprintf(r, "%d", u->postlen);
+		if (s > 0) r += s;
+		r = stpcpy(r, "\r\n");
+		r = stpcpy(r, contenttypeheader);
+		r = stpcpy(r, "\r\n");
 	}
 
 	// end of header
-	strcpy(r, "\r\n");
-	r += 2;
+	r = stpcpy(r, "\r\n");
 
 	// body
 	if (u->post != NULL) {
-		strcpy(r, u->post);
+		r = mempcpy(r, u->post, u->postlen);
 	}
+	*r = 0;
 
 	debugf("[%d] Request: [%s]", u->index, u->request);
-	u->request_len = strlen(u->request);
+	u->request_len = strlen((char *)u->request);;
 	u->request_it = 0;
 
 	set_atomic_int(&u->state, SURL_S_SENDREQUEST);
@@ -1000,15 +992,15 @@ free_struct:
 static void find_content_type(struct surl *u) {
 	static const char content_type[] = "\nContent-Type:";
 	static const char charset[] = " charset=";
-	char *p_ct = (char*) memmem(u->buf, u->headlen, content_type, sizeof(content_type) - 1);
+	unsigned char *p_ct = (unsigned char*) memmem(u->buf, u->headlen, content_type, sizeof(content_type) - 1);
 	if(!p_ct)
 		return;
-	char *end;
+	unsigned char *end;
 	for (end = &p_ct[sizeof(content_type) - 1]; end < &u->buf[u->headlen] && *end != '\n' && *end != '\r'; ++end);
-	char *p_charset = (char*) memmem(&p_ct[sizeof(content_type) - 1], end - &p_ct[sizeof(content_type) - 1], charset, sizeof(charset) - 1);
+	unsigned char *p_charset = (unsigned char*) memmem(&p_ct[sizeof(content_type) - 1], end - &p_ct[sizeof(content_type) - 1], charset, sizeof(charset) - 1);
 	if (!p_charset)
 		return;
-	char *p_charset_end = &p_charset[sizeof(charset) - 1];
+	unsigned char *p_charset_end = &p_charset[sizeof(charset) - 1];
 	if (sizeof(u->charset) > end - p_charset_end) {
 		*(char*)mempcpy(u->charset, p_charset_end, end - p_charset_end) = 0;
 		debugf("charset='%s'\n", u->charset);
@@ -1017,8 +1009,8 @@ static void find_content_type(struct surl *u) {
 
 /**  Tries to find the end of a head in the server's reply.
         It works in a way that it finds a sequence of characters of the form: m{\r*\n\r*\n} */
-static char *find_head_end(struct surl *u) {
-	char *s = u->buf;
+static unsigned char *find_head_end(struct surl *u) {
+	unsigned char *s = u->buf;
 	const size_t len = u->bufp > 0 ? (size_t)u->bufp : 0;
 	unsigned nn = 0;
 	size_t i;
@@ -1038,10 +1030,10 @@ static char *find_head_end(struct surl *u) {
  *  FIXME: handle http headers case-insensitive!!
  */
 static int detecthead(struct surl *u) {
-	u->status = atoi(u->buf + 9);
+	u->status = atoi((char *)u->buf + 9);
 	u->buf[u->bufp] = 0;
 	
-	char *p = find_head_end(u);
+	unsigned char *p = find_head_end(u);
 
 	if(p == NULL) {
 		debugf("[%d] cannot find end of http header?\n", u->index);
@@ -1050,9 +1042,9 @@ static int detecthead(struct surl *u) {
 	
 	u->headlen = p-u->buf;
 	
-	p=(char*)memmem(u->buf, u->headlen, "Content-Length: ", 16)?:(char*)memmem(u->buf, u->headlen, "Content-length: ", 16)?:(char*)memmem(u->buf, u->headlen, "content-length: ", 16);
+	p=(unsigned char*)memmem(u->buf, u->headlen, "Content-Length: ", 16)?:(unsigned char*)memmem(u->buf, u->headlen, "Content-length: ", 16)?:(unsigned char*)memmem(u->buf, u->headlen, "content-length: ", 16);
 	if(p != NULL) {
-		u->contentlen = atoi(p + 16);
+		u->contentlen = atoi((char *)p + 16);
 	}
 	debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
 	if (!strcmp(u->method, "HEAD")) { // there will be no content
@@ -1060,9 +1052,13 @@ static int detecthead(struct surl *u) {
 		debugf("[%d] HEAD request, no content\n", u->index);
 	}
 
-	p=(char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(char*)memmem(u->buf,u->headlen,"\nlocation: ",11);
-	if(p!=NULL) {
-		if (!strcpy_term(u->location,p+11,MAXURLSIZE)) {
+	p=(unsigned char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(unsigned char*)memmem(u->buf,u->headlen,"\nlocation: ",11);
+	if (p!=NULL) {
+		char *q;
+		q = (char *)mempcpy_term(u->location, p+11, MAXURLSIZE);
+		if (q - u->location <= MAXURLSIZE + 1) {
+			*q = 0;
+		} else {
 			sprintf(u->error_msg, "Redirect URL is too long");
 			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
@@ -1070,9 +1066,13 @@ static int detecthead(struct surl *u) {
 		debugf("[%d] Location='%s'\n",u->index,u->location);
 	}
 
-	p=(char*)memmem(u->buf,u->headlen,"\nRefresh: 0;url=",16)?:(char*)memmem(u->buf,u->headlen,"\nrefresh: 0;url=",16);
-	if(p!=NULL) {
-		if (!strcpy_term(u->location,p+16,MAXURLSIZE)) {
+	p=(unsigned char*)memmem(u->buf,u->headlen,"\nRefresh: 0;url=",16)?:(unsigned char*)memmem(u->buf,u->headlen,"\nrefresh: 0;url=",16);
+	if (p!=NULL) {
+		char *q;
+		q = (char *)mempcpy_term(u->location, p+16, MAXURLSIZE);
+		if (q - u->location <= MAXURLSIZE + 1) {
+			*q = 0;
+		} else {
 			sprintf(u->error_msg, "Redirect URL is too long");
 			set_atomic_int(&u->state, SURL_S_ERROR);
 		}
@@ -1080,24 +1080,24 @@ static int detecthead(struct surl *u) {
 		debugf("[%d] Refresh='%s'\n",u->index,u->location);
 	}
 
-	for (char *q = u->buf; q < &u->buf[u->headlen];) {
-		q = (char*)memmem(q, u->headlen - (q - u->buf), "\nSet-Cookie: ", 13);
+	for (unsigned char *q = u->buf; q < &u->buf[u->headlen];) {
+		q = (unsigned char*)memmem(q, u->headlen - (q - u->buf), "\nSet-Cookie: ", 13);
 		if (q != NULL) {
 			q += 13;
-			setcookie(u, q);
+			setcookie(u, (char *)q);
 		} else {
 			break;
 		}
 	}
 	
-	p=(char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26)?:(char*)memmem(u->buf, u->headlen, "Transfer-Encoding:  chunked", 27);
+	p=(unsigned char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(unsigned char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26)?:(unsigned char*)memmem(u->buf, u->headlen, "Transfer-Encoding:  chunked", 27);
 	if(p != NULL) {
 		u->chunked = 1;
 		u->nextchunkedpos=u->headlen;
 		debugf("[%d] Chunked!\n",u->index);
 	}
 
-	p=(char*)memmem(u->buf, u->headlen, "Content-Encoding: gzip", 22)?:(char*)memmem(u->buf,u->headlen,"content-encoding: gzip", 22)?:(char*)memmem(u->buf, u->headlen, "Content-Encoding:  gzip", 23);
+	p=(unsigned char*)memmem(u->buf, u->headlen, "Content-Encoding: gzip", 22)?:(unsigned char*)memmem(u->buf,u->headlen,"content-encoding: gzip", 22)?:(unsigned char*)memmem(u->buf, u->headlen, "Content-Encoding:  gzip", 23);
 	if(p != NULL) {
 		u->gzipped = 1;
 		debugf("[%d] Gzipped!\n",u->index);
@@ -1117,7 +1117,7 @@ Length of the read data is not limited if possible.
 Unread data may remain in SSL buffers and select(.) may not notify us about it,
 because from its point of view they were read.
 */
-ssize_t plain_read(const struct surl *u, char *buf, const size_t size, char *errbuf) {
+ssize_t plain_read(const struct surl *u, unsigned char *buf, const size_t size, char *errbuf) {
 	const int fd = u->sockfd;
 	const ssize_t res = read(fd, buf, size);
 	if (0 < res) {
@@ -1136,7 +1136,7 @@ ssize_t plain_read(const struct surl *u, char *buf, const size_t size, char *err
 	return SURL_IO_ERROR;
 }
 
-ssize_t plain_write(const struct surl *u, const char *buf, const size_t size, char *errbuf) {
+ssize_t plain_write(const struct surl *u, const unsigned char *buf, const size_t size, char *errbuf) {
 	const int fd = u->sockfd;
 	const ssize_t res = write(fd, buf, size);
 	if (0 < res) {
@@ -1158,11 +1158,11 @@ ssize_t plain_write(const struct surl *u, const char *buf, const size_t size, ch
 static void finish(struct surl *u, surl_callback callback) {
 
 	if (u->gzipped) {
-		char *buf;
+		unsigned char *buf;
 		int buflen = BUFSIZE - u->headlen;
 		int ret;
 
-		buf = (char *)malloc(u->bufp);
+		buf = (unsigned char *)malloc(u->bufp);
 		memcpy(buf, u->buf + u->headlen, u->bufp - u->headlen);
 		ret = gunzip(u->buf + u->headlen, &buflen, buf, u->bufp - u->headlen);
 		debugf("[%d] gzip decompress status: %d (input length: %d, output length: %d)\n", u->index, ret, u->bufp - u->headlen, buflen);
@@ -1177,7 +1177,7 @@ static void finish(struct surl *u, surl_callback callback) {
 
 	if (!*u->charset) {
 		unsigned charset_len = 0;
-		char *charset = detect_charset_from_html(u->buf + u->headlen, u->bufp - u->headlen, &charset_len);
+		char *charset = detect_charset_from_html((char *)u->buf + u->headlen, u->bufp - u->headlen, &charset_len);
 		if (charset && charset_len < sizeof(u->charset)) {
 			*(char*)mempcpy(u->charset, charset, charset_len) = 0;
 		}
@@ -1189,7 +1189,7 @@ static void finish(struct surl *u, surl_callback callback) {
 		conv_charset(u);
 	}
 	if (u->options & 1<<SURL_OPT_CONVERT_TO_TEXT) {
-		u->bufp=converthtml2text(u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
+		u->bufp = converthtml2text((char *)u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
 
 	u->timing.done = get_time_int();
@@ -1209,6 +1209,7 @@ static void reset_url(struct surl *u) {
 	if (u->post != NULL) {
 		free(u->post);
 		u->post = NULL;
+		u->postlen = 0;
 	}
 	u->bufp = 0;
 	u->headlen = 0;

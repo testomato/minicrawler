@@ -22,4 +22,4 @@ char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_le
 char *consume_entity(char *s, const char *end, int *code);
 char *put_code(char *dst, const unsigned dst_len, const int code);
 int urlencode(char *src);
-int gunzip(char *out, int *outlen, char *in, int inlen);
+int gunzip(unsigned char *out, int *outlen, unsigned char *in, int inlen);

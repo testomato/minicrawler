@@ -41,7 +41,7 @@ AC_TYPE_SSIZE_T
 AC_FUNC_MALLOC
 AC_CHECK_FUNC([clock_gettime], [], AC_CHECK_FUNC([gettimeofday], [], AC_MSG_ERROR([clock_gettime or gettimeofday needed to measure time])))
 AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday])
-#AC_CHECK_FUNCS([bzero memchr memmove mempcpy memset select socket strcasecmp strchr strerror strpbrk strstr strtol])
+#AC_CHECK_FUNCS([bzero memchr memmove mempcpy memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
 
 AC_CONFIG_FILES([Makefile libminicrawler.pc])
 AC_OUTPUT

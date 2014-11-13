@@ -91,7 +91,8 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
 			curl->post = malloc(strlen(argv[t+1]) + 1);
-			memcpy(curl->post, argv[t+1], strlen(argv[t+1]) + 1);
+			curl->postlen = strlen(argv[t+1]);
+			memcpy(curl->post, argv[t+1], curl->postlen);
 			t++;
 			continue;
 		}
@@ -141,49 +142,58 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 /**
  * Formats timing data for output
  */
-static void format_timing(char *dest, struct timing *timing) {
-	int n;
+static int format_timing(char *dest, struct timing *timing) {
+	int n, len = 0;
 	const int now = timing->done;
 	if (timing->dnsstart) {
-		n = sprintf(dest, "DNS Lookup=%d ms; ", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
-		if (n > 0) dest += n;
+		n = sprintf(dest+len, "DNS Lookup=%d ms; ", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
+		if (n > 0) len += n;
 	}
 	if (timing->connectionstart) {
-		n = sprintf(dest, "Initial connection=%d ms; ", (timing->requeststart ? timing->requeststart : now) - timing->connectionstart);
-		if (n > 0) dest += n;
+		n = sprintf(dest+len, "Initial connection=%d ms; ", (timing->requeststart ? timing->requeststart : now) - timing->connectionstart);
+		if (n > 0) len += n;
 	}
 	if (timing->sslstart) {
-		n = sprintf(dest, "SSL=%d ms; ", (timing->sslend ? timing->sslend : now) - timing->sslstart);
-		if (n > 0) dest += n;
+		n = sprintf(dest+len, "SSL=%d ms; ", (timing->sslend ? timing->sslend : now) - timing->sslstart);
+		if (n > 0) len += n;
 	}
 	if (timing->requeststart) {
-		n = sprintf(dest, "Request=%d ms; ", (timing->requestend ? timing->requestend : now) - timing->requeststart);
-		if (n > 0) dest += n;
+		n = sprintf(dest+len, "Request=%d ms; ", (timing->requestend ? timing->requestend : now) - timing->requeststart);
+		if (n > 0) len += n;
 	}
 	if (timing->requestend) {
-		n = sprintf(dest, "Waiting=%d ms; ", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
-		if (n > 0) dest += n;
+		n = sprintf(dest+len, "Waiting=%d ms; ", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
+		if (n > 0) len += n;
 	}
 	if (timing->firstbyte) {
-		n = sprintf(dest, "Content download=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->firstbyte);
-		if (n > 0) dest += n;
+		n = sprintf(dest+len, "Content download=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->firstbyte);
+		if (n > 0) len += n;
 	}
 	if (timing->connectionstart) {
-		n = sprintf(dest, "Total=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->connectionstart);
-		if (n > 0) dest += n;
+		n = sprintf(dest+len, "Total=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->connectionstart);
+		if (n > 0) len += n;
 	}
+	return len;
 }
 
 void output(struct surl *u) {
 	unsigned char header[16384];
+	char *h = (char *)header;
+	int n, hlen = 0;
 
-	sprintf(header,"URL: %s",u->rawurl);
-	if(u->redirectedto != NULL) sprintf(header+strlen(header),"\nRedirected-To: %s",u->redirectedto);
-	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
-		sprintf(header+strlen(header), "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
-		format_timing(header+strlen(header), &rinfo->timing);
+	n = sprintf(h + hlen, "URL: %s", u->rawurl);
+	if (n > 0) hlen += n;
+	if (u->redirectedto != NULL) {
+		n = sprintf(h+hlen, "\nRedirected-To: %s", u->redirectedto);
+		if (n > 0) hlen += n;
 	}
-	sprintf(header+strlen(header),"\nStatus: %d\nContent-length: %d\n",u->status,u->bufp-u->headlen);
+	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
+		n = sprintf(h+hlen, "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
+		if (n > 0) hlen += n;
+		hlen += format_timing(h+hlen, &rinfo->timing);
+	}
+	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %d\n", u->status, u->bufp-u->headlen);
+	if (n > 0) hlen += n;
 
 	const int url_state = u->state;
 	if (url_state <= SURL_S_RECVREPLY) {
@@ -214,24 +224,30 @@ void output(struct surl *u) {
 				strcpy(timeouterr, "HTTP server timed out"); break;
 		}
 
-		sprintf(header+strlen(header), "Timeout: %d (%s); %s\n", url_state, state_to_s(url_state), timeouterr);
+		n = sprintf(h+hlen, "Timeout: %d (%s); %s\n", url_state, state_to_s(url_state), timeouterr);
+		if (n > 0) hlen += n;
 	}
 	if (*u->error_msg) {
-		sprintf(header+strlen(header), "Error-msg: %s\n", u->error_msg);
+		n = sprintf(h+hlen, "Error-msg: %s\n", u->error_msg);
+		if (n > 0) hlen += n;
 	}
 	if (*u->charset) {
-		sprintf(header+strlen(header), "Content-type: text/html; charset=%s\n", u->charset);
+		n = sprintf(h+hlen, "Content-type: text/html; charset=%s\n", u->charset);
+		if (n > 0) hlen += n;
 	}
 	if (u->cookiecnt) {
-		sprintf(header+strlen(header), "Cookies: %d\n", u->cookiecnt);
+		n = sprintf(h+hlen, "Cookies: %d\n", u->cookiecnt);
+		if (n > 0) hlen += n;
 		// netscape cookies.txt format
 		// @see http://www.cookiecentral.com/faq/#3.5
 		for (int t = 0; t < u->cookiecnt; t++) {
-			sprintf(header+strlen(header), "%s\t%d\t/\t%d\t0\t%s\t%s\n", u->cookies[t].domain, u->cookies[t].host_only/*, u->cookies[t].path*/, u->cookies[t].secure/*, u->cookies[t].expiration*/, u->cookies[t].name, u->cookies[t].value);
+			n = sprintf(h+hlen, "%s\t%d\t/\t%d\t0\t%s\t%s\n", u->cookies[t].domain, u->cookies[t].host_only/*, u->cookies[t].path*/, u->cookies[t].secure/*, u->cookies[t].expiration*/, u->cookies[t].name, u->cookies[t].value);
+			if (n > 0) hlen += n;
 		}
 	}
 	if (u->conv_errno) {
-		sprintf(header+strlen(header), "Conversion error: %s\n", strerror(u->conv_errno));
+		n = sprintf(h+hlen, "Conversion error: %s\n", strerror(u->conv_errno));
+		if (n > 0) hlen += n;
 	}
 
 	// downtime
@@ -244,25 +260,29 @@ void output(struct surl *u) {
 	} else {
 		downtime = u->timing.done;
 	}
-	sprintf(header+strlen(header), "Downtime: %dms; %dms", downtime, u->downstart);
+	n = sprintf(h+hlen, "Downtime: %dms; %dms", downtime, u->downstart);
+	if (n > 0) hlen += n;
 	if (u->addr != NULL) {
 		char straddr[INET6_ADDRSTRLEN];
 		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
-		sprintf(header+strlen(header), " (ip=%s)", straddr);
+		n = sprintf(h+hlen, " (ip=%s)", straddr);
+		if (n > 0) hlen += n;
 	}
-	sprintf(header+strlen(header), "\nTiming: ");
-	format_timing(header+strlen(header), &u->timing);
-	sprintf(header+strlen(header), "\nIndex: %d\n\n",u->index);
+	n = sprintf(h+hlen, "\nTiming: ");
+	if (n > 0) hlen += n;
+	hlen += format_timing(h+hlen, &u->timing);
+	n = sprintf(h+hlen, "\nIndex: %d\n\n", u->index);
+	if (n > 0) hlen += n;
 
-	write_all(STDOUT_FILENO, header, strlen(header));
+	write_all(STDOUT_FILENO, header, hlen);
 	if (writehead) {
 		write_all(STDOUT_FILENO, u->buf, u->headlen);
 		if (0 == u->headlen) {
-			write_all(STDOUT_FILENO, "\n", 1); // PHP library expects one empty line at the end of headers, in normal circumstances it is contained
+			write_all(STDOUT_FILENO, (unsigned char*)"\n", 1); // PHP library expects one empty line at the end of headers, in normal circumstances it is contained
 						      // within u->buf[0 .. u->headlen] .
 		}
 	}
 
 	write_all(STDOUT_FILENO, u->buf+u->headlen, u->bufp-u->headlen);
-	write_all(STDOUT_FILENO, "\n", 1); // jinak se to vývojářům v php špatně parsuje
+	write_all(STDOUT_FILENO, (unsigned char *)"\n", 1); // jinak se to vývojářům v php špatně parsuje
 }

@@ -11,7 +11,7 @@ static inline int safe_size_to_int(const size_t sz) {
 #define I_SIZEOF(__X) ( safe_size_to_int(sizeof(__X)) )
 #define I_LENGTHOF(__X) ( sizeof(__X) > 0 ? safe_size_to_int(sizeof(__X)) - 1 : 0 )
 
-static inline size_t write_all(const int fd, const char *buf, const size_t len) {
+static inline size_t write_all(const int fd, const unsigned char *buf, const size_t len) {
 	size_t written = 0;
 	do {
 		const ssize_t r = write(fd, &buf[written], len - written);
@@ -47,19 +47,17 @@ static inline char *str_replace( char *dest,  const char *string, const char *su
 	return dest;
 }
 
-/** strcpy, ktere se ukonci i koncem radku
+/** kopirovani, ktere se ukonci i koncem radku
  */
-static inline int strcpy_term(char *to, char *from, const size_t size) {
+static inline void *mempcpy_term(void *to, const void *from, const size_t size) {
 	int i = 0;
-	for(;*from && *from != '\r' && *from != '\n';i++) {
+	unsigned char *t = (unsigned char*)to;
+	const unsigned char *f = (const unsigned char*)from;
+	for(;*f != '\r' && *f != '\n';i++) {
 		if (i < size)
-			*to++ = *from++;
-		else return 0;
+			*t++ = *f++;
 	}
-	if (i < size)
-		*to = 0;
-	else return 0;
-	return 1;
+	return t;
 }
 
 static inline void trim(char *str) {
@@ -75,8 +73,8 @@ static inline void trim(char *str) {
 static inline void *mempcpy(void *dest, const void *src, size_t n) {
 	if (!n)
 		return dest;
-	char *d = (char*)dest;
-	const char *s = (const char*)src;
+	unsigned char *d = (unsigned char*)dest;
+	const unsigned char *s = (const unsigned char*)src;
 	do {
 		*d++ = *s++;
 	} while (--n);

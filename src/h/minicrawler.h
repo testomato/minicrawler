@@ -146,7 +146,8 @@ struct surl {
 	char *path;
 
 	char method[16];
-	char *post;
+	unsigned char *post;
+	int postlen;
 
 	// hlavicky
 	char location[MAXURLSIZE + 1];	// presne to co je v hlavicce Location - pro ucely redirect
@@ -161,7 +162,7 @@ struct surl {
 	int gzipped;
 
 	// request
-	char *request;
+	unsigned char *request;
 	size_t request_len;
 	size_t request_it;
 
@@ -183,7 +184,7 @@ struct surl {
 	int addrtype;
 
 	// obsah
-	char buf[BUFSIZE];
+	unsigned char buf[BUFSIZE];
 	int bufp;
 	int headlen;
 	int contentlen;

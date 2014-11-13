@@ -22,7 +22,7 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
             return 1;  // FIXME: Some log?
         char *uni_dst = unibuf;
         size_t uni_dst_left = sizeof(unibuf);
-	char *src_end = &u->buf[u->headlen];
+	char *src_end = (char *)&u->buf[u->headlen];
 	size_t src_left = u->bufp - u->headlen;
 	for (;;) {
 		const size_t iconv_ret = iconv(uni_desc, &src_end, &src_left, &uni_dst, &uni_dst_left);
