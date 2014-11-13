@@ -114,6 +114,7 @@ static inline const char *state_to_s(const enum surl_s x) {
 		case SURL_S_DONE:
 			return "SURL_S_DONE";
 	}
+	return "";
 }
 
 struct surl;

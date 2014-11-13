@@ -103,7 +103,7 @@ int urlencode(char *src)
 	unsigned char c, *str;
 	int bp = 0, escape_sq_br = 0, slash_cnt = 0, question_mark_cnt = 0;
 
-	str = src;
+	str = (unsigned char*)src;
 	while ((c = *str++) != '\0') {
 		if (c == '/') {
 			slash_cnt++;
@@ -121,9 +121,9 @@ int urlencode(char *src)
 				c == 0x3E ||
 				c == 0x5C ||
 				c == 0x5E ||
-				escape_sq_br && (c == 0x5B || c == 0x5D) ||
+				(escape_sq_br && (c == 0x5B || c == 0x5D)) ||
 				c == 0x60 ||
-				c >= 0x7B && c <= 0x7D ||
+				(c >= 0x7B && c <= 0x7D) ||
 				c >= 0x7F
 		   ) {
 			if (bp + 3 > MAXURLSIZE) {

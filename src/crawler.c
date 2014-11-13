@@ -56,7 +56,7 @@ static int want_io(const int state, const int rw) {
 Otherwise die in cruel pain!
 HINT: This function simply checks whether we check availability of fd for reading/writing before using it for r/w.
 */
-static int check_io(const int state, const int rw) {
+static void check_io(const int state, const int rw) {
 	if ( ((1 << state) & SURL_STATES_IO) && !(rw & (1 << SURL_RW_READY_READ | 1 << SURL_RW_READY_WRITE)) ) {
 		abort();
 	}
@@ -140,7 +140,7 @@ static void sec_handshake(struct surl *u) {
 	// else SSL_ERROR_SSL = protocol error
 	debugf("[%d] SSL protocol error (in handshake): \n", u->index);
 	unsigned long e, last_e = 0;
-	while (e = ERR_get_error()) {
+	while ((e = ERR_get_error())) {
 		debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
 		last_e = e;
 	}
@@ -201,7 +201,7 @@ static ssize_t sec_read(const struct surl *u, unsigned char *buf, const size_t s
 		case SSL_ERROR_SSL:
 			debugf("[%d] SSL read failed: protocol error: \n", u->index);
 			unsigned long e, last_e = 0;
-			while (e = ERR_get_error()) {
+			while ((e = ERR_get_error())) {
 				debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
 				last_e = e;
 			}
@@ -246,7 +246,7 @@ static ssize_t sec_write(const struct surl *u, const unsigned char *buf, const s
 		case SSL_ERROR_SSL:
 			debugf("[%d] SSL write failed: protocol error: \n", u->index);
 			unsigned long e, last_e = 0;
-			while (e = ERR_get_error()) {
+			while ((e = ERR_get_error())) {
 				debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
 				last_e = e;
 			}
@@ -688,8 +688,8 @@ static void genrequest(struct surl *u) {
 		// see http://tools.ietf.org/html/rfc6265 section 5.4
 		// TODO: The request-uri's path path-matches the cookie's path.
 		if (
-				(u->cookies[t].host_only == 1 && strcasecmp(u->host, u->cookies[t].domain) == 0 ||
-					u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) != NULL && *(p+strlen(u->cookies[t].domain)+1) == '\0') &&
+				((u->cookies[t].host_only == 1 && strcasecmp(u->host, u->cookies[t].domain) == 0) ||
+					(u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) != NULL && *(p+strlen(u->cookies[t].domain)+1) == '\0')) &&
 				(u->cookies[t].secure == 0 || strcmp(u->proto, "https") == 0)
 		) {
 			if (!r[0]) {
@@ -810,7 +810,7 @@ static int eatchunked(struct surl *u) {
 		debugf("[%d] Warning: empty string for chunksize\n",u->index);
 	}
 	hex[i] = 0;
-	size = strtol(hex, NULL, 16);
+	size = strtol((char *)hex, NULL, 16);
 
 	debugf("[%d] Chunksize at %d (now %d): '%s' (=%d)\n",u->index,u->nextchunkedpos,u->bufp,hex,size);
 
@@ -840,7 +840,7 @@ static int eatchunked(struct surl *u) {
  * kašleme na *cestu* a na dobu platnosti cookie (to by mělo být pro účely minicrawleru v pohodě)
  * see http://tools.ietf.org/html/rfc6265 section 5.2 and 5.3
  */
-static void setcookie(struct surl *u,char *str) {
+static void setcookie(struct surl *u, char *str) {
 	struct cookie cookie;
 	struct nv attributes[10];
 	int att_len = 0;
@@ -1424,7 +1424,7 @@ static void readreply(struct surl *u) {
 		u->timing.firstbyte = u->timing.lastread;
 	}
 
-	debugf("[%d] Read %zd bytes; bufp = %d; chunked = %d; data = [%.*s]\n", u->index, t, u->bufp, !!u->chunked, t, u->buf + u->bufp - t);
+	debugf("[%d] Read %zd bytes; bufp = %d; chunked = %d; data = [%.*s]\n", u->index, t, u->bufp, !!u->chunked, (int)t, u->buf + u->bufp - t);
 	if (u->headlen == 0 && find_head_end(u)) {
 		detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
 	}

@@ -141,6 +141,7 @@ If no element starts at `s[0]', then `s' is returned.
 */
 static char *consume_elem(char *s, const char *end, struct ElemDesc *desc)
 {
+	desc->id = 0;
 	if (s >= end)
 		return s;
 	if (*s != '<')
@@ -261,9 +262,10 @@ void put_char(const int c, unsigned hints,int *ending,char **p_dst)
 /**
 Consumes CDATA block that starts at `s[0]'. `s[0]' MUST be inside CDATA block before ]]> . 
 */
+/*
 static char *consume_cdata(char *s, const char *end)
 {
-/*	static const char cdata_end[] = "]]>";
+	static const char cdata_end[] = "]]>";
 	for (; s < end; ++s) {
 		const int c = *s;
 		if (c == '\n' || c == '\t') {
@@ -285,9 +287,9 @@ static char *consume_cdata(char *s, const char *end)
 			PUT_CHAR(c);
 		}
 	}
-	return s;*/
+	return s;
 }
-
+*/
 
 /** převede html na text
  * @param s vstupní řetězec (html); tamtéž se uloží i výstup (pozor, nemusí být ukončen nulou)
