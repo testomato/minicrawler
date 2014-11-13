@@ -1638,8 +1638,7 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
  */
-static int exitprematurely(struct surl *url) {
-	int tim;
+static int exitprematurely(struct surl *url, int time) {
 	int cnt = 0, notdone = 0, lastread = 0;
 	struct surl *curl;
 	
@@ -1655,13 +1654,13 @@ static int exitprematurely(struct surl *url) {
 		cnt++;
 	} while ((curl = curl->next) != NULL);
 	
-	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,tim);
+	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,time);
 	
-	if(cnt >= 5 && notdone == 1 && (tim-lastread) > 400) {
+	if (cnt >= 5 && notdone == 1 && (time-lastread) > 400) {
 		debugf("[-] Forcing premature end 1!\n");
 		return 1;
 	}
-	if(cnt >= 20 && notdone <= 2 && (tim-lastread) > 400) {
+	if (cnt >= 20 && notdone <= 2 && (time-lastread) > 400) {
 		debugf("[-] Forcing premature end 2!\n");
 		return 1;
 	}
@@ -1760,7 +1759,7 @@ void mcrawler_go(struct surl *url, const struct ssettings *settings, surl_callba
 		}
 		if(!change && !done) {
 			if (settings->impatient && t >= settings->timeout*1000-1000) {
-				done = exitprematurely(url);
+				done = exitprematurely(url, t);
 			}
 		}
 	} while(!done);
