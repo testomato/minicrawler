@@ -44,7 +44,7 @@ static int writehead = 0;
  */
 void initurls(int argc, char *argv[], struct surl **url, struct ssettings *settings)
 {
-	struct surl *curl, *purl;
+	struct surl *curl, *purl = NULL;
 	char *p, *q;
 	long options = 0;
 	char customheader[4096];
@@ -125,8 +125,13 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 		purl->next = curl;
 	}
 
+	if (curl == *url) {
+		*url = NULL;
+	}
 	free(curl);
-	purl->next = NULL;
+	if (purl) {
+		purl->next = NULL;
+	}
 
 	for (int t = 0; t < ccnt; t++) {
 		free_cookie(&cookies[t]);
