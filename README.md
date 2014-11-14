@@ -1,9 +1,30 @@
 minicrawler
 ===========
 
-Minicrawler executes HTTP requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread* by opening a non-blocking socket for each connection. Minicrawler is licensed under the [AGPL license](license.txt).
+Minicrawler executes HTTP requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread* by opening a socket for each connection. Minicrawler is licensed under the [AGPL license](license.txt).
 
-## Options
+## Usage
+
+```
+#include <minicrawler/minicrawler.h>
+
+static void onfinish(struct surl *url) {
+	printf("%d: Status: %d\n", url->index, url->status);
+}
+
+void main() {
+	struct surl url, *urls[1];
+	urls[0] = &url;
+	memset(&u, 0, sizeof(struct surl));
+	mcrawler_init_url(&url, "http://example.com");
+	strcpy(url.method, "GET");
+	mcrawler_go(urls, 1, &settings, onfinish);
+}
+```
+
+## Command line API
+
+### Options
 
 ```
 Usage:   minicrawler [options] [urloptions] url [[url2options] url2]...
@@ -33,7 +54,7 @@ Where
 Options can be get by calling minicrawler without any options.
 
 
-## Output headers
+### Output headers
 
 Minicrawler puts its own headers into an output with the following meaning
 
@@ -57,7 +78,7 @@ Minicrawler puts its own headers into an output with the following meaning
  * **Timing**: Timing of request (DNS lookup, Initial connection, SSL, Request, Waiting, Content download, Total)
  * **Index**: Index of URL from command line
 
-## Dependencies
+## 3rd party libraries
 
  * asynchronous hostname resolving - [c-ares](http://c-ares.haxx.se/)
  * gzipped content - [zlib](http://zlib.net/)
@@ -72,7 +93,7 @@ Install following dependencies (including header files):
  * c-ares
  * zlib1g
  * uriparser
- * OpenSSL
+ * OpenSSL (optional)
 
 With apt-get: `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
 With [homebrew](http://brew.sh/): `brew install c-ares zlib uriparser openssl`
