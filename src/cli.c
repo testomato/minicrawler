@@ -42,19 +42,18 @@ static int writehead = 0;
 
 /** nacte url z prikazove radky do struktur
  */
-void initurls(int argc, char *argv[], struct surl **url, struct ssettings *settings)
+void initurls(int argc, char *argv[], struct surl **urls, int *urllen, struct ssettings *settings)
 {
-	struct surl *curl, *purl = NULL;
-	char *p, *q;
+	struct surl *url;
 	long options = 0;
 	char customheader[4096];
 	char customagent[256];
 	struct cookie cookies[COOKIESTORAGESIZE];
+	char *p, *q;
 	int ccnt = 0, i = 0;
 
-	*url = (struct surl *)malloc(sizeof(struct surl));
-	memset(*url, 0, sizeof(struct surl));
-	curl = *url;
+	url = (struct surl *)malloc(sizeof(struct surl));
+	memset(url, 0, sizeof(struct surl));
 
 	for (int t = 1; t < argc; ++t) {
 
@@ -90,49 +89,44 @@ void initurls(int argc, char *argv[], struct surl **url, struct ssettings *setti
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
-			curl->post = malloc(strlen(argv[t+1]) + 1);
-			curl->postlen = strlen(argv[t+1]);
-			memcpy(curl->post, argv[t+1], curl->postlen);
+			url->post = malloc(strlen(argv[t+1]) + 1);
+			url->postlen = strlen(argv[t+1]);
+			memcpy(url->post, argv[t+1], url->postlen);
 			t++;
 			continue;
 		}
 		if(!strncmp(argv[t], "-C", 2)) {
 			if (customheader[0]) {
-				str_replace(curl->customheader, customheader, "%", argv[t+1]);
+				str_replace(url->customheader, customheader, "%", argv[t+1]);
 			}
 			t++;
 			continue;
 		}
-		if(!strcmp(argv[t], "-X")) {safe_cpy(curl->method, argv[t+1], I_SIZEOF(curl->method)); t++; continue;}
+		if(!strcmp(argv[t], "-X")) {safe_cpy(url->method, argv[t+1], I_SIZEOF(url->method)); t++; continue;}
 
 		// init url
-		mcrawler_init_url(curl, argv[t]);
-		curl->index = i++;
-		if (!curl->method[0]) {
-			strcpy(curl->method, curl->post ? "POST" : "GET");
+		mcrawler_init_url(url, argv[t]);
+		url->index = i++;
+		if (!url->method[0]) {
+			strcpy(url->method, url->post ? "POST" : "GET");
 		}
 		for (int i = 0; i < ccnt; i++) {
-			cp_cookie(&curl->cookies[i], &cookies[i]);
+			cp_cookie(&url->cookies[i], &cookies[i]);
 		}
-		curl->cookiecnt = ccnt;
-		strcpy(curl->customagent, customagent);
-		if (!curl->customheader[0]) {
-			strcpy(curl->customheader, customheader);
+		url->cookiecnt = ccnt;
+		strcpy(url->customagent, customagent);
+		if (!url->customheader[0]) {
+			strcpy(url->customheader, customheader);
 		}
-		curl->options = options;
+		url->options = options;
 
-		purl = curl;
-		curl = (struct surl *)malloc(sizeof(struct surl));
-		purl->next = curl;
+		urls[i-1] = url;
+		url = (struct surl *)malloc(sizeof(struct surl));
+		memset(url, 0, sizeof(struct surl));
 	}
 
-	if (curl == *url) {
-		*url = NULL;
-	}
-	free(curl);
-	if (purl) {
-		purl->next = NULL;
-	}
+	*urllen = i;
+	free(url);
 
 	for (int t = 0; t < ccnt; t++) {
 		free_cookie(&cookies[t]);

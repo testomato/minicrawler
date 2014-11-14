@@ -199,8 +199,6 @@ struct surl {
 	void *ssl;
 	long ssl_options;
 
-	struct surl *next; // linked list
-
 	long options;
 
 	void *f;
@@ -210,4 +208,4 @@ void mcrawler_init_settings(struct ssettings *settings);
 
 void mcrawler_init_url(struct surl *u, const char *url);
 
-void mcrawler_go(struct surl *url, const struct ssettings *settings, surl_callback callback);
+void mcrawler_go(struct surl **url, const int urllen, const struct ssettings *settings, surl_callback callback);

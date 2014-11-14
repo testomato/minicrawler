@@ -1469,11 +1469,11 @@ static void readreply(struct surl *u) {
 
 /** provede systemovy select nad vsemi streamy
  */
-static void selectall(struct surl *url) {
+static void selectall(struct surl **urls, int urllen) {
 	fd_set set;
 	fd_set writeset;
 	struct timeval timeout;	
-	struct surl *curl;
+	struct surl *url;
 	
 	FD_ZERO (&set);
 	FD_ZERO (&writeset);
@@ -1483,23 +1483,23 @@ static void selectall(struct surl *url) {
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 20000;
 	
-	curl = url;
-	do {
-		const int state = get_atomic_int(&curl->state);
-		const int rw = get_atomic_int(&curl->rw);
-		debugf("[%d] select.state = [%s][%d]\n", curl->index, state_to_s(state), want_io(state, rw));
+	for (int i = 0; i < urllen; i++) {
+		url = urls[i];
+		const int state = get_atomic_int(&url->state);
+		const int rw = get_atomic_int(&url->rw);
+		debugf("[%d] select.state = [%s][%d]\n", url->index, state_to_s(state), want_io(state, rw));
 		if (!want_io(state, rw)) {
 			continue;
 		}
 		wantio = 1;
 		if(rw & 1<<SURL_RW_WANT_READ) {
-			FD_SET(curl->sockfd, &set);
+			FD_SET(url->sockfd, &set);
 		}
 		
 		if(rw & 1<<SURL_RW_WANT_WRITE) {
-			FD_SET(curl->sockfd, &writeset);
+			FD_SET(url->sockfd, &writeset);
 		}
-	} while ((curl = curl->next) != NULL);
+	}
 	if (!wantio) {
 		// nothing can happen
 		return;
@@ -1511,15 +1511,15 @@ static void selectall(struct surl *url) {
 		case 0:
 			return; // nothing
 	}
-	curl = url;
-	do {
-		const int rw = !!FD_ISSET(curl->sockfd, &set) << SURL_RW_READY_READ | !!FD_ISSET(curl->sockfd, &writeset) << SURL_RW_READY_WRITE;
+	for (int i = 0; i < urllen; i++) {
+		url = urls[i];
+		const int rw = !!FD_ISSET(url->sockfd, &set) << SURL_RW_READY_READ | !!FD_ISSET(url->sockfd, &writeset) << SURL_RW_READY_WRITE;
 		if (rw) {
-			set_atomic_int(&curl->rw, rw);
+			set_atomic_int(&url->rw, rw);
 		} else {
 			// Do nothing, this way you preserve the original value !!
 		}
-	} while ((curl = curl->next) != NULL);
+	}
 }
 
 
@@ -1639,29 +1639,28 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
  */
-static int exitprematurely(struct surl *url, int time) {
-	int cnt = 0, notdone = 0, lastread = 0;
-	struct surl *curl;
+static int exitprematurely(struct surl **urls, int urllen, int time) {
+	int notdone = 0, lastread = 0;
+	struct surl *url;
 	
-	curl = url;
-	do {
-		const int url_state = get_atomic_int(&curl->state);
+	for (int i = 0; i < urllen; i++) {
+		url = urls[i];
+		const int url_state = get_atomic_int(&url->state);
 		if(url_state<SURL_S_DONE) {
 			notdone++;
 		}
-		if(curl->timing.lastread>lastread) {
-			lastread=curl->timing.lastread;
+		if(url->timing.lastread > lastread) {
+			lastread = url->timing.lastread;
 		}
-		cnt++;
-	} while ((curl = curl->next) != NULL);
+	}
 	
 	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,time);
 	
-	if (cnt >= 5 && notdone == 1 && (time-lastread) > 400) {
+	if (urllen >= 5 && notdone == 1 && (time-lastread) > 400) {
 		debugf("[-] Forcing premature end 1!\n");
 		return 1;
 	}
-	if (cnt >= 20 && notdone <= 2 && (time-lastread) > 400) {
+	if (urllen >= 20 && notdone <= 2 && (time-lastread) > 400) {
 		debugf("[-] Forcing premature end 2!\n");
 		return 1;
 	}
@@ -1671,16 +1670,16 @@ static int exitprematurely(struct surl *url, int time) {
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-static void outputpartial(struct surl *url, surl_callback callback) {
-	struct surl *curl;
+static void outputpartial(struct surl **urls, int urllen, surl_callback callback) {
+	struct surl *url;
 
-	curl = url;
-	do {
-		const int url_state = get_atomic_int(&curl->state);
+	for (int i = 0; i < urllen; i++) {
+		url = urls[i];
+		const int url_state = get_atomic_int(&url->state);
 		if(url_state < SURL_S_DONE) {
-			finish(curl, callback);
+			finish(url, callback);
 		}
-	} while ((curl = curl->next) != NULL);
+	}
 }
 
 void mcrawler_init_settings(struct ssettings *settings) {
@@ -1725,42 +1724,41 @@ void mcrawler_init_url(struct surl *u, const char *url) {
 /**
  * hlavni smycka
  */
-void mcrawler_go(struct surl *url, const struct ssettings *settings, surl_callback callback) {
+void mcrawler_go(struct surl **urls, const int urllen, const struct ssettings *settings, surl_callback callback) {
 	int done;
 	int change;
-	struct surl *curl;
+	struct surl *url;
 
 	debug = settings->debug;
 	do {
 		done = 1;
 		change = 0;
 		
-		selectall(url);
-		curl = url;
-		do {
-			//debugf("%d: %d\n",t,curl->state);
-			const int state = get_atomic_int(&curl->state);
+		selectall(urls, urllen);
+		for (int i = 0; i < urllen; i++) {
+			url = urls[i];
+			const int state = get_atomic_int(&url->state);
 			if(state < SURL_S_DONE) {
-				goone(curl, settings, callback);
+				goone(url, settings, callback);
 				done = 0;
 			}
-			// curl->state can change inside goone
-			if(state != get_atomic_int(&curl->state)) {
+			// url->state can change inside goone
+			if(state != get_atomic_int(&url->state)) {
 				change = 1;
 			}
-		} while ((curl = curl->next) != NULL);
+		}
 
 		const int t = get_time_int();
 		if(t > settings->timeout*1000) {
 			debugf("Timeout (%d ms elapsed). The end.\n", t);
 			if(settings->partial) {
-				outputpartial(url, callback);
+				outputpartial(urls, urllen, callback);
 			}
 			break;
 		}
 		if(!change && !done) {
 			if (settings->impatient && t >= settings->timeout*1000-1000) {
-				done = exitprematurely(url, t);
+				done = exitprematurely(urls, urllen, t);
 			}
 		}
 	} while(!done);
