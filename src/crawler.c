@@ -6,10 +6,17 @@
 #include <stdlib.h>
 #include <netdb.h>
 #include <unistd.h>
+#ifdef HAVE_SYS_SELECT_H
+# include <sys/select.h> // select(.)
+#else
+# include <sys/time.h>
+# include <sys/types.h>
+#endif
 #include <ares.h>
-#include <sys/types.h>          
+#ifdef HAVE_SYS_TYPES_H
+# include <sys/types.h> // socket(.)
+#endif
 #include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -787,7 +794,6 @@ static int eatchunked(mcrawler_url *u) {
 	int size;
 	int movestart;
 
-	//if (!memchr(u->nextchunkedpos, '\n', ))
 	// čte velikost chunku
 	debugf("nextchunkedpos = %d; bufp = %d\n", u->nextchunkedpos, u->bufp);
 	for(t=u->nextchunkedpos, i=0; u->buf[t] != '\r' && u->buf[t] != '\n' && t < u->bufp; t++) {
@@ -1377,8 +1383,8 @@ static void resolvelocation(mcrawler_url *u) {
 		}
 	}
 
-	mcrawler_redirect_info *rinfo = malloc(sizeof(*rinfo));
-	bzero(rinfo, sizeof(*rinfo));
+	mcrawler_redirect_info *rinfo = malloc(sizeof(mcrawler_redirect_info));
+	memset(rinfo, 0, sizeof(mcrawler_redirect_info));
 	rinfo->url = malloc(strlen(u->location)+1);
 	strcpy(rinfo->url, u->location);
 	rinfo->status = u->status;

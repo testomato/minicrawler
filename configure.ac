@@ -29,8 +29,8 @@ AS_IF([test "${with_ssl}" != "no"],
 			AC_CHECK_LIB([ssl], [SSL_new], [], AC_MSG_ERROR([please install OpenSSL or use option --without-ssl]))])
 
 # Checks for header files.
-AC_CHECK_HEADERS([limits.h])
-#AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h netdb.h netinet/in.h stddef.h stdlib.h string.h sys/socket.h unistd.h])
+AC_CHECK_HEADERS([limits.h sys/types.h sys/select.h])
+##AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h stddef.h stdlib.h string.h sys/socket.h unistd.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_C_INLINE
@@ -41,7 +41,7 @@ AC_TYPE_SSIZE_T
 AC_FUNC_MALLOC
 AC_CHECK_FUNC([clock_gettime], [], AC_CHECK_FUNC([gettimeofday], [], AC_MSG_ERROR([clock_gettime or gettimeofday needed to measure time])))
 AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday])
-#AC_CHECK_FUNCS([bzero memchr memmove mempcpy memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
+##AC_CHECK_FUNCS([memmove memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
 
 AC_CONFIG_FILES([Makefile libminicrawler.pc])
 AC_OUTPUT
