@@ -1,20 +1,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-struct ssettings {
+struct mcrawler_settings {
 	int debug;
 	int timeout;
 	int impatient;
 	int partial;
 	int delay;
 };
+typedef struct mcrawler_settings mcrawler_settings;
 
-struct cookie {
+struct mcrawler_cookie {
     char *name, *value, *domain, *path;
 	int secure, host_only, expire;
 };
+typedef struct mcrawler_cookie mcrawler_cookie;
 
-struct timing {
+struct mcrawler_timing {
 	int dnsstart;
 	int dnsend;
 	int connectionstart;
@@ -27,37 +29,40 @@ struct timing {
 	int lastread;
 	int done;
 };
+typedef struct mcrawler_timing mcrawler_timing;
 
-struct redirect_info {
+struct mcrawler_redirect_info {
 	char *url;
 	int status;
-	struct timing timing;
-	struct redirect_info *next;
+	mcrawler_timing timing;
+	struct mcrawler_redirect_info *next;
 };
+typedef struct mcrawler_redirect_info mcrawler_redirect_info;
 
-struct addr {
+struct mcrawler_addr {
 	int type;
 	int length;
 	unsigned char ip[16];
-	struct addr *next;
+	struct mcrawler_addr *next;
 };
+typedef struct mcrawler_addr mcrawler_addr;
 
-static inline void free_addr(struct addr *addr) {
+static inline void free_addr(mcrawler_addr *addr) {
 	while (addr) {
-		struct addr *next = addr->next;
+		mcrawler_addr *next = addr->next;
 		free(addr);
 		addr = next;
 	}
 }
 
-static inline void free_cookie(struct cookie *cookie) {
+static inline void free_cookie(mcrawler_cookie *cookie) {
 	if (cookie->name) free(cookie->name);
 	if (cookie->value) free(cookie->value);
 	if (cookie->domain) free(cookie->domain);
 	if (cookie->path) free(cookie->path);
 }
 
-static inline void cp_cookie(struct cookie *dst, const struct cookie *src) {
+static inline void cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src) {
 	dst->name = malloc(strlen(src->name) + 1);
 	dst->value = malloc(strlen(src->value) + 1);
 	dst->domain = malloc(strlen(src->domain) + 1);
@@ -72,61 +77,57 @@ static inline void cp_cookie(struct cookie *dst, const struct cookie *src) {
 	dst->expire = src->expire;
 }
 
-enum surl_s {
-	SURL_S_JUSTBORN,
-	SURL_S_PARSEDURL,
-	SURL_S_INDNS,
-	SURL_S_GOTIP,
-	SURL_S_CONNECT,
-	SURL_S_HANDSHAKE,
-	SURL_S_GENREQUEST,
-	SURL_S_SENDREQUEST,
-	SURL_S_RECVREPLY,
-	SURL_S_DOWNLOADED,
-	SURL_S_ERROR,
-	SURL_S_DONE,
+enum mcrawler_url_s {
+	MCURL_S_JUSTBORN,
+	MCURL_S_PARSEDURL,
+	MCURL_S_INDNS,
+	MCURL_S_GOTIP,
+	MCURL_S_CONNECT,
+	MCURL_S_HANDSHAKE,
+	MCURL_S_GENREQUEST,
+	MCURL_S_SENDREQUEST,
+	MCURL_S_RECVREPLY,
+	MCURL_S_DOWNLOADED,
+	MCURL_S_ERROR,
+	MCURL_S_DONE,
 };
 
-static inline const char *state_to_s(const enum surl_s x) {
+static inline const char *mcrawler_state_to_s(const enum mcrawler_url_s x) {
 	switch (x) {
-		case SURL_S_JUSTBORN:
-			return "SURL_S_JUSTBORN";
-		case SURL_S_PARSEDURL:
-			return "SURL_S_PARSEDURL";
-		case SURL_S_INDNS:
-			return "SURL_S_INDNS";
-		case SURL_S_GOTIP:
-			return "SURL_S_GOTIP";
-		case SURL_S_CONNECT:
-			return "SURL_S_CONNECT";
-		case SURL_S_HANDSHAKE:
-			return "SURL_S_HANDSHAKE";
-		case SURL_S_GENREQUEST:
-			return "SURL_S_GENREQUEST";
-		case SURL_S_SENDREQUEST:
-			return "SURL_S_SENDREQUEST";
-		case SURL_S_RECVREPLY:
-			return "SURL_S_RECVREPLY";
-		case SURL_S_DOWNLOADED:
-			return "SURL_S_DOWNLOADED";
-		case SURL_S_ERROR:
-			return "SURL_S_ERROR";
-		case SURL_S_DONE:
-			return "SURL_S_DONE";
+		case MCURL_S_JUSTBORN:
+			return "MCURL_S_JUSTBORN";
+		case MCURL_S_PARSEDURL:
+			return "MCURL_S_PARSEDURL";
+		case MCURL_S_INDNS:
+			return "MCURL_S_INDNS";
+		case MCURL_S_GOTIP:
+			return "MCURL_S_GOTIP";
+		case MCURL_S_CONNECT:
+			return "MCURL_S_CONNECT";
+		case MCURL_S_HANDSHAKE:
+			return "MCURL_S_HANDSHAKE";
+		case MCURL_S_GENREQUEST:
+			return "MCURL_S_GENREQUEST";
+		case MCURL_S_SENDREQUEST:
+			return "MCURL_S_SENDREQUEST";
+		case MCURL_S_RECVREPLY:
+			return "MCURL_S_RECVREPLY";
+		case MCURL_S_DOWNLOADED:
+			return "MCURL_S_DOWNLOADED";
+		case MCURL_S_ERROR:
+			return "MCURL_S_ERROR";
+		case MCURL_S_DONE:
+			return "MCURL_S_DONE";
 	}
 	return "";
 }
 
-struct surl;
-
-typedef void (*surl_callback)(struct surl*);
-
-enum surl_options {
-	SURL_OPT_NONSSL,
-	SURL_OPT_CONVERT_TO_TEXT,
-	SURL_OPT_CONVERT_TO_UTF8,
-	SURL_OPT_GZIP,
-	SURL_OPT_IPV6,
+enum mcrawler_url_options {
+	MCURL_OPT_NONSSL,
+	MCURL_OPT_CONVERT_TO_TEXT,
+	MCURL_OPT_CONVERT_TO_UTF8,
+	MCURL_OPT_GZIP,
+	MCURL_OPT_IPV6,
 };
 
 enum {
@@ -135,7 +136,7 @@ enum {
 	COOKIESTORAGESIZE = 25,
 };
 
-struct surl {
+struct mcrawler_url {
 
 	int index;
 	char rawurl[MAXURLSIZE + 1];
@@ -155,7 +156,7 @@ struct surl {
 	char *redirectedto;	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
 	int nextchunkedpos;
-	struct cookie cookies[COOKIESTORAGESIZE];
+	mcrawler_cookie cookies[COOKIESTORAGESIZE];
 	int cookiecnt;
 	char customagent[256];
 	char customheader[4096];
@@ -167,12 +168,12 @@ struct surl {
 	size_t request_len;
 	size_t request_it;
 
-	struct redirect_info *redirect_info;
+	mcrawler_redirect_info *redirect_info;
 	int redirect_limit;
 
 	int state;
 	int rw;
-	struct timing timing;
+	mcrawler_timing timing;
 	int downstart;		// time downloading start
 
 	// ares
@@ -180,8 +181,8 @@ struct surl {
 
 	// network
 	int sockfd;
-	struct addr *addr;
-	struct addr *prev_addr;
+	mcrawler_addr *addr;
+	mcrawler_addr *prev_addr;
 	int addrtype;
 
 	// obsah
@@ -203,9 +204,12 @@ struct surl {
 
 	void *f;
 };
+typedef struct mcrawler_url mcrawler_url;
 
-void mcrawler_init_settings(struct ssettings *settings);
+typedef void (*mcrawler_url_callback)(mcrawler_url*);
 
-void mcrawler_init_url(struct surl *u, const char *url);
+void mcrawler_init_settings(mcrawler_settings *settings);
 
-void mcrawler_go(struct surl **url, const int urllen, const struct ssettings *settings, surl_callback callback);
+void mcrawler_init_url(mcrawler_url *u, const char *url);
+
+void mcrawler_go(mcrawler_url **url, const int urllen, const mcrawler_settings *settings, mcrawler_url_callback callback);

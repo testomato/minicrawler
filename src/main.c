@@ -21,8 +21,8 @@ int main(int argc, char *argv[]) {
 	signal(SIGPIPE,sighandler);
 //	signal(SIGSEGV,sighandler);
 	
-	struct surl *urls[argc - 1];
-	struct ssettings settings;
+	mcrawler_url *urls[argc - 1];
+	mcrawler_settings settings;
 	int urllen;
 
 	mcrawler_init_settings(&settings);

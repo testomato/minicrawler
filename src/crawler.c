@@ -49,7 +49,7 @@ Otherwise it returns false.
 HINT: This function says: you should call select(.) over the filedescriptor.
 */
 static int want_io(const int state, const int rw) {
-	return ((1 << state) & SURL_STATES_IO) && (rw & (1 << SURL_RW_WANT_READ | 1 << SURL_RW_WANT_WRITE));
+	return ((1 << state) & MCURL_STATES_IO) && (rw & (1 << MCURL_RW_WANT_READ | 1 << MCURL_RW_WANT_WRITE));
 }
 
 /** Assert like function: Check that actual state either doesn't requiere io or io is available for its socket.
@@ -57,7 +57,7 @@ Otherwise die in cruel pain!
 HINT: This function simply checks whether we check availability of fd for reading/writing before using it for r/w.
 */
 static void check_io(const int state, const int rw) {
-	if ( ((1 << state) & SURL_STATES_IO) && !(rw & (1 << SURL_RW_READY_READ | 1 << SURL_RW_READY_WRITE)) ) {
+	if ( ((1 << state) & MCURL_STATES_IO) && !(rw & (1 << MCURL_RW_READY_READ | 1 << MCURL_RW_READY_WRITE)) ) {
 		abort();
 	}
 }
@@ -66,7 +66,7 @@ static void check_io(const int state, const int rw) {
 /**
  * Sets lower TSL/SSL protocol
  */
-static int lower_ssl_protocol(struct surl *u) {
+static int lower_ssl_protocol(mcrawler_url *u) {
 	const long opts = SSL_get_options(u->ssl);
 
 	if (opts & SSL_OP_NO_TLSv1) {
@@ -90,7 +90,7 @@ static int lower_ssl_protocol(struct surl *u) {
 We may switch between need read/need write for several times.
 SSL is blackbox this time for us.
 */
-static void sec_handshake(struct surl *u) {
+static void sec_handshake(mcrawler_url *u) {
 	assert(u->ssl);
 
 	if (!u->timing.sslstart) u->timing.sslstart = get_time_int();
@@ -98,41 +98,41 @@ static void sec_handshake(struct surl *u) {
 	const int t = SSL_connect(u->ssl);
     if (t == 1) {
 		u->timing.sslend = get_time_int();
-        set_atomic_int(&u->state, SURL_S_GENREQUEST);
+        set_atomic_int(&u->state, MCURL_S_GENREQUEST);
         return;
     }
 
     const int err = SSL_get_error(u->ssl, t);
     if (err == SSL_ERROR_WANT_READ) {
-    	set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
 		return;
     }
     if (err == SSL_ERROR_WANT_WRITE) {
-		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
 		return;
     }
 	switch (err) {
 		case SSL_ERROR_ZERO_RETURN:
 			debugf("[%d] Connection closed (in handshake)", u->index);
 			sprintf(u->error_msg, "SSL connection closed during handshake");
-			set_atomic_int(&u->state, SURL_S_ERROR);
+			set_atomic_int(&u->state, MCURL_S_ERROR);
 			return;
 		case SSL_ERROR_WANT_CONNECT:
 		case SSL_ERROR_WANT_ACCEPT:
 			debugf("[%d] SSL_ERROR_WANT_CONNECT\n", u->index);
 			sprintf(u->error_msg, "Unexpected SSL error during handshake");
-			set_atomic_int(&u->state, SURL_S_ERROR);
+			set_atomic_int(&u->state, MCURL_S_ERROR);
 			return;
 		case SSL_ERROR_WANT_X509_LOOKUP:
 			debugf("[%d] SSL_ERROR_WANT_X509_LOOKUP\n", u->index);
 			sprintf(u->error_msg, "Unexpected SSL error during handshake");
-			set_atomic_int(&u->state, SURL_S_ERROR);
+			set_atomic_int(&u->state, MCURL_S_ERROR);
 			return;
 		case SSL_ERROR_SYSCALL:
 			debugf("[%d] SSL_ERROR_SYSCALL (%d)\n", u->index, t);
 			if (t < 0) { // t == 0: unexpected EOF
 				sprintf(u->error_msg, "Unexpected SSL error during handshake");
-				set_atomic_int(&u->state, SURL_S_ERROR);
+				set_atomic_int(&u->state, MCURL_S_ERROR);
 				return;
 			}
 	}
@@ -150,7 +150,7 @@ static void sec_handshake(struct surl *u) {
 		if (last_e) {
 			sprintf(u->error_msg + strlen(u->error_msg), " (%s)", ERR_reason_error_string(last_e));
 		}
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 	else {
@@ -158,7 +158,7 @@ static void sec_handshake(struct surl *u) {
 		SSL_shutdown(u->ssl);
 		SSL_free(u->ssl);
 		close(u->sockfd);
-		set_atomic_int(&u->state, SURL_S_GOTIP);
+		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		return;
 	}
 }
@@ -168,7 +168,7 @@ NOTE: We must read as much as possible, because select(.) may
 not notify us that other data are available.
 From select(.)'s point of view they are read but in fact they are in SSL buffers.
 */
-static ssize_t sec_read(const struct surl *u, unsigned char *buf, const size_t size, char *errbuf) {
+static ssize_t sec_read(const mcrawler_url *u, unsigned char *buf, const size_t size, char *errbuf) {
 	assert(u->ssl);
 
 	const int t = SSL_read(u->ssl, buf, size);
@@ -187,16 +187,16 @@ static ssize_t sec_read(const struct surl *u, unsigned char *buf, const size_t s
 	const int err = SSL_get_error(u->ssl, t);
 	switch (err) {
 		case SSL_ERROR_WANT_WRITE:
-			return SURL_IO_WRITE;
+			return MCURL_IO_WRITE;
 		case SSL_ERROR_WANT_READ:
-			return SURL_IO_READ;
+			return MCURL_IO_READ;
 		case SSL_ERROR_ZERO_RETURN:
-			return SURL_IO_EOF;
+			return MCURL_IO_EOF;
 		case SSL_ERROR_SYSCALL:
 			debugf("[%d] SSL read failed: SSL_ERROR_SYSCALL (%d)\n", u->index, t);
 			if (t < 0) { // t == 0: unexpected EOF
 				sprintf(errbuf, "Downloading content failed (%m)");
-				return SURL_IO_ERROR;
+				return MCURL_IO_ERROR;
 			}
 		case SSL_ERROR_SSL:
 			debugf("[%d] SSL read failed: protocol error: \n", u->index);
@@ -209,11 +209,11 @@ static ssize_t sec_read(const struct surl *u, unsigned char *buf, const size_t s
 			if (last_e && n > 0) {
 				sprintf(errbuf + n, " (%s)", ERR_reason_error_string(last_e));
 			}
-			return SURL_IO_ERROR;
+			return MCURL_IO_ERROR;
 		default:
 			debugf("[%d] SSL read failed: %d (WANT_X509_LOOKUP: 4, WANT_CONNECT: 7, WANT_ACCEPT: 8)\n", u->index, err);
 			sprintf(errbuf, "Downloading content failed (unexpected SSL error)");
-			return SURL_IO_ERROR;
+			return MCURL_IO_ERROR;
 	}
 }
 
@@ -221,7 +221,7 @@ static ssize_t sec_read(const struct surl *u, unsigned char *buf, const size_t s
 NOTE: We must write as much as possible otherwise
 select(.) would not notify us that socket is writable again.
 */
-static ssize_t sec_write(const struct surl *u, const unsigned char *buf, const size_t size, char *errbuf) {
+static ssize_t sec_write(const mcrawler_url *u, const unsigned char *buf, const size_t size, char *errbuf) {
     assert(u->ssl);
 
 	const int t = SSL_write(u->ssl, buf, size);
@@ -232,16 +232,16 @@ static ssize_t sec_write(const struct surl *u, const unsigned char *buf, const s
 	const int err = SSL_get_error(u->ssl, t);
 	switch (err) {
 		case SSL_ERROR_WANT_READ:
-			return SURL_IO_READ;
+			return MCURL_IO_READ;
 		case SSL_ERROR_WANT_WRITE:
-			return SURL_IO_WRITE;
+			return MCURL_IO_WRITE;
 		case SSL_ERROR_ZERO_RETURN:
-			return SURL_IO_EOF;
+			return MCURL_IO_EOF;
 		case SSL_ERROR_SYSCALL:
 			debugf("[%d] SSL write failed: SSL_ERROR_SYSCALL (%d)\n", u->index, t);
 			if (t < 0) { // t == 0: unexpected EOF
 				sprintf(errbuf, "Sending request failed (%m)");
-				return SURL_IO_ERROR;
+				return MCURL_IO_ERROR;
 			}
 		case SSL_ERROR_SSL:
 			debugf("[%d] SSL write failed: protocol error: \n", u->index);
@@ -254,11 +254,11 @@ static ssize_t sec_write(const struct surl *u, const unsigned char *buf, const s
 			if (last_e && n > 0) {
 				sprintf(errbuf + n, " (%s)", ERR_reason_error_string(last_e));
 			}
-			return SURL_IO_ERROR;
+			return MCURL_IO_ERROR;
 		default:
 			debugf("[%d] SSL write failed: %d (WANT_X509_LOOKUP: 4, WANT_CONNECT: 7, WANT_ACCEPT: 8)\n", u->index, err);
 			sprintf(errbuf, "Sending request failed (unexpected SSL error)");
-			return SURL_IO_ERROR;
+			return MCURL_IO_ERROR;
 	}
 }
 #endif
@@ -266,20 +266,20 @@ static ssize_t sec_write(const struct surl *u, const unsigned char *buf, const s
 /** callback funkce, kterou zavola ares
  */
 static void dnscallback(void *arg, int status, int timeouts, struct hostent *hostent) {
-	struct surl *u;
+	mcrawler_url *u;
 	
-	u=(struct surl *)arg;
+	u=(mcrawler_url *)arg;
 	if (status != ARES_SUCCESS) {
 		if (u->addrtype == AF_INET) {
 			// zkusíme ještě IPv6
 			u->addrtype = AF_INET6;
 			debugf("[%d] gethostbyname error: %d: %s -> switch to ipv6\n", u->index, *(int *) arg, ares_strerror(status));
-			set_atomic_int(&u->state, SURL_S_PARSEDURL);
+			set_atomic_int(&u->state, MCURL_S_PARSEDURL);
 			return;
 		}
 		debugf("[%d] gethostbyname error: %d: %s\n", u->index, *(int *) arg, ares_strerror(status));
 		sprintf(u->error_msg, "%s", ares_strerror(status));
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 	
@@ -288,12 +288,12 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 			// zkusíme ještě IPv6
 			u->addrtype = AF_INET6;
 			debugf("[%d] Could not resolve host -> switch to ipv6\n", u->index);
-			set_atomic_int(&u->state, SURL_S_PARSEDURL);
+			set_atomic_int(&u->state, MCURL_S_PARSEDURL);
 			return;
 		}
 		debugf("[%d] Could not resolve host\n", u->index);
 		sprintf(u->error_msg, "Could not resolve host");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 
@@ -307,11 +307,11 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	}
 
 	char **p_addr = hostent->h_addr_list;
-	struct addr *last_addr;
+	mcrawler_addr *last_addr;
 	do {
-		struct addr *addr;
-		addr = (struct addr*)malloc(sizeof(struct addr));
-		memset(addr, 0, sizeof(struct addr));
+		mcrawler_addr *addr;
+		addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
+		memset(addr, 0, sizeof(mcrawler_addr));
 		addr->type = hostent->h_addrtype;
 		addr->length = hostent->h_length;
 		memcpy(addr->ip, *p_addr, hostent->h_length);
@@ -332,18 +332,18 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	debugf("\n");
 
 	u->timing.dnsend = get_time_int();
-	set_atomic_int(&u->state, SURL_S_GOTIP);
+	set_atomic_int(&u->state, MCURL_S_GOTIP);
 }
 
 static int parse_proto(const char *s);
 
-static int check_proto(struct surl *u);
+static int check_proto(mcrawler_url *u);
 
 /**
  * Nastaví proto, host, port a path
  * rawurl musí obsahovat scheme a authority!
  */
-static int set_new_uri(struct surl *u, char *rawurl) {
+static int set_new_uri(mcrawler_url *u, char *rawurl) {
 	int r;
 	UriUriA *uri;
 
@@ -360,14 +360,14 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 	if (uriParseUriA(&state, rawurl) != URI_SUCCESS) {
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, rawurl);
 		sprintf(u->error_msg, "Failed to parse URL");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return 0;
 	}
 
 	if (uri->scheme.first == NULL) {
 		debugf("[%d] error: url='%s' has no scheme\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no scheme");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return 0;
 	}
 	if (u->proto != NULL) free(u->proto);
@@ -381,7 +381,7 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 	if (uri->hostText.first == NULL) {
 		debugf("[%d] error: url='%s' has no host\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no host");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return 0;
 	}
 	if (u->host != NULL) free(u->host);
@@ -426,39 +426,39 @@ static int set_new_uri(struct surl *u, char *rawurl) {
 	if (uri->hostData.ip4 != NULL) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
-		u->addr = (struct addr*)malloc(sizeof(struct addr));
-		memset(u->addr, 0, sizeof(struct addr));
+		u->addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
+		memset(u->addr, 0, sizeof(mcrawler_addr));
 		memcpy(u->addr->ip, uri->hostData.ip4->data, 4);
 		u->addr->type = AF_INET;
 		u->addr->length = 4;
 		u->addr->next = NULL;
-		set_atomic_int(&u->state, SURL_S_GOTIP);
+		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		debugf("[%d] go directly to ipv4\n", u->index);
 	} else if (uri->hostData.ip6 != NULL) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
-		u->addr = (struct addr*)malloc(sizeof(struct addr));
-		memset(u->addr, 0, sizeof(struct addr));
+		u->addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
+		memset(u->addr, 0, sizeof(mcrawler_addr));
 		memcpy(u->addr->ip, uri->hostData.ip6->data, 16);
 		u->addr->type = AF_INET6;
 		u->addr->length = 16;
 		u->addr->next = NULL;
-		set_atomic_int(&u->state, SURL_S_GOTIP);
+		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		debugf("[%d] go directly to ipv6\n", u->index);
 	} else {
-		set_atomic_int(&u->state, SURL_S_PARSEDURL);
+		set_atomic_int(&u->state, MCURL_S_PARSEDURL);
 	}
 	return 1;
 }
 
 /** Parsujeme URL
  */
-static void parseurl(struct surl *u) {
+static void parseurl(mcrawler_url *u) {
 	debugf("[%d] Parse url='%s'\n", u->index, u->rawurl);
 	if (!urlencode(u->rawurl)) {
 		debugf("[%d] Not enough memory for urlencode '%s'\n", u->index, u->rawurl);
 		sprintf(u->error_msg, "URL is too long");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 	if (set_new_uri(u, u->rawurl) == 0) {
@@ -468,7 +468,7 @@ static void parseurl(struct surl *u) {
 
 /** spusti preklad pres ares
  */
-static void launchdns(struct surl *u) {
+static void launchdns(mcrawler_url *u) {
 	int t;
 
 	debugf("[%d] Resolving %s starts\n", u->index, u->host);
@@ -476,24 +476,24 @@ static void launchdns(struct surl *u) {
 	if(t) {
 		debugf("[%d] ares_init failed\n", u->index);
 		sprintf(u->error_msg, "ares init failed");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 	if (!u->addrtype) {
-		if (u->options & 1<<SURL_OPT_IPV6) {
+		if (u->options & 1<<MCURL_OPT_IPV6) {
 			u->addrtype = AF_INET6;
 		} else {
 			u->addrtype = AF_INET;
 		}
 	}
 
-	set_atomic_int(&u->state, SURL_S_INDNS);
+	set_atomic_int(&u->state, MCURL_S_INDNS);
 	ares_gethostbyname(u->aresch, u->host, u->addrtype, (ares_host_callback)&dnscallback, u);
 }
 
 /** uz je ares hotovy?
  */
-static void checkdns(struct surl *u) {
+static void checkdns(mcrawler_url *u) {
 	int t;
 	fd_set readfds;
 	fd_set writefds;
@@ -518,22 +518,22 @@ static void checkdns(struct surl *u) {
 /**
 Finish connection for non-blocking socket for which connect(.) returned EAGAIN.
 */
-static void connectsocket(struct surl *u) {
+static void connectsocket(mcrawler_url *u) {
 	int result;
 	socklen_t result_len = sizeof(result);
 	if (getsockopt(u->sockfd, SOL_SOCKET, SO_ERROR, &result, &result_len) < 0) {
 		// error, fail somehow, close socket
 		debugf("[%d] Cannot connect, getsoskopt(.) returned error status: %m\n", u->index);
 		if (u->addr->next != NULL) {
-			struct addr *next = u->addr->next;
+			mcrawler_addr *next = u->addr->next;
 			free(u->addr);
 			u->addr = next;
 			debugf("[%d] Trying another ip\n", u->index);
-			set_atomic_int(&u->state, SURL_S_GOTIP);
+			set_atomic_int(&u->state, MCURL_S_GOTIP);
 			return;
 		}
 		sprintf(u->error_msg, "Failed to connect to host (%m)");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		close(u->sockfd);
 		return;
 	}
@@ -541,26 +541,26 @@ static void connectsocket(struct surl *u) {
 	if (result != 0) {
 		debugf("[%d] Cannot connect, attempt to connect failed\n", u->index);
 		if (u->addr->next != NULL) {
-			struct addr *next = u->addr->next;
+			mcrawler_addr *next = u->addr->next;
 			free(u->addr);
 			u->addr = next;
 			debugf("[%d] Trying another ip\n", u->index);
-			set_atomic_int(&u->state, SURL_S_GOTIP);
+			set_atomic_int(&u->state, MCURL_S_GOTIP);
 			return;
 		}
 		sprintf(u->error_msg, "Failed to connect to host (%s)", strerror(result));
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		close(u->sockfd);
 		return;
 	}
 
-	set_atomic_int(&u->state, SURL_S_HANDSHAKE);
-	set_atomic_int(&u->rw, 1<< SURL_RW_READY_READ | 1<<SURL_RW_READY_WRITE);
+	set_atomic_int(&u->state, MCURL_S_HANDSHAKE);
+	set_atomic_int(&u->rw, 1<< MCURL_RW_READY_READ | 1<<MCURL_RW_READY_WRITE);
 }
 
 /** Allocate ssl objects for ssl connection. Do nothing for plain connection.
 */
-static int maybe_create_ssl(struct surl *u) {
+static int maybe_create_ssl(mcrawler_url *u) {
 #ifdef HAVE_LIBSSL
 	if (0 != strcmp(u->proto, "https")) {
 		return 1;
@@ -579,7 +579,7 @@ static int maybe_create_ssl(struct surl *u) {
 
 /** uz znam IP, otevri socket
  */
-static void opensocket(struct surl *u)
+static void opensocket(mcrawler_url *u)
 {
 	int flags;
 	struct sockaddr_storage addr;
@@ -610,28 +610,28 @@ static void opensocket(struct surl *u)
 	if (!maybe_create_ssl(u)) {
 		debugf("%d: cannot create ssl session :-(\n", u->index);
 		sprintf(u->error_msg, "Cannot create SSL session");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 	}
 	if(t) {
 		if(errno == EINPROGRESS) {
-			set_atomic_int(&u->state, SURL_S_CONNECT);
-			set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+			set_atomic_int(&u->state, MCURL_S_CONNECT);
+			set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
 		}
 		else {
 			debugf("%d: connect failed (%d, %s)\n", u->index, errno, strerror(errno));
 			sprintf(u->error_msg, "Failed to connect to host (%m)");
-			set_atomic_int(&u->state, SURL_S_ERROR);
+			set_atomic_int(&u->state, MCURL_S_ERROR);
 		}
 	} else {
-		set_atomic_int(&u->state, SURL_S_HANDSHAKE);
-		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE | 1<<SURL_RW_WANT_WRITE);
+		set_atomic_int(&u->state, MCURL_S_HANDSHAKE);
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE | 1<<MCURL_RW_WANT_WRITE);
 	}
 }
 
 /** socket bezi, posli dotaz
  * cookie header see http://tools.ietf.org/html/rfc6265 section 5.4
  */
-static void genrequest(struct surl *u) {
+static void genrequest(mcrawler_url *u) {
 	const char reqfmt[] = "%s %s HTTP/1.1";
 	const char hostheader[] = "Host: ";
 	const char useragentheader[] = "User-Agent: ";
@@ -648,7 +648,7 @@ static void genrequest(struct surl *u) {
 			strlen(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
 			strlen(cookieheader) + 1024 * u->cookiecnt + 2 + // Cookie: %s; %s...\n
 			strlen(u->customheader) + 2 +
-			(u->options & 1<<SURL_OPT_GZIP ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
+			(u->options & 1<<MCURL_OPT_GZIP ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
 			(u->post != NULL ? strlen(contentlengthheader) + 6 + 2 + strlen(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
 			2 + // end of header
 			u->postlen + // body
@@ -712,7 +712,7 @@ static void genrequest(struct surl *u) {
 	}
 
 	// gzip
-	if (u->options & 1<<SURL_OPT_GZIP) {
+	if (u->options & 1<<MCURL_OPT_GZIP) {
 		r = stpcpy(r, gzipheader);
 		r = stpcpy(r, "\r\n");
 	}
@@ -739,49 +739,49 @@ static void genrequest(struct surl *u) {
 	u->request_len = strlen((char *)u->request);;
 	u->request_it = 0;
 
-	set_atomic_int(&u->state, SURL_S_SENDREQUEST);
-	set_atomic_int(&u->rw, 1<<SURL_RW_READY_WRITE);
+	set_atomic_int(&u->state, MCURL_S_SENDREQUEST);
+	set_atomic_int(&u->rw, 1<<MCURL_RW_READY_WRITE);
 }
 
 /** Sends the request string. This string was generated in previous state:
 GEN_REQUEST.
 */
-static void sendrequest(struct surl *u) {
+static void sendrequest(mcrawler_url *u) {
 	if (u->request_it < u->request_len) {
-		const ssize_t ret = ((struct surl_func *)u->f)->write(u, &u->request[u->request_it], u->request_len - u->request_it, (char *)&u->error_msg);
-		if (ret == SURL_IO_ERROR || ret == SURL_IO_EOF) {
-			set_atomic_int(&u->state, SURL_S_ERROR);
+		const ssize_t ret = ((mcrawler_url_func *)u->f)->write(u, &u->request[u->request_it], u->request_len - u->request_it, (char *)&u->error_msg);
+		if (ret == MCURL_IO_ERROR || ret == MCURL_IO_EOF) {
+			set_atomic_int(&u->state, MCURL_S_ERROR);
 			return;
 		}
-		else if (ret == SURL_IO_WRITE) {
-			set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
-		} else if (ret == SURL_IO_READ) {
-			set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+		else if (ret == MCURL_IO_WRITE) {
+			set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
+		} else if (ret == MCURL_IO_READ) {
+			set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
 		} else {
 			assert(ret > 0);
 			u->request_it += (size_t)ret;
 		}
 	}
 	if (u->request_it == u->request_len) {
-		set_atomic_int(&u->state, SURL_S_RECVREPLY);
-		set_atomic_int(&u->rw, 1<<SURL_RW_READY_READ);
+		set_atomic_int(&u->state, MCURL_S_RECVREPLY);
+		set_atomic_int(&u->rw, 1<<MCURL_RW_READY_READ);
 	} else {
-		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
 	}
 }
 
 /** Fake handshake handler that does nothing, only increments state.
 Usefull for plain http protocol that does not need handshake.
 */
-static void empty_handshake(struct surl *u) {
-	set_atomic_int(&u->state, SURL_S_GENREQUEST);
+static void empty_handshake(mcrawler_url *u) {
+	set_atomic_int(&u->state, MCURL_S_GENREQUEST);
 }
 
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
  *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
  */
-static int eatchunked(struct surl *u) {
+static int eatchunked(mcrawler_url *u) {
 	int t,i;
 	unsigned char hex[10];
 	int size;
@@ -840,14 +840,14 @@ static int eatchunked(struct surl *u) {
  * kašleme na *cestu* a na dobu platnosti cookie (to by mělo být pro účely minicrawleru v pohodě)
  * see http://tools.ietf.org/html/rfc6265 section 5.2 and 5.3
  */
-static void setcookie(struct surl *u, char *str) {
-	struct cookie cookie;
+static void setcookie(mcrawler_url *u, char *str) {
+	mcrawler_cookie cookie;
 	struct nv attributes[10];
 	int att_len = 0;
 	char *p, *q, *r;
 	int i;
 
-	memset(&cookie, 0, sizeof(struct cookie));
+	memset(&cookie, 0, sizeof(mcrawler_cookie));
 	memset(attributes, 0, sizeof(attributes));
 
 	p = strpbrk(str, ";\r\n");
@@ -989,7 +989,7 @@ free_struct:
 
 /** Find string with content type inside the http head.
 */
-static void find_content_type(struct surl *u) {
+static void find_content_type(mcrawler_url *u) {
 	static const char content_type[] = "\nContent-Type:";
 	static const char charset[] = " charset=";
 	unsigned char *p_ct = (unsigned char*) memmem(u->buf, u->headlen, content_type, sizeof(content_type) - 1);
@@ -1009,7 +1009,7 @@ static void find_content_type(struct surl *u) {
 
 /**  Tries to find the end of a head in the server's reply.
         It works in a way that it finds a sequence of characters of the form: m{\r*\n\r*\n} */
-static unsigned char *find_head_end(struct surl *u) {
+static unsigned char *find_head_end(mcrawler_url *u) {
 	unsigned char *s = u->buf;
 	const size_t len = u->bufp > 0 ? (size_t)u->bufp : 0;
 	unsigned nn = 0;
@@ -1029,7 +1029,7 @@ static unsigned char *find_head_end(struct surl *u) {
 /** pozná status a hlavičku http požadavku
  *  FIXME: handle http headers case-insensitive!!
  */
-static int detecthead(struct surl *u) {
+static int detecthead(mcrawler_url *u) {
 	u->status = atoi((char *)u->buf + 9);
 	u->buf[u->bufp] = 0;
 	
@@ -1060,7 +1060,7 @@ static int detecthead(struct surl *u) {
 			*q = 0;
 		} else {
 			sprintf(u->error_msg, "Redirect URL is too long");
-			set_atomic_int(&u->state, SURL_S_ERROR);
+			set_atomic_int(&u->state, MCURL_S_ERROR);
 		}
 		u->contentlen = 0; // do not need content - some servers returns no content-length and keeps conection open
 		debugf("[%d] Location='%s'\n",u->index,u->location);
@@ -1074,7 +1074,7 @@ static int detecthead(struct surl *u) {
 			*q = 0;
 		} else {
 			sprintf(u->error_msg, "Redirect URL is too long");
-			set_atomic_int(&u->state, SURL_S_ERROR);
+			set_atomic_int(&u->state, MCURL_S_ERROR);
 		}
 		u->contentlen = 0; // do not need content
 		debugf("[%d] Refresh='%s'\n",u->index,u->location);
@@ -1117,45 +1117,45 @@ Length of the read data is not limited if possible.
 Unread data may remain in SSL buffers and select(.) may not notify us about it,
 because from its point of view they were read.
 */
-ssize_t plain_read(const struct surl *u, unsigned char *buf, const size_t size, char *errbuf) {
+ssize_t plain_read(const mcrawler_url *u, unsigned char *buf, const size_t size, char *errbuf) {
 	const int fd = u->sockfd;
 	const ssize_t res = read(fd, buf, size);
 	if (0 < res) {
 		return res;
 	}
 	if (0 == res) {
-		return SURL_IO_EOF;
+		return MCURL_IO_EOF;
 	}
 	if (-1 == res) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-			return SURL_IO_READ;
+			return MCURL_IO_READ;
 		}
 	}
 	debugf("[%d] read failed: %m\n", u->index);
 	sprintf(errbuf, "Downloading content failed (%m)");
-	return SURL_IO_ERROR;
+	return MCURL_IO_ERROR;
 }
 
-ssize_t plain_write(const struct surl *u, const unsigned char *buf, const size_t size, char *errbuf) {
+ssize_t plain_write(const mcrawler_url *u, const unsigned char *buf, const size_t size, char *errbuf) {
 	const int fd = u->sockfd;
 	const ssize_t res = write(fd, buf, size);
 	if (0 < res) {
 		return res;
 	}	
 	if (0 == res) {
-		return SURL_IO_EOF;
+		return MCURL_IO_EOF;
 	}
 	if (-1 == res) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-			return SURL_IO_WRITE;
+			return MCURL_IO_WRITE;
 		}
 	}
 	debugf("[%d] write failed: %m\n", u->index);
 	sprintf(errbuf, "Sending request failed (%m)");
-	return SURL_IO_ERROR;
+	return MCURL_IO_ERROR;
 }
 
-static void finish(struct surl *u, surl_callback callback) {
+static void finish(mcrawler_url *u, mcrawler_url_callback callback) {
 
 	if (u->gzipped) {
 		unsigned char *buf;
@@ -1170,7 +1170,7 @@ static void finish(struct surl *u, surl_callback callback) {
 			u->bufp = buflen + u->headlen;
 		} else {
 			sprintf(u->error_msg, "Gzip decompression error %d", ret);
-			u->status = SURL_S_DOWNLOADED - SURL_S_ERROR;
+			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
 			u->bufp = u->headlen;
 		}
 	}
@@ -1185,10 +1185,10 @@ static void finish(struct surl *u, surl_callback callback) {
 	if (!*u->charset) {
 		strcpy(u->charset, "unknown");
 	}
-	if (*u->charset && u->options & 1<<SURL_OPT_CONVERT_TO_UTF8) {
+	if (*u->charset && u->options & 1<<MCURL_OPT_CONVERT_TO_UTF8) {
 		conv_charset(u);
 	}
-	if (u->options & 1<<SURL_OPT_CONVERT_TO_TEXT) {
+	if (u->options & 1<<MCURL_OPT_CONVERT_TO_TEXT) {
 		u->bufp = converthtml2text((char *)u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
 
@@ -1197,13 +1197,13 @@ static void finish(struct surl *u, surl_callback callback) {
 	callback(u);
 
 	debugf("[%d] Done.\n",u->index);
-	set_atomic_int(&u->state, SURL_S_DONE);
+	set_atomic_int(&u->state, MCURL_S_DONE);
 }
 
 /**
  * Sets the url to initial state
  */
-static void reset_url(struct surl *u) {
+static void reset_url(mcrawler_url *u) {
 	u->status = 0;
 	u->location[0] = 0;
 	if (u->post != NULL) {
@@ -1225,10 +1225,10 @@ static void reset_url(struct surl *u) {
  * Turn the state to INTERNAL ERROR with information that
  * we have been requested to download url with unsupported protocol.
  */
-static void set_unsupported_protocol(struct surl *u) {
+static void set_unsupported_protocol(mcrawler_url *u) {
 	debugf("[%d] Unsupported protocol: [%s]\n", u->index, u->proto);
 	sprintf(u->error_msg, "Protocol [%s] not supported", u->proto);
-	set_atomic_int(&u->state, SURL_S_ERROR);
+	set_atomic_int(&u->state, MCURL_S_ERROR);
 }
 
 /** Parse string with the name of the protocol and return default port for that protocol or 0,
@@ -1248,9 +1248,9 @@ static int parse_proto(const char *s) {
  * Check the protocol of the destination url. If it is supported protocol,
  * then set all callbacks, otherwise turn the state to UNSUPPORTED PROTOCOL.
  */
-static int check_proto(struct surl *u) {
+static int check_proto(mcrawler_url *u) {
 	const int port = parse_proto(u->proto);
-	struct surl_func *f = u->f;
+	mcrawler_url_func *f = u->f;
 	switch (port) {
 		case 80:
 			f->read = plain_read;
@@ -1259,7 +1259,7 @@ static int check_proto(struct surl *u) {
 			break;
 #ifdef HAVE_LIBSSL
 		case 443:
-			if (u->options & 1<<SURL_OPT_NONSSL) {
+			if (u->options & 1<<MCURL_OPT_NONSSL) {
 				set_unsupported_protocol(u);
 				return -1;
 			} else {
@@ -1278,11 +1278,11 @@ static int check_proto(struct surl *u) {
 
 /** vyres presmerovani
  */
-static void resolvelocation(struct surl *u) {
+static void resolvelocation(mcrawler_url *u) {
 	if (--u->redirect_limit <= 0) {
 		debugf("[%d] Exceeded redirects limit", u->index);
 		sprintf(u->error_msg, "Too many redirects, possibly a redirect loop");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 
@@ -1294,7 +1294,7 @@ static void resolvelocation(struct surl *u) {
 	if (!urlencode(u->location)) {
 		debugf("[%d] Not enough memory for urlencode '%s'\n", u->index, u->location);
 		sprintf(u->error_msg, "URL is too long");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 
@@ -1318,7 +1318,7 @@ static void resolvelocation(struct surl *u) {
 
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, u->location);
 		sprintf(u->error_msg, "Failed to parse URL %s", u->location);
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 
@@ -1338,7 +1338,7 @@ static void resolvelocation(struct surl *u) {
 
 		debugf("[%d] error: url='%s' failed to resolve\n", u->index, u->location);
 		sprintf(u->error_msg, "Failed to resolve URL %s", u->location);
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
 
@@ -1365,19 +1365,19 @@ static void resolvelocation(struct surl *u) {
 	if (strcmp(u->host, ohost) == 0) {
 		// muzes se pripojit na tu puvodni IP
 		free_addr(u->prev_addr);
-		u->prev_addr = (struct addr*)malloc(sizeof(struct addr));
-		memcpy(u->prev_addr, u->addr, sizeof(struct addr));
+		u->prev_addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
+		memcpy(u->prev_addr, u->addr, sizeof(mcrawler_addr));
 		u->prev_addr->next = NULL;
-		set_atomic_int(&u->state, SURL_S_GOTIP);
+		set_atomic_int(&u->state, MCURL_S_GOTIP);
 	} else {
 		// zmena host
-		if (get_atomic_int(&u->state) != SURL_S_GOTIP) {
+		if (get_atomic_int(&u->state) != MCURL_S_GOTIP) {
 			// pokud jsme nedostali promo ip, přepneme se do ipv4
 			u->addrtype = AF_INET;
 		}
 	}
 
-	struct redirect_info *rinfo = malloc(sizeof(*rinfo));
+	mcrawler_redirect_info *rinfo = malloc(sizeof(*rinfo));
 	bzero(rinfo, sizeof(*rinfo));
 	rinfo->url = malloc(strlen(u->location)+1);
 	strcpy(rinfo->url, u->location);
@@ -1394,26 +1394,26 @@ static void resolvelocation(struct surl *u) {
 /**
 Try read some data from the socket, check that we have some available place in the buffer.
 */
-static ssize_t try_read(struct surl *u) {
+static ssize_t try_read(mcrawler_url *u) {
 	ssize_t left = BUFSIZE - u->bufp;
 	if(left <= 0) {
 		return 0;
 	}
 
-	return ((struct surl_func *)u->f)->read(u, u->buf + u->bufp, left, (char *)&u->error_msg);
+	return ((mcrawler_url_func *)u->f)->read(u, u->buf + u->bufp, left, (char *)&u->error_msg);
 }
 
 /** cti odpoved
  */
-static void readreply(struct surl *u) {
+static void readreply(mcrawler_url *u) {
 	const ssize_t t = try_read(u);
-	assert(t >= SURL_IO_WRITE);
-	if (t == SURL_IO_READ) {
-		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+	assert(t >= MCURL_IO_WRITE);
+	if (t == MCURL_IO_READ) {
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
 		return;
 	}
-	if (t == SURL_IO_WRITE) {
-		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_WRITE);
+	if (t == MCURL_IO_WRITE) {
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
 		return;
 	}
 	if (t >= 0) {
@@ -1440,7 +1440,7 @@ static void readreply(struct surl *u) {
 		}
 	}
 	
-	if(t == SURL_IO_EOF || t == SURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
+	if(t == MCURL_IO_EOF || t == MCURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
 #ifdef HAVE_LIBSSL
 		if (u->ssl != NULL) {
 			SSL_free(u->ssl);
@@ -1450,18 +1450,18 @@ static void readreply(struct surl *u) {
 		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
 		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 
-		if (t == SURL_IO_ERROR) {
-			set_atomic_int(&u->state, SURL_S_ERROR);
-		} else if (get_atomic_int(&u->state) != SURL_S_ERROR) {
-			set_atomic_int(&u->state, SURL_S_DOWNLOADED);
+		if (t == MCURL_IO_ERROR) {
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+		} else if (get_atomic_int(&u->state) != MCURL_S_ERROR) {
+			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
 			debugf("[%d] Downloaded.\n",u->index);
 			if (u->location[0] && strcmp(u->method, "HEAD")) {
 				resolvelocation(u);
 			}
 		}
 	} else {
-		set_atomic_int(&u->state, SURL_S_RECVREPLY);
-		set_atomic_int(&u->rw, 1<<SURL_RW_WANT_READ);
+		set_atomic_int(&u->state, MCURL_S_RECVREPLY);
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
 	}
 }
 
@@ -1469,11 +1469,11 @@ static void readreply(struct surl *u) {
 
 /** provede systemovy select nad vsemi streamy
  */
-static void selectall(struct surl **urls, int urllen) {
+static void selectall(mcrawler_url **urls, int urllen) {
 	fd_set set;
 	fd_set writeset;
 	struct timeval timeout;	
-	struct surl *url;
+	mcrawler_url *url;
 	
 	FD_ZERO (&set);
 	FD_ZERO (&writeset);
@@ -1487,16 +1487,16 @@ static void selectall(struct surl **urls, int urllen) {
 		url = urls[i];
 		const int state = get_atomic_int(&url->state);
 		const int rw = get_atomic_int(&url->rw);
-		debugf("[%d] select.state = [%s][%d]\n", url->index, state_to_s(state), want_io(state, rw));
+		debugf("[%d] select.state = [%s][%d]\n", url->index, mcrawler_state_to_s(state), want_io(state, rw));
 		if (!want_io(state, rw)) {
 			continue;
 		}
 		wantio = 1;
-		if(rw & 1<<SURL_RW_WANT_READ) {
+		if(rw & 1<<MCURL_RW_WANT_READ) {
 			FD_SET(url->sockfd, &set);
 		}
 		
-		if(rw & 1<<SURL_RW_WANT_WRITE) {
+		if(rw & 1<<MCURL_RW_WANT_WRITE) {
 			FD_SET(url->sockfd, &writeset);
 		}
 	}
@@ -1513,7 +1513,7 @@ static void selectall(struct surl **urls, int urllen) {
 	}
 	for (int i = 0; i < urllen; i++) {
 		url = urls[i];
-		const int rw = !!FD_ISSET(url->sockfd, &set) << SURL_RW_READY_READ | !!FD_ISSET(url->sockfd, &writeset) << SURL_RW_READY_WRITE;
+		const int rw = !!FD_ISSET(url->sockfd, &set) << MCURL_RW_READY_READ | !!FD_ISSET(url->sockfd, &writeset) << MCURL_RW_READY_WRITE;
 		if (rw) {
 			set_atomic_int(&url->rw, rw);
 		} else {
@@ -1525,28 +1525,28 @@ static void selectall(struct surl **urls, int urllen) {
 
 /** provede jeden krok pro dane url
  */
-static void goone(struct surl *u, const struct ssettings *settings, surl_callback callback) {
+static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_url_callback callback) {
 	const int state = get_atomic_int(&u->state);
 	const int rw = get_atomic_int(&u->rw);
 	int timeout;
 
-	debugf("[%d] state = [%s][%d]\n", u->index, state_to_s(state), want_io(state, rw));
+	debugf("[%d] state = [%s][%d]\n", u->index, mcrawler_state_to_s(state), want_io(state, rw));
 
 	if (want_io(state, rw)) {
 		timeout = (settings->timeout > 6 ? settings->timeout / 3 : 2) * 1000;
 
 		switch(state) {
-		case SURL_S_CONNECT:
+		case MCURL_S_CONNECT:
 			if (u->addr->next && get_time_int() - u->timing.connectionstart > timeout) {
-				struct addr *next = u->addr->next;
+				mcrawler_addr *next = u->addr->next;
 				free(u->addr);
 				u->addr = next;
 				debugf("[%d] Connection timeout (%d ms), trying another ip\n", u->index, timeout);
 				close(u->sockfd);
-				set_atomic_int(&u->state, SURL_S_GOTIP);
+				set_atomic_int(&u->state, MCURL_S_GOTIP);
 			}
 			break;
-		case SURL_S_HANDSHAKE:
+		case MCURL_S_HANDSHAKE:
 #ifdef HAVE_LIBSSL
 			if (get_time_int() - u->timing.handshakestart > timeout) {
 				// we retry handshake with another protocol
@@ -1555,7 +1555,7 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 
 					SSL_free(u->ssl);
 					close(u->sockfd);
-					set_atomic_int(&u->state, SURL_S_GOTIP);
+					set_atomic_int(&u->state, MCURL_S_GOTIP);
 				}
 			}
 #endif
@@ -1567,23 +1567,23 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 	check_io(state, rw); // Checks that when we need some io, then the socket is in readable/writeable state
 
 	const int time = get_time_int();
-	struct surl_func *f = u->f;
+	mcrawler_url_func *f = u->f;
 
 	switch(state) {  
-	case SURL_S_JUSTBORN:
+	case MCURL_S_JUSTBORN:
 		f->parse_url(u);
 		break;
 
-	case SURL_S_PARSEDURL:
+	case MCURL_S_PARSEDURL:
 		if (!u->timing.dnsstart) u->timing.dnsstart = time;
 		f->launch_dns(u);
 		break;
   
-	case SURL_S_INDNS:
+	case MCURL_S_INDNS:
 		f->check_dns(u);
 		break;
 
-	case SURL_S_GOTIP:
+	case MCURL_S_GOTIP:
 		if (test_free_channel(u->addr->ip, settings->delay, u->prev_addr && !memcmp(u->addr->ip, u->prev_addr->ip, sizeof(u->addr->ip)))) {
 			if (!u->timing.connectionstart) u->timing.connectionstart = time;
 			if (!u->downstart) u->downstart = time;
@@ -1591,41 +1591,41 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 		}
 		break;
   
-	case SURL_S_CONNECT:
+	case MCURL_S_CONNECT:
 		f->connect_socket(u);
 		break;
 
-	case SURL_S_HANDSHAKE:
+	case MCURL_S_HANDSHAKE:
 		u->timing.handshakestart = time;
 		f->handshake(u);
 		break;
 
-	case SURL_S_GENREQUEST:
+	case MCURL_S_GENREQUEST:
 		f->gen_request(u);
 		break;
 
-	case SURL_S_SENDREQUEST:
+	case MCURL_S_SENDREQUEST:
 		if (!u->timing.requeststart) u->timing.requeststart = time;
 		f->send_request(u);
 		break;
 
-	case SURL_S_RECVREPLY:
+	case MCURL_S_RECVREPLY:
 		if (!u->timing.requestend) u->timing.requestend = time;
 		f->recv_reply(u);
 		break;
 
-	case SURL_S_DOWNLOADED:
+	case MCURL_S_DOWNLOADED:
 		finish(u, callback);
 		break;
   
-	case SURL_S_ERROR:
+	case MCURL_S_ERROR:
 		assert(u->status < 0);
 		finish(u, callback);
 		break;
 	}
 
 	const int stateAfter = get_atomic_int(&u->state);
-	if (stateAfter == SURL_S_ERROR) {
+	if (stateAfter == MCURL_S_ERROR) {
 		u->status = state - stateAfter;
 	}
 
@@ -1639,14 +1639,14 @@ static void goone(struct surl *u, const struct ssettings *settings, surl_callbac
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
  */
-static int exitprematurely(struct surl **urls, int urllen, int time) {
+static int exitprematurely(mcrawler_url **urls, int urllen, int time) {
 	int notdone = 0, lastread = 0;
-	struct surl *url;
+	mcrawler_url *url;
 	
 	for (int i = 0; i < urllen; i++) {
 		url = urls[i];
 		const int url_state = get_atomic_int(&url->state);
-		if(url_state<SURL_S_DONE) {
+		if(url_state<MCURL_S_DONE) {
 			notdone++;
 		}
 		if(url->timing.lastread > lastread) {
@@ -1670,20 +1670,20 @@ static int exitprematurely(struct surl **urls, int urllen, int time) {
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-static void outputpartial(struct surl **urls, int urllen, surl_callback callback) {
-	struct surl *url;
+static void outputpartial(mcrawler_url **urls, int urllen, mcrawler_url_callback callback) {
+	mcrawler_url *url;
 
 	for (int i = 0; i < urllen; i++) {
 		url = urls[i];
 		const int url_state = get_atomic_int(&url->state);
-		if(url_state < SURL_S_DONE) {
+		if(url_state < MCURL_S_DONE) {
 			finish(url, callback);
 		}
 	}
 }
 
-void mcrawler_init_settings(struct ssettings *settings) {
-	memset(settings, 0, sizeof(struct ssettings));
+void mcrawler_init_settings(mcrawler_settings *settings) {
+	memset(settings, 0, sizeof(mcrawler_settings));
 	settings->timeout = DEFAULT_TIMEOUT;
 	settings->delay = DEFAULT_DELAY;
 }
@@ -1691,20 +1691,20 @@ void mcrawler_init_settings(struct ssettings *settings) {
 /**
  * Init URL struct
  */
-void mcrawler_init_url(struct surl *u, const char *url) {
-	u->state = SURL_S_JUSTBORN;
+void mcrawler_init_url(mcrawler_url *u, const char *url) {
+	u->state = MCURL_S_JUSTBORN;
 	u->redirect_limit = MAX_REDIRECTS;
 	if (strlen(url) > MAXURLSIZE) {
 		*(char*)mempcpy(u->rawurl, url, MAXURLSIZE) = 0;
 		sprintf(u->error_msg, "URL is too long");
-		set_atomic_int(&u->state, SURL_S_ERROR);
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 	} else {
 		strcpy(u->rawurl, url);
 	}
 	u->contentlen = -1;
 
 	// init callbacks
-	struct surl_func f = (struct surl_func) {
+	mcrawler_url_func f = (mcrawler_url_func) {
 		read:plain_read,
 		write:plain_write,
 		parse_url:parseurl,
@@ -1717,17 +1717,17 @@ void mcrawler_init_url(struct surl *u, const char *url) {
 		send_request:sendrequest,
 		recv_reply:readreply,
 	};
-	u->f = (struct surl_func*)malloc(sizeof(struct surl_func));
-	memcpy(u->f, &f, sizeof(struct surl_func));
+	u->f = (mcrawler_url_func*)malloc(sizeof(mcrawler_url_func));
+	memcpy(u->f, &f, sizeof(mcrawler_url_func));
 }
 
 /**
  * hlavni smycka
  */
-void mcrawler_go(struct surl **urls, const int urllen, const struct ssettings *settings, surl_callback callback) {
+void mcrawler_go(mcrawler_url **urls, const int urllen, const mcrawler_settings *settings, mcrawler_url_callback callback) {
 	int done;
 	int change;
-	struct surl *url;
+	mcrawler_url *url;
 
 	debug = settings->debug;
 	do {
@@ -1738,7 +1738,7 @@ void mcrawler_go(struct surl **urls, const int urllen, const struct ssettings *s
 		for (int i = 0; i < urllen; i++) {
 			url = urls[i];
 			const int state = get_atomic_int(&url->state);
-			if(state < SURL_S_DONE) {
+			if(state < MCURL_S_DONE) {
 				goone(url, settings, callback);
 				done = 0;
 			}

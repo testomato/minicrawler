@@ -2,6 +2,6 @@
 
 void printusage();
 
-void initurls(int argc, char *argv[], struct surl **urls, int *urllen, struct ssettings *settings);
+void initurls(int argc, char *argv[], mcrawler_url **urls, int *urllen, mcrawler_settings *settings);
 
-void output(struct surl *u);
+void output(mcrawler_url *u);

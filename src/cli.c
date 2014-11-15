@@ -42,30 +42,30 @@ static int writehead = 0;
 
 /** nacte url z prikazove radky do struktur
  */
-void initurls(int argc, char *argv[], struct surl **urls, int *urllen, struct ssettings *settings)
+void initurls(int argc, char *argv[], mcrawler_url **urls, int *urllen, mcrawler_settings *settings)
 {
-	struct surl *url;
+	mcrawler_url *url;
 	long options = 0;
 	char customheader[4096];
 	char customagent[256];
-	struct cookie cookies[COOKIESTORAGESIZE];
+	mcrawler_cookie cookies[COOKIESTORAGESIZE];
 	char *p, *q;
 	int ccnt = 0, i = 0;
 
-	url = (struct surl *)malloc(sizeof(struct surl));
-	memset(url, 0, sizeof(struct surl));
+	url = (mcrawler_url *)malloc(sizeof(mcrawler_url));
+	memset(url, 0, sizeof(mcrawler_url));
 
 	for (int t = 1; t < argc; ++t) {
 
 		// options
 		if(!strcmp(argv[t], "-d")) {settings->debug=1; continue;}
-		if(!strcmp(argv[t], "-S")) {options |= 1<<SURL_OPT_NONSSL; continue;}
+		if(!strcmp(argv[t], "-S")) {options |= 1<<MCURL_OPT_NONSSL; continue;}
 		if(!strcmp(argv[t], "-h")) {writehead=1; continue;}
 		if(!strcmp(argv[t], "-i")) {settings->impatient=1; continue;}
 		if(!strcmp(argv[t], "-p")) {settings->partial=1; continue;}
-		if(!strcmp(argv[t], "-c")) {options |= 1<<SURL_OPT_CONVERT_TO_TEXT | 1<<SURL_OPT_CONVERT_TO_UTF8; continue;}
-		if(!strcmp(argv[t], "-8")) {options |= 1<<SURL_OPT_CONVERT_TO_UTF8; continue;}
-		if(!strcmp(argv[t], "-g")) {options |= 1<<SURL_OPT_GZIP; continue;}
+		if(!strcmp(argv[t], "-c")) {options |= 1<<MCURL_OPT_CONVERT_TO_TEXT | 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
+		if(!strcmp(argv[t], "-8")) {options |= 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
+		if(!strcmp(argv[t], "-g")) {options |= 1<<MCURL_OPT_GZIP; continue;}
 		if(!strncmp(argv[t], "-t", 2)) {settings->timeout = atoi(argv[t]+2); continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings->delay = atoi(argv[t]+2); continue;}
 		if(!strncmp(argv[t], "-w", 2)) {safe_cpy(customheader, argv[t+1], I_SIZEOF(customheader)); t++; continue;}
@@ -85,7 +85,7 @@ void initurls(int argc, char *argv[], struct surl **urls, int *urllen, struct ss
 			t++;
 			continue;
 		}
-		if(!strcmp(argv[t], "-6")) {options |= 1<<SURL_OPT_IPV6; continue;}
+		if(!strcmp(argv[t], "-6")) {options |= 1<<MCURL_OPT_IPV6; continue;}
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
@@ -121,8 +121,8 @@ void initurls(int argc, char *argv[], struct surl **urls, int *urllen, struct ss
 		url->options = options;
 
 		urls[i-1] = url;
-		url = (struct surl *)malloc(sizeof(struct surl));
-		memset(url, 0, sizeof(struct surl));
+		url = (mcrawler_url *)malloc(sizeof(mcrawler_url));
+		memset(url, 0, sizeof(mcrawler_url));
 	}
 
 	*urllen = i;
@@ -136,7 +136,7 @@ void initurls(int argc, char *argv[], struct surl **urls, int *urllen, struct ss
 /**
  * Formats timing data for output
  */
-static int format_timing(char *dest, struct timing *timing) {
+static int format_timing(char *dest, mcrawler_timing *timing) {
 	int n, len = 0;
 	const int now = timing->done;
 	if (timing->dnsstart) {
@@ -170,7 +170,7 @@ static int format_timing(char *dest, struct timing *timing) {
 	return len;
 }
 
-void output(struct surl *u) {
+void output(mcrawler_url *u) {
 	unsigned char header[16384];
 	char *h = (char *)header;
 	int n, hlen = 0;
@@ -181,7 +181,7 @@ void output(struct surl *u) {
 		n = sprintf(h+hlen, "\nRedirected-To: %s", u->redirectedto);
 		if (n > 0) hlen += n;
 	}
-	for (struct redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
+	for (mcrawler_redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
 		n = sprintf(h+hlen, "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
 		if (n > 0) hlen += n;
 		hlen += format_timing(h+hlen, &rinfo->timing);
@@ -190,35 +190,35 @@ void output(struct surl *u) {
 	if (n > 0) hlen += n;
 
 	const int url_state = u->state;
-	if (url_state <= SURL_S_RECVREPLY) {
+	if (url_state <= MCURL_S_RECVREPLY) {
 		char timeouterr[50];
 		switch (url_state) {
-			case SURL_S_JUSTBORN:
+			case MCURL_S_JUSTBORN:
 				strcpy(timeouterr, "Process has not started yet"); break;
-			case SURL_S_PARSEDURL:
+			case MCURL_S_PARSEDURL:
 				strcpy(timeouterr, "Timeout while contacting DNS servers"); break;
-			case SURL_S_INDNS:
+			case MCURL_S_INDNS:
 				strcpy(timeouterr, "Timeout while resolving host"); break;
-			case SURL_S_GOTIP:
+			case MCURL_S_GOTIP:
 				if (u->timing.connectionstart) {
 					strcpy(timeouterr, "Connection timed out");
 				} else {
 					strcpy(timeouterr, "Waiting for download slot");
 				}
 				break;
-			case SURL_S_CONNECT:
+			case MCURL_S_CONNECT:
 				strcpy(timeouterr, "Connection timed out"); break;
-			case SURL_S_HANDSHAKE:
+			case MCURL_S_HANDSHAKE:
 				strcpy(timeouterr, "Timeout during SSL handshake"); break;
-			case SURL_S_GENREQUEST:
+			case MCURL_S_GENREQUEST:
 				strcpy(timeouterr, "Timeout while generating HTTP request"); break;
-			case SURL_S_SENDREQUEST:
+			case MCURL_S_SENDREQUEST:
 				strcpy(timeouterr, "Timeout while sending HTTP request"); break;
-			case SURL_S_RECVREPLY:
+			case MCURL_S_RECVREPLY:
 				strcpy(timeouterr, "HTTP server timed out"); break;
 		}
 
-		n = sprintf(h+hlen, "Timeout: %d (%s); %s\n", url_state, state_to_s(url_state), timeouterr);
+		n = sprintf(h+hlen, "Timeout: %d (%s); %s\n", url_state, mcrawler_state_to_s(url_state), timeouterr);
 		if (n > 0) hlen += n;
 	}
 	if (*u->error_msg) {
@@ -246,7 +246,7 @@ void output(struct surl *u) {
 
 	// downtime
 	int downtime;
-	if (url_state == SURL_S_DOWNLOADED) {
+	if (url_state == MCURL_S_DOWNLOADED) {
 		assert(u->timing.lastread >= u->timing.connectionstart);
 		downtime = u->timing.lastread - u->downstart;
 	} else if (u->downstart) {

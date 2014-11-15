@@ -12,7 +12,7 @@
  * Convert body of the page from u->charset to
  *   UCS4. Use dst as a destination buffer.
  */
-static int convertor(struct surl *u, char *dst, const size_t dst_size)
+static int convertor(mcrawler_url *u, char *dst, const size_t dst_size)
 {
 	const char *from_charset = !strcasecmp(u->charset, "unknown") ? "utf-8" : u->charset;
 
@@ -61,7 +61,7 @@ static int convertor(struct surl *u, char *dst, const size_t dst_size)
  * Convert body of the page from u->charset to
  *   UCS4.
  */
-void conv_charset(struct surl *u)
+void conv_charset(mcrawler_url *u)
 {
 	assert(u->charset && *u->charset);
 	const size_t dst_size = BUFSIZE - u->headlen;

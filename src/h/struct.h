@@ -16,36 +16,37 @@ static inline void free_nv(struct nv *nv) {
 }
 
 enum {
-	SURL_STATES_IO = 1<<SURL_S_CONNECT | 1<<SURL_S_HANDSHAKE | 1<<SURL_S_SENDREQUEST | 1<<SURL_S_RECVREPLY,
+	MCURL_STATES_IO = 1<<MCURL_S_CONNECT | 1<<MCURL_S_HANDSHAKE | 1<<MCURL_S_SENDREQUEST | 1<<MCURL_S_RECVREPLY,
 };
 
-enum surl_rw {
-	SURL_RW_WANT_READ,
-	SURL_RW_WANT_WRITE,
-	SURL_RW_READY_READ,
-	SURL_RW_READY_WRITE,
+enum mcrawler_url_rw {
+	MCURL_RW_WANT_READ,
+	MCURL_RW_WANT_WRITE,
+	MCURL_RW_READY_READ,
+	MCURL_RW_READY_WRITE,
 };
 
-enum surl_io {
-	SURL_IO_WRITE = -3,
-	SURL_IO_READ = -2,
-	SURL_IO_ERROR = -1,
-	SURL_IO_EOF = 0,
+enum mcrawler_url_io {
+	MCURL_IO_WRITE = -3,
+	MCURL_IO_READ = -2,
+	MCURL_IO_ERROR = -1,
+	MCURL_IO_EOF = 0,
 };
 
-typedef ssize_t (*read_callback)(const struct surl *u, unsigned char *buf, const size_t size, char *errbuf);
-typedef ssize_t (*write_callback)(const struct surl *u, const unsigned char *buf, const size_t size, char *errbuf);
+typedef ssize_t (*read_callback)(const mcrawler_url *u, unsigned char *buf, const size_t size, char *errbuf);
+typedef ssize_t (*write_callback)(const mcrawler_url *u, const unsigned char *buf, const size_t size, char *errbuf);
 
-struct surl_func {
+struct mcrawler_url_func {
 	read_callback read;
 	write_callback write;
-	surl_callback parse_url;
-	surl_callback launch_dns;
-	surl_callback check_dns;
-	surl_callback open_socket;
-	surl_callback connect_socket;
-	surl_callback handshake;
-	surl_callback gen_request;
-	surl_callback send_request;
-	surl_callback recv_reply;
+	mcrawler_url_callback parse_url;
+	mcrawler_url_callback launch_dns;
+	mcrawler_url_callback check_dns;
+	mcrawler_url_callback open_socket;
+	mcrawler_url_callback connect_socket;
+	mcrawler_url_callback handshake;
+	mcrawler_url_callback gen_request;
+	mcrawler_url_callback send_request;
+	mcrawler_url_callback recv_reply;
 };
+typedef struct mcrawler_url_func mcrawler_url_func;
