@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <sys/types.h>
 
 #include "config.h"
 #include "struct.h"
@@ -23,3 +24,4 @@ char *consume_entity(char *s, const char *end, int *code);
 char *put_code(char *dst, const unsigned dst_len, const int code);
 int urlencode(char *src);
 int gunzip(unsigned char *out, int *outlen, unsigned char *in, int inlen);
+void *rpl_malloc(size_t n);
