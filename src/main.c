@@ -21,13 +21,12 @@ int main(int argc, char *argv[]) {
 	signal(SIGPIPE,sighandler);
 //	signal(SIGSEGV,sighandler);
 	
-	mcrawler_url *urls[argc - 1];
+	mcrawler_url *urls[argc];
 	mcrawler_settings settings;
-	int urllen;
 
 	mcrawler_init_settings(&settings);
-	initurls(argc, argv, urls, &urllen, &settings);
-	mcrawler_go(urls, urllen, &settings, output);
+	initurls(argc, argv, urls, &settings);
+	mcrawler_go(urls, &settings, output);
  
 	exit(0);
 }

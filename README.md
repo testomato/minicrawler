@@ -13,12 +13,14 @@ static void onfinish(mcrawler_url *url) {
 }
 
 void main() {
-	mcrawler_url url, *urls[1];
-	urls[0] = &url;
-	memset(&u, 0, sizeof(mcrawler_url));
+	mcrawler_url url;
+	mcrawler_url *urls[] = {&url, NULL};
+	mcrawler_settings settings;
+	memset(&url, 0, sizeof(mcrawler_url));
 	mcrawler_init_url(&url, "http://example.com");
+	mcrawler_init_settings(&settings);
 	strcpy(url.method, "GET");
-	mcrawler_go(urls, 1, &settings, onfinish);
+	mcrawler_go(urls, &settings, onfinish);
 }
 ```
 

@@ -1475,7 +1475,7 @@ static void readreply(mcrawler_url *u) {
 
 /** provede systemovy select nad vsemi streamy
  */
-static void selectall(mcrawler_url **urls, int urllen) {
+static void selectall(mcrawler_url **urls) {
 	fd_set set;
 	fd_set writeset;
 	struct timeval timeout;	
@@ -1489,7 +1489,7 @@ static void selectall(mcrawler_url **urls, int urllen) {
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 20000;
 	
-	for (int i = 0; i < urllen; i++) {
+	for (int i = 0; urls[i] != NULL; i++) {
 		url = urls[i];
 		const int state = get_atomic_int(&url->state);
 		const int rw = get_atomic_int(&url->rw);
@@ -1517,7 +1517,7 @@ static void selectall(mcrawler_url **urls, int urllen) {
 		case 0:
 			return; // nothing
 	}
-	for (int i = 0; i < urllen; i++) {
+	for (int i = 0; urls[i] != NULL; i++) {
 		url = urls[i];
 		const int rw = !!FD_ISSET(url->sockfd, &set) << MCURL_RW_READY_READ | !!FD_ISSET(url->sockfd, &writeset) << MCURL_RW_READY_WRITE;
 		if (rw) {
@@ -1645,11 +1645,11 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
  */
-static int exitprematurely(mcrawler_url **urls, int urllen, int time) {
-	int notdone = 0, lastread = 0;
+static int exitprematurely(mcrawler_url **urls, int time) {
+	int notdone = 0, lastread = 0, i;
 	mcrawler_url *url;
 	
-	for (int i = 0; i < urllen; i++) {
+	for (i = 0; urls[i] != NULL; i++) {
 		url = urls[i];
 		const int url_state = get_atomic_int(&url->state);
 		if(url_state<MCURL_S_DONE) {
@@ -1662,11 +1662,11 @@ static int exitprematurely(mcrawler_url **urls, int urllen, int time) {
 	
 	debugf("[-] impatient: %d not done, last read at %d ms (now %d)\n",notdone,lastread,time);
 	
-	if (urllen >= 5 && notdone == 1 && (time-lastread) > 400) {
+	if (i >= 5 && notdone == 1 && (time-lastread) > 400) {
 		debugf("[-] Forcing premature end 1!\n");
 		return 1;
 	}
-	if (urllen >= 20 && notdone <= 2 && (time-lastread) > 400) {
+	if (i >= 20 && notdone <= 2 && (time-lastread) > 400) {
 		debugf("[-] Forcing premature end 2!\n");
 		return 1;
 	}
@@ -1676,10 +1676,10 @@ static int exitprematurely(mcrawler_url **urls, int urllen, int time) {
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-static void outputpartial(mcrawler_url **urls, int urllen, mcrawler_url_callback callback) {
+static void outputpartial(mcrawler_url **urls, mcrawler_url_callback callback) {
 	mcrawler_url *url;
 
-	for (int i = 0; i < urllen; i++) {
+	for (int i = 0; urls[i] != NULL; i++) {
 		url = urls[i];
 		const int url_state = get_atomic_int(&url->state);
 		if(url_state < MCURL_S_DONE) {
@@ -1730,7 +1730,7 @@ void mcrawler_init_url(mcrawler_url *u, const char *url) {
 /**
  * hlavni smycka
  */
-void mcrawler_go(mcrawler_url **urls, const int urllen, const mcrawler_settings *settings, mcrawler_url_callback callback) {
+void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawler_url_callback callback) {
 	int done;
 	int change;
 	mcrawler_url *url;
@@ -1740,8 +1740,8 @@ void mcrawler_go(mcrawler_url **urls, const int urllen, const mcrawler_settings 
 		done = 1;
 		change = 0;
 		
-		selectall(urls, urllen);
-		for (int i = 0; i < urllen; i++) {
+		selectall(urls);
+		for (int i = 0; urls[i] != NULL; i++) {
 			url = urls[i];
 			const int state = get_atomic_int(&url->state);
 			if(state < MCURL_S_DONE) {
@@ -1758,13 +1758,13 @@ void mcrawler_go(mcrawler_url **urls, const int urllen, const mcrawler_settings 
 		if(t > settings->timeout*1000) {
 			debugf("Timeout (%d ms elapsed). The end.\n", t);
 			if(settings->partial) {
-				outputpartial(urls, urllen, callback);
+				outputpartial(urls, callback);
 			}
 			break;
 		}
 		if(!change && !done) {
 			if (settings->impatient && t >= settings->timeout*1000-1000) {
-				done = exitprematurely(urls, urllen, t);
+				done = exitprematurely(urls, t);
 			}
 		}
 	} while(!done);

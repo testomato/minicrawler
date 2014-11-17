@@ -42,7 +42,7 @@ static int writehead = 0;
 
 /** nacte url z prikazove radky do struktur
  */
-void initurls(int argc, char *argv[], mcrawler_url **urls, int *urllen, mcrawler_settings *settings)
+void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *settings)
 {
 	mcrawler_url *url;
 	long options = 0;
@@ -125,7 +125,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, int *urllen, mcrawler
 		memset(url, 0, sizeof(mcrawler_url));
 	}
 
-	*urllen = i;
+	urls[i] = NULL;
 	free(url);
 
 	for (int t = 0; t < ccnt; t++) {
