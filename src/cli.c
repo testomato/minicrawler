@@ -39,6 +39,7 @@ void printusage()
 }
 
 static int writehead = 0;
+static int output_partial = 0;
 
 /** nacte url z prikazove radky do struktur
  */
@@ -62,7 +63,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-S")) {options |= 1<<MCURL_OPT_NONSSL; continue;}
 		if(!strcmp(argv[t], "-h")) {writehead=1; continue;}
 		if(!strcmp(argv[t], "-i")) {settings->impatient=1; continue;}
-		if(!strcmp(argv[t], "-p")) {settings->partial=1; continue;}
+		if(!strcmp(argv[t], "-p")) {output_partial=1; continue;}
 		if(!strcmp(argv[t], "-c")) {options |= 1<<MCURL_OPT_CONVERT_TO_TEXT | 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-8")) {options |= 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-g")) {options |= 1<<MCURL_OPT_GZIP; continue;}
@@ -171,6 +172,12 @@ static int format_timing(char *dest, mcrawler_timing *timing) {
 }
 
 void output(mcrawler_url *u) {
+	const int url_state = u->state;
+	if (!output_partial && url_state < MCURL_S_DOWNLOADED) {
+		// output only downloaded urls
+		return;
+	}
+
 	unsigned char header[16384];
 	char *h = (char *)header;
 	int n, hlen = 0;
@@ -189,7 +196,6 @@ void output(mcrawler_url *u) {
 	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %d\n", u->status, u->bufp-u->headlen);
 	if (n > 0) hlen += n;
 
-	const int url_state = u->state;
 	if (url_state <= MCURL_S_RECVREPLY) {
 		char timeouterr[50];
 		switch (url_state) {

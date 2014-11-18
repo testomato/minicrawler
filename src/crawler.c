@@ -1757,9 +1757,7 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 		const int t = get_time_int();
 		if(t > settings->timeout*1000) {
 			debugf("Timeout (%d ms elapsed). The end.\n", t);
-			if(settings->partial) {
-				outputpartial(urls, callback);
-			}
+			outputpartial(urls, callback);
 			break;
 		}
 		if(!change && !done) {

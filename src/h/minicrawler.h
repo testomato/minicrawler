@@ -5,7 +5,6 @@ struct mcrawler_settings {
 	int debug;
 	int timeout;
 	int impatient;
-	int partial;
 	int delay;
 };
 typedef struct mcrawler_settings mcrawler_settings;
