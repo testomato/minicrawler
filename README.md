@@ -19,8 +19,7 @@ void main() {
 	memset(&url, 0, sizeof(mcrawler_url));
 	mcrawler_init_url(&url, "http://example.com");
 	mcrawler_init_settings(&settings);
-	strcpy(url.method, "GET");
-	mcrawler_go(urls, &settings, onfinish);
+	mcrawler_go(urls, &settings, &onfinish, NULL);
 }
 ```
 

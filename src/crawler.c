@@ -1707,6 +1707,7 @@ void mcrawler_init_url(mcrawler_url *u, const char *url) {
 	} else {
 		strcpy(u->rawurl, url);
 	}
+	strcpy(u->method, "GET");
 	u->contentlen = -1;
 
 	// init callbacks
