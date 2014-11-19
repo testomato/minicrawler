@@ -171,7 +171,7 @@ static int format_timing(char *dest, mcrawler_timing *timing) {
 	return len;
 }
 
-void output(mcrawler_url *u) {
+void output(mcrawler_url *u, void *arg) {
 	const int url_state = u->state;
 	if (!output_partial && url_state < MCURL_S_DOWNLOADED) {
 		// output only downloaded urls

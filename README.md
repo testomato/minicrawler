@@ -8,7 +8,7 @@ Minicrawler executes HTTP requests while handling cookies, network connection ma
 ```
 #include <minicrawler/minicrawler.h>
 
-static void onfinish(mcrawler_url *url) {
+static void onfinish(mcrawler_url *url, void *arg) {
 	printf("%d: Status: %d\n", url->index, url->status);
 }
 

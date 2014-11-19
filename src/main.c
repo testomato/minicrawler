@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
 
 	mcrawler_init_settings(&settings);
 	initurls(argc, argv, urls, &settings);
-	mcrawler_go(urls, &settings, output);
+	mcrawler_go(urls, &settings, &output, NULL);
  
 	exit(0);
 }

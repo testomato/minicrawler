@@ -1161,7 +1161,7 @@ ssize_t plain_write(const mcrawler_url *u, const unsigned char *buf, const size_
 	return MCURL_IO_ERROR;
 }
 
-static void finish(mcrawler_url *u, mcrawler_url_callback callback) {
+static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callback_arg) {
 
 	if (u->gzipped) {
 		unsigned char *buf;
@@ -1200,7 +1200,7 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback) {
 
 	u->timing.done = get_time_int();
 
-	callback(u);
+	callback(u, callback_arg);
 
 	debugf("[%d] Done.\n",u->index);
 	set_atomic_int(&u->state, MCURL_S_DONE);
@@ -1531,7 +1531,7 @@ static void selectall(mcrawler_url **urls) {
 
 /** provede jeden krok pro dane url
  */
-static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_url_callback callback) {
+static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg) {
 	const int state = get_atomic_int(&u->state);
 	const int rw = get_atomic_int(&u->rw);
 	int timeout;
@@ -1621,12 +1621,12 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 		break;
 
 	case MCURL_S_DOWNLOADED:
-		finish(u, callback);
+		finish(u, callback, callback_arg);
 		break;
   
 	case MCURL_S_ERROR:
 		assert(u->status < 0);
-		finish(u, callback);
+		finish(u, callback, callback_arg);
 		break;
 	}
 
@@ -1676,14 +1676,14 @@ static int exitprematurely(mcrawler_url **urls, int time) {
 
 /** vypise obsah vsech dosud neuzavrenych streamu
  */
-static void outputpartial(mcrawler_url **urls, mcrawler_url_callback callback) {
+static void outputpartial(mcrawler_url **urls, mcrawler_url_callback callback, void *callback_arg) {
 	mcrawler_url *url;
 
 	for (int i = 0; urls[i] != NULL; i++) {
 		url = urls[i];
 		const int url_state = get_atomic_int(&url->state);
 		if(url_state < MCURL_S_DONE) {
-			finish(url, callback);
+			finish(url, callback, callback_arg);
 		}
 	}
 }
@@ -1731,7 +1731,7 @@ void mcrawler_init_url(mcrawler_url *u, const char *url) {
 /**
  * hlavni smycka
  */
-void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawler_url_callback callback) {
+void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg) {
 	int done;
 	int change;
 	mcrawler_url *url;
@@ -1746,7 +1746,7 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 			url = urls[i];
 			const int state = get_atomic_int(&url->state);
 			if(state < MCURL_S_DONE) {
-				goone(url, settings, callback);
+				goone(url, settings, callback, callback_arg);
 				done = 0;
 			}
 			// url->state can change inside goone
@@ -1758,7 +1758,7 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 		const int t = get_time_int();
 		if(t > settings->timeout*1000) {
 			debugf("Timeout (%d ms elapsed). The end.\n", t);
-			outputpartial(urls, callback);
+			outputpartial(urls, callback, callback_arg);
 			break;
 		}
 		if(!change && !done) {

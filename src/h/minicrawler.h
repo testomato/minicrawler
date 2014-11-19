@@ -205,10 +205,10 @@ struct mcrawler_url {
 };
 typedef struct mcrawler_url mcrawler_url;
 
-typedef void (*mcrawler_url_callback)(mcrawler_url*);
+typedef void (*mcrawler_url_callback)(mcrawler_url*, void *);
 
 void mcrawler_init_settings(mcrawler_settings *settings);
 
 void mcrawler_init_url(mcrawler_url *u, const char *url);
 
-void mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback);
+void mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg);

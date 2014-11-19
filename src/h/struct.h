@@ -33,20 +33,21 @@ enum mcrawler_url_io {
 	MCURL_IO_EOF = 0,
 };
 
+typedef void (*url_callback)(mcrawler_url*);
 typedef ssize_t (*read_callback)(const mcrawler_url *u, unsigned char *buf, const size_t size, char *errbuf);
 typedef ssize_t (*write_callback)(const mcrawler_url *u, const unsigned char *buf, const size_t size, char *errbuf);
 
 struct mcrawler_url_func {
 	read_callback read;
 	write_callback write;
-	mcrawler_url_callback parse_url;
-	mcrawler_url_callback launch_dns;
-	mcrawler_url_callback check_dns;
-	mcrawler_url_callback open_socket;
-	mcrawler_url_callback connect_socket;
-	mcrawler_url_callback handshake;
-	mcrawler_url_callback gen_request;
-	mcrawler_url_callback send_request;
-	mcrawler_url_callback recv_reply;
+	url_callback parse_url;
+	url_callback launch_dns;
+	url_callback check_dns;
+	url_callback open_socket;
+	url_callback connect_socket;
+	url_callback handshake;
+	url_callback gen_request;
+	url_callback send_request;
+	url_callback recv_reply;
 };
 typedef struct mcrawler_url_func mcrawler_url_func;
