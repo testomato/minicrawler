@@ -41,8 +41,7 @@ static long long get_uptime(void)
 #endif
 
 static long long birth;
-static void init_birth(void) __attribute__ ((constructor));
-static void init_birth(void)
+void init_birth(void)
 {
 	birth = get_uptime();
 }

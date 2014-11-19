@@ -1736,6 +1736,8 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 	int change;
 	mcrawler_url *url;
 
+	init_birth();
+
 	debug = settings->debug;
 	do {
 		done = 1;
