@@ -19,7 +19,6 @@ void printusage()
 	         "         -tSECONDS  set timeout (default is 5 seconds)\n"
 	         "         -h         enable output of HTTP headers\n"
 	         "         -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)\n"
-	         "         -p         output also URLs that timed out and a reason of it\n"
 	         "         -A STRING  custom user agent (max 255 bytes)\n"
 	         "         -w STRING  write this custom header to all requests (max 4095 bytes)\n"
 	         "         -c         convert content to text format (with UTF-8 encoding)\n"
@@ -39,7 +38,6 @@ void printusage()
 }
 
 static int writehead = 0;
-static int output_partial = 0;
 
 /** nacte url z prikazove radky do struktur
  */
@@ -63,7 +61,6 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-S")) {options |= 1<<MCURL_OPT_NONSSL; continue;}
 		if(!strcmp(argv[t], "-h")) {writehead=1; continue;}
 		if(!strcmp(argv[t], "-i")) {settings->impatient=1; continue;}
-		if(!strcmp(argv[t], "-p")) {output_partial=1; continue;}
 		if(!strcmp(argv[t], "-c")) {options |= 1<<MCURL_OPT_CONVERT_TO_TEXT | 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-8")) {options |= 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-g")) {options |= 1<<MCURL_OPT_GZIP; continue;}
@@ -173,10 +170,6 @@ static int format_timing(char *dest, mcrawler_timing *timing) {
 
 void output(mcrawler_url *u, void *arg) {
 	const int url_state = u->state;
-	if (!output_partial && url_state < MCURL_S_DOWNLOADED) {
-		// output only downloaded urls
-		return;
-	}
 
 	unsigned char header[16384];
 	char *h = (char *)header;

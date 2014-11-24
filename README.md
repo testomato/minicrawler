@@ -36,7 +36,6 @@ Where
          -tSECONDS  set timeout (default is 5 seconds)
          -h         enable output of HTTP headers
          -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)
-         -p         output also URLs that timed out and a reason of it
          -A STRING  custom user agent (max 256 bytes)
          -w STRING  write this custom header to all requests (max 4096 bytes)
          -c         convert content to text format (with UTF-8 encoding)
