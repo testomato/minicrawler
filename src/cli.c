@@ -69,7 +69,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-g")) {options |= 1<<MCURL_OPT_GZIP; continue;}
 		if(!strncmp(argv[t], "-t", 2)) {settings->timeout = atoi(argv[t]+2); continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings->delay = atoi(argv[t]+2); continue;}
-		if(!strncmp(argv[t], "-w", 2)) {safe_cpy(customheader, argv[t+1], I_SIZEOF(customheader)); t++; continue;}
+		if(!strncmp(argv[t], "-w", 2)) {SAFE_STRCPY(customheader, argv[t+1]); t++; continue;}
 		if(!strncmp(argv[t], "-A", 2)) {str_replace(customagent, argv[t+1], "%version%", VERSION); t++; continue;}
 		if(!strncmp(argv[t], "-b", 2)) {
 			p = argv[t+1];
@@ -103,7 +103,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 			t++;
 			continue;
 		}
-		if(!strcmp(argv[t], "-X")) {safe_cpy(url->method, argv[t+1], I_SIZEOF(url->method)); t++; continue;}
+		if(!strcmp(argv[t], "-X")) {SAFE_STRCPY(url->method, argv[t+1]); t++; continue;}
 
 		// init url
 		mcrawler_init_url(url, argv[t]);

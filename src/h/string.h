@@ -10,6 +10,8 @@ static inline int safe_size_to_int(const size_t sz) {
 }
 #define I_SIZEOF(__X) ( safe_size_to_int(sizeof(__X)) )
 #define I_LENGTHOF(__X) ( sizeof(__X) > 0 ? safe_size_to_int(sizeof(__X)) - 1 : 0 )
+#define SAFE_STRCPY(__D, __S) ( safe_strncpy(__D, __S, I_SIZEOF(__D), I_SIZEOF(__D)) )
+#define SAFE_STRNCPY(__D, __S, __SZ) ( safe_strncpy(__D, __S, I_SIZEOF(__D), __SZ) )
 
 static inline size_t write_all(const int fd, const unsigned char *buf, const size_t len) {
 	size_t written = 0;
@@ -24,9 +26,9 @@ static inline size_t write_all(const int fd, const unsigned char *buf, const siz
 	return written;
 }
 
-static inline char *safe_cpy(char *dst, const char *src, const size_t sz) {
+static inline char *safe_strncpy(char *dst, const char *src, const size_t dz, const size_t sz) {
 	size_t i = 0;
-	for (; i < sz - 1 && src[i]; ++i) {
+	for (; i < dz - 1 && i < sz && src[i]; ++i) {
 		dst[i] = src[i];
 	}
 	dst[i++] = 0;

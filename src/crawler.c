@@ -377,9 +377,7 @@ static int set_new_uri(mcrawler_url *u, char *rawurl) {
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return 0;
 	}
-	if (u->proto != NULL) free(u->proto);
-	u->proto = malloc(uri->scheme.afterLast - uri->scheme.first + 1);
-	*(char*)mempcpy(u->proto, uri->scheme.first, uri->scheme.afterLast-uri->scheme.first) = 0;
+	SAFE_STRNCPY(u->proto, uri->scheme.first, uri->scheme.afterLast - uri->scheme.first);
 
 	if (check_proto(u) == -1) {
 		return 0;
@@ -391,9 +389,7 @@ static int set_new_uri(mcrawler_url *u, char *rawurl) {
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return 0;
 	}
-	if (u->host != NULL) free(u->host);
-	u->host = malloc(uri->hostText.afterLast - uri->hostText.first + 1);
-	*(char*)mempcpy(u->host, uri->hostText.first, uri->hostText.afterLast-uri->hostText.first) = 0;
+	SAFE_STRNCPY(u->host, uri->hostText.first, uri->hostText.afterLast - uri->hostText.first);
 
 	if (uri->portText.first == NULL) {
 		u->port = parse_proto(u->proto);
