@@ -32,19 +32,19 @@ Usage:   minicrawler [options] [urloptions] url [[url2options] url2]...
 
 Where
    options:
+         -6         resolve host to IPv6 address only
+         -8         convert from page encoding to UTF-8
+         -A STRING  custom user agent (max 255 bytes)
+         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)
+         -c         convert content to text format (with UTF-8 encoding)
          -d         enable debug messages (to stderr)
-         -tSECONDS  set timeout (default is 5 seconds)
+         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)
+         -g         accept gzip encoding
          -h         enable output of HTTP headers
          -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)
-         -A STRING  custom user agent (max 256 bytes)
-         -w STRING  write this custom header to all requests (max 4096 bytes)
-         -c         convert content to text format (with UTF-8 encoding)
-         -8         convert from page encoding to UTF-8
-         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)
          -S         disable SSL/TLS support
-         -g         accept gzip encoding
-         -6         resolve host to IPv6 address only
-         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)
+         -tSECONDS  set timeout (default is 5 seconds)
+         -w STRING  write this custom header to all requests (max 4095 bytes)
 
    urloptions:
          -C STRING  parameter which replaces '%' in the custom header
