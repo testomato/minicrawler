@@ -2,7 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <errno.h>
 #include <iconv.h>
 
 #include "h/proto.h"
@@ -61,16 +60,17 @@ static int convertor(mcrawler_url *u, char *dst, const size_t dst_size)
  * Convert body of the page from u->charset to
  *   UCS4.
  */
-void conv_charset(mcrawler_url *u)
+int conv_charset(mcrawler_url *u)
 {
 	assert(u->charset && *u->charset);
 	const size_t dst_size = BUFSIZE - u->headlen;
 	char *dst = malloc(dst_size);
 	if (!dst || convertor(u, dst, dst_size)) {
-		u->conv_errno = errno;
-		u->bufp = u->headlen;  // discard whole input in case of error
+		free(dst);
+		return 1;
 	}
 	free(dst);
+	return 0;
 }
 
 /**

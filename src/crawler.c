@@ -1009,7 +1009,7 @@ static void find_content_type(mcrawler_url *u) {
 	unsigned char *p_charset_end = &p_charset[sizeof(charset) - 1];
 	if (sizeof(u->charset) > end - p_charset_end) {
 		*(char*)mempcpy(u->charset, p_charset_end, end - p_charset_end) = 0;
-		debugf("charset='%s'\n", u->charset);
+		debugf("[%d] charset='%s'\n", u->index, u->charset);
 	}
 }
 
@@ -1192,8 +1192,17 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 		strcpy(u->charset, "unknown");
 	}
 	if (*u->charset && u->options & 1<<MCURL_OPT_CONVERT_TO_UTF8) {
-		conv_charset(u);
+		debugf("[%d] converting from %s to UTF-8\n", u->index, u->charset);
+		const int r = conv_charset(u);
+		if (r != 0) {
+			debugf("[%d] conversion error: %m\n", u->index);
+			sprintf(u->error_msg, "Charset conversion error (%m)");
+			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
+			u->bufp = u->headlen;  // discard whole input in case of error
+		}
+
 	}
+
 	if (u->options & 1<<MCURL_OPT_CONVERT_TO_TEXT) {
 		u->bufp = converthtml2text((char *)u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}

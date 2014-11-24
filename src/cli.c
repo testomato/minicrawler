@@ -245,10 +245,6 @@ void output(mcrawler_url *u, void *arg) {
 			if (n > 0) hlen += n;
 		}
 	}
-	if (u->conv_errno) {
-		n = sprintf(h+hlen, "Conversion error: %s\n", strerror(u->conv_errno));
-		if (n > 0) hlen += n;
-	}
 
 	// downtime
 	int downtime;

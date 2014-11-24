@@ -192,9 +192,6 @@ struct mcrawler_url {
 	int status;		// http navratovy kod
 	char error_msg[256];
 
-	// errno
-	int conv_errno;		// set in case of wrong conversion
-
 	// SSL support
 	void *ssl;
 	long ssl_options;
