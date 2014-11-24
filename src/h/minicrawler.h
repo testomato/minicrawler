@@ -162,6 +162,10 @@ struct mcrawler_url {
 	char charset[32];
 	int gzipped;
 
+	// http auth
+	char username[32];
+	char password[32];
+
 	// request
 	unsigned char *request;
 	size_t request_len;

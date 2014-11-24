@@ -28,7 +28,9 @@ void printusage()
 #ifdef HAVE_LIBSSL
 	         "         -S         disable SSL/TLS support\n"
 #endif
+	         "         -pSTRING   password for HTTP authentication (basic or digest, max 31 bytes)\n"
 	         "         -tSECONDS  set timeout (default is 5 seconds)\n"
+	         "         -u STRING  username for HTTP authentication (basic or digest, max 31 bytes)\n"
 	         "         -w STRING  write this custom header to all requests (max 4095 bytes)\n"
 	         "\n   urloptions:\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
@@ -47,6 +49,8 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 	long options = 0;
 	char customheader[4096];
 	char customagent[256];
+	char username[32];
+	char password[32];
 	mcrawler_cookie cookies[COOKIESTORAGESIZE];
 	char *p, *q;
 	int ccnt = 0, i = 0;
@@ -84,6 +88,8 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 			continue;
 		}
 		if(!strcmp(argv[t], "-6")) {options |= 1<<MCURL_OPT_IPV6; continue;}
+		if(!strcmp(argv[t], "-u")) {SAFE_STRCPY(username, argv[t+1]); t++; continue;}
+		if(!strncmp(argv[t], "-p", 2)) {SAFE_STRCPY(password, argv[t] + 2); continue;}
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
@@ -116,6 +122,8 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if (!url->customheader[0]) {
 			strcpy(url->customheader, customheader);
 		}
+		strcpy(url->username, username);
+		strcpy(url->password, password);
 		url->options = options;
 
 		urls[i-1] = url;
