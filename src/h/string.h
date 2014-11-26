@@ -49,19 +49,6 @@ static inline char *str_replace( char *dest,  const char *string, const char *su
 	return dest;
 }
 
-/** kopirovani, ktere se ukonci i koncem radku
- */
-static inline void *mempcpy_term(void *to, const void *from, const size_t size) {
-	int i = 0;
-	unsigned char *t = (unsigned char*)to;
-	const unsigned char *f = (const unsigned char*)from;
-	for(;*f != '\r' && *f != '\n';i++) {
-		if (i < size)
-			*t++ = *f++;
-	}
-	return t;
-}
-
 static inline void trim(char *str) {
 	int len = strlen(str);
 	char *p = str;

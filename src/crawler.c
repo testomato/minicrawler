@@ -791,7 +791,7 @@ static int eatchunked(mcrawler_url *u) {
 	int movestart;
 
 	// čte velikost chunku
-	debugf("nextchunkedpos = %d; bufp = %d\n", u->nextchunkedpos, u->bufp);
+	debugf("[%d] nextchunkedpos = %d; bufp = %d\n", u->index, u->nextchunkedpos, u->bufp);
 	for(t=u->nextchunkedpos, i=0; u->buf[t] != '\r' && u->buf[t] != '\n' && t < u->bufp; t++) {
 		if(i < 9) {
 			hex[i++] = u->buf[t];
@@ -852,20 +852,15 @@ static void setcookie(mcrawler_url *u, char *str) {
 	memset(&cookie, 0, sizeof(mcrawler_cookie));
 	memset(attributes, 0, sizeof(attributes));
 
-	p = strpbrk(str, ";\r\n");
-	if (p == NULL) return;
+	p = strchrnul(str, ';');
 
 	char namevalue[p-str+1];
 	*(char*)mempcpy(namevalue, str, p-str) = 0;
 
-	char *attributestr;
+	char attributestr[strlen(p) + 1];
 	if (p[0] == ';') {
-		q = strpbrk(str, "\r\n");
-		if (q == NULL) return;
-		attributestr = (char *) malloc(q - p + 1);
-		*(char*)mempcpy(attributestr, p, q - p) = 0;
+		strcpy(attributestr, p);
 	} else {
-		attributestr = malloc(1);
 		attributestr[0] = '\0';
 	}
 
@@ -983,29 +978,8 @@ static void setcookie(mcrawler_url *u, char *str) {
 fail:
 	free_cookie(&cookie);
 free_struct:
-	free(attributestr);
 	for (i = 0; i < att_len; i++) {
 		free_nv(&attributes[i]);
-	}
-}
-
-/** Find string with content type inside the http head.
-*/
-static void find_content_type(mcrawler_url *u) {
-	static const char content_type[] = "\nContent-Type:";
-	static const char charset[] = " charset=";
-	unsigned char *p_ct = (unsigned char*) memmem(u->buf, u->headlen, content_type, sizeof(content_type) - 1);
-	if(!p_ct)
-		return;
-	unsigned char *end;
-	for (end = &p_ct[sizeof(content_type) - 1]; end < &u->buf[u->headlen] && *end != '\n' && *end != '\r'; ++end);
-	unsigned char *p_charset = (unsigned char*) memmem(&p_ct[sizeof(content_type) - 1], end - &p_ct[sizeof(content_type) - 1], charset, sizeof(charset) - 1);
-	if (!p_charset)
-		return;
-	unsigned char *p_charset_end = &p_charset[sizeof(charset) - 1];
-	if (sizeof(u->charset) > end - p_charset_end) {
-		*(char*)mempcpy(u->charset, p_charset_end, end - p_charset_end) = 0;
-		debugf("[%d] charset='%s'\n", u->index, u->charset);
 	}
 }
 
@@ -1028,88 +1002,128 @@ static unsigned char *find_head_end(mcrawler_url *u) {
 	return nn == 2 ? &s[i] : NULL;
 }
 
-/** pozná status a hlavičku http požadavku
- *  FIXME: handle http headers case-insensitive!!
- */
-static int detecthead(mcrawler_url *u) {
-	u->status = atoi((char *)u->buf + 9);
-	u->buf[u->bufp] = 0;
-	
-	unsigned char *p = find_head_end(u);
+static void header_callback(mcrawler_url *u, char *name, char *value) {
+	debugf("header: %s: %s\n", name, value);
 
-	if(p == NULL) {
-		debugf("[%d] cannot find end of http header?\n", u->index);
-		return 0;
-	}
-	
-	u->headlen = p-u->buf;
-	
-	p=(unsigned char*)memmem(u->buf, u->headlen, "Content-Length: ", 16)?:(unsigned char*)memmem(u->buf, u->headlen, "Content-length: ", 16)?:(unsigned char*)memmem(u->buf, u->headlen, "content-length: ", 16);
-	if(p != NULL) {
-		u->contentlen = atoi((char *)p + 16);
-	}
-	debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
-	if (!strcmp(u->method, "HEAD")) { // there will be no content
-		u->contentlen = 0;
-		debugf("[%d] HEAD request, no content\n", u->index);
+	if (!strcasecmp(name, "Content-Length")) {
+		u->contentlen = atoi(value);
+		debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
+		if (!strcmp(u->method, "HEAD")) { // there will be no content
+			u->contentlen = 0;
+			debugf("[%d] HEAD request, no content\n", u->index);
+		}
+		return;
 	}
 
-	p=(unsigned char*)memmem(u->buf,u->headlen,"\nLocation: ",11)?:(unsigned char*)memmem(u->buf,u->headlen,"\nlocation: ",11);
-	if (p!=NULL) {
-		char *q;
-		q = (char *)mempcpy_term(u->location, p+11, MAXURLSIZE);
-		if (q - u->location <= MAXURLSIZE + 1) {
-			*q = 0;
-		} else {
+	if (!strcasecmp(name, "Location") || !strcasecmp(name, "Refresh")) {
+		if (!strcasecmp(name, "Refresh")) {
+			if (strncmp(value, "0;url=", 6)) {
+				return;
+			} else {
+				value += 6;
+			}
+		}
+		if (strlen(value) > MAXURLSIZE) {
 			sprintf(u->error_msg, "Redirect URL is too long");
 			set_atomic_int(&u->state, MCURL_S_ERROR);
+			return;
 		}
+		strcpy(u->location, value);
 		u->contentlen = 0; // do not need content - some servers returns no content-length and keeps conection open
-		debugf("[%d] Location='%s'\n",u->index,u->location);
+		debugf("[%d] Location='%s'\n", u->index, u->location);
+		return;
 	}
 
-	p=(unsigned char*)memmem(u->buf,u->headlen,"\nRefresh: 0;url=",16)?:(unsigned char*)memmem(u->buf,u->headlen,"\nrefresh: 0;url=",16);
-	if (p!=NULL) {
-		char *q;
-		q = (char *)mempcpy_term(u->location, p+16, MAXURLSIZE);
-		if (q - u->location <= MAXURLSIZE + 1) {
-			*q = 0;
-		} else {
-			sprintf(u->error_msg, "Redirect URL is too long");
-			set_atomic_int(&u->state, MCURL_S_ERROR);
+	if (!strcasecmp(name, "Set-Cookie")) {
+		setcookie(u, value);
+		return;
+	}
+
+	if (!strcasecmp(name, "Transfer-Encoding")) {
+		if (!strcasecmp(value, "chunked")) {
+			u->chunked = 1;
+			u->nextchunkedpos = u->headlen;
+			debugf("[%d] Chunked!\n", u->index);
 		}
-		u->contentlen = 0; // do not need content
-		debugf("[%d] Refresh='%s'\n",u->index,u->location);
+		return;
 	}
 
-	for (unsigned char *q = u->buf; q < &u->buf[u->headlen];) {
-		q = (unsigned char*)memmem(q, u->headlen - (q - u->buf), "\nSet-Cookie: ", 13);
-		if (q != NULL) {
-			q += 13;
-			setcookie(u, (char *)q);
-		} else {
-			break;
+	if (!strcasecmp(name, "Content-Encoding")) {
+		if (strstr(value, "gzip")) {
+			u->gzipped = 1;
+			debugf("[%d] Gzipped!\n", u->index);
 		}
-	}
-	
-	p=(unsigned char*)memmem(u->buf, u->headlen, "Transfer-Encoding: chunked", 26)?:(unsigned char*)memmem(u->buf,u->headlen,"transfer-encoding: chunked", 26)?:(unsigned char*)memmem(u->buf, u->headlen, "Transfer-Encoding:  chunked", 27);
-	if(p != NULL) {
-		u->chunked = 1;
-		u->nextchunkedpos=u->headlen;
-		debugf("[%d] Chunked!\n",u->index);
+		return;
 	}
 
-	p=(unsigned char*)memmem(u->buf, u->headlen, "Content-Encoding: gzip", 22)?:(unsigned char*)memmem(u->buf,u->headlen,"content-encoding: gzip", 22)?:(unsigned char*)memmem(u->buf, u->headlen, "Content-Encoding:  gzip", 23);
-	if(p != NULL) {
-		u->gzipped = 1;
-		debugf("[%d] Gzipped!\n",u->index);
+	if (!strcasecmp(name, "Content-Type")) {
+		char *p;
+		if ((p = strstr(value, " charset="))) {
+			p += 9;
+			if (strlen(p) < sizeof(u->charset)) {
+				strcpy(u->charset, p);
+				debugf("[%d] charset='%s'\n", u->index, u->charset);
+			}
+		}
+		return;
+	}
+}
+
+/**
+ * @see https://www.ietf.org/rfc/rfc2616.txt
+ */
+static int parsehead(mcrawler_url *u) {
+	char buf[u->headlen + 1];
+	char *p = buf, *q;
+	char *name, *value;
+
+	strncpy(buf, u->buf, u->headlen);
+	buf[u->headlen] = 0;
+
+    if (strncmp("HTTP/1.0", p, 8) && strncmp("HTTP/1.1", p, 8)) {
+		debugf("[%d] Unsupported protocol\n", u->index);
+		return 1;
 	}
 
-	find_content_type(u);
+	p += 9;
+	u->status = atoi(p);
+	assert(u->status > 0);
 
-	debugf("[%d] status=%d, headlen=%d, content-length=%d, charset=%s\n",u->index,u->status,u->headlen,u->contentlen, u->charset);
+	p = strchr(p, '\n');
+	assert(p != 0); // we know, there are two newlines somewhere
 
-	return 1;
+	while (1) {
+		while (*p == '\r' || *p == '\n') p++;
+		if (*p == 0) break;
+
+		name = p;
+		p = strpbrk(p, "\r\n:");
+		assert(p != 0);
+		if (*p != ':') {
+			debugf("[%d] Header name terminator ':' not found\n", u->index);
+			continue;
+		}
+		*p = 0; p++;
+
+		while (*p == ' ' || *p == '\t') p++;
+		value = p;
+		while (1) {
+			p = q = strpbrk(p, "\r\n");
+			assert(p != 0);
+			while (*q == '\r' || *q == '\n') q++;
+			if (*q == ' ' || *q == '\t') { // value continues
+				memmove(p, q, strlen(q) + 1);
+			} else {
+				break;
+			}
+		}
+
+		*p = 0; p++;
+
+		header_callback(u, name, value);
+	}
+
+	return 0;
 }
 
 /**
@@ -1436,11 +1450,14 @@ static void readreply(mcrawler_url *u) {
 	}
 
 	debugf("[%d] Read %zd bytes; bufp = %d; chunked = %d; data = [%.*s]\n", u->index, t, u->bufp, !!u->chunked, (int)t, u->buf + u->bufp - t);
-	if (u->headlen == 0 && find_head_end(u)) {
-		detecthead(u);		// pokud jsme to jeste nedelali, tak precti hlavicku
+
+	unsigned char *head_end;
+	if (u->headlen == 0 && (head_end = find_head_end(u))) {
+		u->headlen = head_end - u->buf;
+		parsehead(u);
 	}
 	
-	// u->chunked is set in detecthead()
+	// u->chunked is set in parsehead()
 	if(t > 0 && u->chunked) {
 		//debugf("debug: bufp=%d nextchunkedpos=%d",u->bufp,u->nextchunkedpos);
 		while(u->bufp > u->nextchunkedpos) {
