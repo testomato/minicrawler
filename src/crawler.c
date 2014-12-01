@@ -1059,11 +1059,16 @@ static void header_callback(mcrawler_url *u, char *name, char *value) {
 	if (!strcasecmp(name, "Content-Type")) {
 		char *p;
 		if ((p = strstr(value, " charset="))) {
+			u->contenttype = malloc(p - value + 1);
+			memcpy(u->contenttype, value, p-value+1);
+			for (int i = p-value; u->contenttype[i] == ' ' || u->contenttype[i] == ';'; i--) u->contenttype[i] = 0;
 			p += 9;
 			if (strlen(p) < sizeof(u->charset)) {
 				strcpy(u->charset, p);
 				debugf("[%d] charset='%s'\n", u->index, u->charset);
 			}
+		} else {
+			u->contenttype = strdup(value);
 		}
 		return;
 	}
@@ -1191,26 +1196,28 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 		}
 	}
 
-	if (!*u->charset) {
-		unsigned charset_len = 0;
-		char *charset = detect_charset_from_html((char *)u->buf + u->headlen, u->bufp - u->headlen, &charset_len);
-		if (charset && charset_len < sizeof(u->charset)) {
-			*(char*)mempcpy(u->charset, charset, charset_len) = 0;
+	if (u->options & 1<<MCURL_OPT_CONVERT_TO_UTF8) {
+		if (!*u->charset) {
+			unsigned charset_len = 0;
+			char *charset = detect_charset_from_html((char *)u->buf + u->headlen, u->bufp - u->headlen, &charset_len);
+			if (charset && charset_len < sizeof(u->charset)) {
+				*(char*)mempcpy(u->charset, charset, charset_len) = 0;
+			}
 		}
-	}
-	if (!*u->charset) {
-		strcpy(u->charset, "unknown");
-	}
-	if (*u->charset && u->options & 1<<MCURL_OPT_CONVERT_TO_UTF8) {
+		if (!*u->charset) {
+			strcpy(u->charset, "ISO-8859-1"); // default see http://www.w3.org/Protocols/rfc2616/rfc2616-sec3.html#sec3.7.1
+		}
 		debugf("[%d] converting from %s to UTF-8\n", u->index, u->charset);
 		const int r = conv_charset(u);
-		if (r != 0) {
+		if (r == 0) {
+			// success, content charset is ut-8 now
+			strcpy(u->charset, "utf-8");
+		} else {
 			debugf("[%d] conversion error: %m\n", u->index);
 			sprintf(u->error_msg, "Charset conversion error (%m)");
 			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
 			u->bufp = u->headlen;  // discard whole input in case of error
 		}
-
 	}
 
 	if (u->options & 1<<MCURL_OPT_CONVERT_TO_TEXT) {

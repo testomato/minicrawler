@@ -159,6 +159,7 @@ struct mcrawler_url {
 	int cookiecnt;
 	char customagent[256];
 	char customheader[4096];
+	char *contenttype;
 	char charset[32];
 	int gzipped;
 

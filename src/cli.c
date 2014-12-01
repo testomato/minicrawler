@@ -232,8 +232,8 @@ void output(mcrawler_url *u, void *arg) {
 		n = sprintf(h+hlen, "Error-msg: %s\n", u->error_msg);
 		if (n > 0) hlen += n;
 	}
-	if (*u->charset) {
-		n = sprintf(h+hlen, "Content-type: text/html; charset=%s\n", u->charset);
+	if (*u->charset && *u->contenttype) {
+		n = sprintf(h+hlen, "Content-type: %s; charset=%s\n", u->contenttype, u->charset);
 		if (n > 0) hlen += n;
 	}
 	if (u->cookiecnt) {
