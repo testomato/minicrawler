@@ -26,3 +26,5 @@ char *put_code(char *dst, const unsigned dst_len, const int code);
 int urlencode(char *src);
 int gunzip(unsigned char *out, int *outlen, unsigned char *in, int inlen);
 void *rpl_malloc(size_t n);
+int base64_len(int);
+void base64(char *, const void *, int);

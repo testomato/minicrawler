@@ -642,12 +642,14 @@ static void genrequest(mcrawler_url *u) {
 	const char gzipheader[] = "Accept-Encoding: gzip";
 	const char contentlengthheader[] = "Content-Length: ";
 	const char contenttypeheader[] = "Content-Type: application/x-www-form-urlencoded";
+	const char authorizationheader[] = "Authorization: ";
 	const char defaultagent[] = "minicrawler/%s";
 
 	free(u->request);
 	u->request = malloc(
 			strlen(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
 			strlen(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
+			(u->authorization != NULL ? strlen(authorizationheader) + strlen(u->authorization) + 2 : 0) + // Authorization: ...\n
 			strlen(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
 			strlen(cookieheader) + 1024 * u->cookiecnt + 2 + // Cookie: %s; %s...\n
 			strlen(u->customheader) + 2 +
@@ -674,6 +676,13 @@ static void genrequest(mcrawler_url *u) {
 		if (s > 0) r += s;
 	}
 	r = stpcpy(r, "\r\n");
+
+	// Authorization
+	if (u->authorization != NULL) {
+		r = stpcpy(r, authorizationheader);
+		r = stpcpy(r, u->authorization);
+		r = stpcpy(r, "\r\n");
+	}
 
 	// Uset-Agent
 	r = stpcpy(r, useragentheader);
@@ -983,6 +992,89 @@ free_struct:
 	}
 }
 
+/**
+ * http://tools.ietf.org/html/rfc2617#section-2
+ */
+static void basicauth(mcrawler_url *u, char *realm, struct nv params[10]) {
+	*strchrnul(u->username, ':') = 0; // dobledot not allowed in unserid
+
+	char userpass[strlen(u->username) + strlen(u->password) + 1 + 1]; // one for : and one for 0
+	sprintf(userpass, "%s:%s", u->username, u->password);
+	u->authorization = malloc(base64_len(strlen(userpass)) + 1 + 6); // 6 for "Basic"
+	strcpy(u->authorization, "Basic ");
+	base64(u->authorization + 6, userpass, strlen(userpass));
+}
+
+/**
+ * HTTP Authentication
+ * @see http://tools.ietf.org/html/rfc2617
+ */
+static void parse_authchallenge(mcrawler_url *u, char *challenge) {
+	char *p = challenge, *scheme, *param, *value, *realm = NULL;
+	struct nv params[10];
+	int params_len = 0;
+
+	scheme = p;
+	p = strchr(p, ' ');
+	if (!p) {
+		debugf("[%d] auth challenge '%s' should contain at least realm\n", u->index, challenge);
+		return;
+	}
+	*p = 0; p++;
+	while (*p == ' ') p++;
+
+	while (*p) {
+		param = p;
+		p = strchr(p, '=');
+		if (!p) {
+			debugf("[%d] error parsing auth challenge: auth param '%s', contains no '='\n", u->index, param);
+			return;
+		}
+		*p = 0; p++;
+		if (*p = '"') { // quoted string
+			value = p + 1;
+			while (*p++ && *p != '"') {
+				if (*p == '\\') { // quoted pair
+					memmove(p, p+1, strlen(p));
+				}
+			}
+			if (!*p) {
+				debugf("[%d] error parsing auth challenge: unterminated quoted string '%s'\n", u->index, value);
+				return;
+			}
+		} else {
+			value = p;
+			p = strpbrk(p, " \t,");
+		}
+		*p = 0; p++;
+
+		while (*p == ' ' || *p == '\t' || *p == ',') p++;
+
+		if (!strcasecmp(param, "realm")) {
+			realm = value;
+		} else {
+			if (params_len > 9) {
+				debugf("[%d] error parsing auth challenge: not enough memory for params\n", u->index);
+				break;
+			} else {
+				params[params_len].name = param;
+				params[params_len].value = value;
+			}
+		}
+	}
+
+	if (!realm) {
+		debugf("[%d] error parsing auth challenge: realm is required\n", u->index);
+	}
+
+	if (!strcasecmp(scheme, "basic")) {
+		basicauth(u, realm, params);
+	} else {
+		debugf("[%d] unsupported auth scheme '%s'\n", u->index, scheme);
+		sprintf(u->error_msg, "Unsupported HTTP authentication scheme '%s'", scheme);
+	}
+}
+
 /**  Tries to find the end of a head in the server's reply.
         It works in a way that it finds a sequence of characters of the form: m{\r*\n\r*\n} */
 static unsigned char *find_head_end(mcrawler_url *u) {
@@ -1003,8 +1095,6 @@ static unsigned char *find_head_end(mcrawler_url *u) {
 }
 
 static void header_callback(mcrawler_url *u, char *name, char *value) {
-	debugf("header: %s: %s\n", name, value);
-
 	if (!strcasecmp(name, "Content-Length")) {
 		u->contentlen = atoi(value);
 		debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
@@ -1071,6 +1161,11 @@ static void header_callback(mcrawler_url *u, char *name, char *value) {
 			u->contenttype = strdup(value);
 		}
 		return;
+	}
+
+	if (!strcasecmp(name, "WWW-Authenticate") && u->status == 401 && u->username[0]) {
+		// TODO: value can contain more than one challenge
+		parse_authchallenge(u, value);
 	}
 }
 
@@ -1238,11 +1333,6 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 static void reset_url(mcrawler_url *u) {
 	u->status = 0;
 	u->location[0] = 0;
-	if (u->post != NULL) {
-		free(u->post);
-		u->post = NULL;
-		u->postlen = 0;
-	}
 	u->bufp = 0;
 	u->headlen = 0;
 	u->contentlen = -1;
@@ -1420,6 +1510,11 @@ static void resolvelocation(mcrawler_url *u) {
 
 	// GET method after redirect
 	strcpy(u->method, "GET");
+	if (u->post != NULL) {
+		free(u->post);
+		u->post = NULL;
+		u->postlen = 0;
+	}
 	reset_url(u);
 }
 
@@ -1482,8 +1577,6 @@ static void readreply(mcrawler_url *u) {
 			u->ssl = NULL;
 		}
 #endif
-		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
-		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 
 		if (t == MCURL_IO_ERROR) {
 			set_atomic_int(&u->state, MCURL_S_ERROR);
@@ -1492,8 +1585,19 @@ static void readreply(mcrawler_url *u) {
 			debugf("[%d] Downloaded.\n",u->index);
 			if (u->location[0] && strcmp(u->method, "HEAD")) {
 				resolvelocation(u);
+			} else if (u->authorization && u->status == 401) {
+				if (!u->auth_attempt) {
+					// try to authorize
+					u->auth_attempt = 1;
+					reset_url(u);
+					set_atomic_int(&u->state, MCURL_S_GENREQUEST);
+					return; // do not close connection
+				}
 			}
 		}
+
+		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
+		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 	} else {
 		set_atomic_int(&u->state, MCURL_S_RECVREPLY);
 		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
