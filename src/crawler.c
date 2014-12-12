@@ -26,12 +26,14 @@
 # ifndef SSL_OP_NO_TLSv1_2
 #  error "please install OpenSSL 1.0.1"
 # endif
+# include <openssl/md5.h>
 # include <openssl/err.h>
 #endif
 #include <uriparser/Uri.h>
 
 #include "h/string.h"
 #include "h/proto.h"
+#include "h/digcalc.h"
 
 int debug = 0;
 
@@ -1005,6 +1007,66 @@ static void basicauth(mcrawler_url *u, char *realm, struct nv params[10]) {
 	base64(u->authorization + 6, userpass, strlen(userpass));
 }
 
+#ifdef HAVE_LIBSSL
+/**
+ * http://tools.ietf.org/html/rfc2617#section-3
+ */
+static void digestauth(mcrawler_url *u, char *realm, struct nv params[10]) {
+	char *nonce = NULL, *alg = NULL, *qop = NULL, *opaq = NULL;
+	char nonce_count[] = "00000001";
+	char cnonce[] = "97jGn565ggO9jsp";
+	HASHHEX HA1, HEntity, response;
+	size_t authlen;
+
+	for (int i = 0; i < 10 && params[i].name != NULL; i++) {
+		if (!strcmp("nonce", params[i].name)) nonce = params[i].value;
+		if (!strcmp("algorithm", params[i].name)) alg = params[i].value;
+		if (!strcmp("qop", params[i].name)) {
+			qop = params[i].value;
+			// take the first value
+			*strchrnul(qop, ',') = 0;
+		}
+		if (!strcmp("opaque", params[i].name)) opaq = params[i].value;
+	}
+
+	if (!nonce) {
+		debugf("[%d] digest auth error: missing nonce\n", u->index);
+		return;
+	}
+	if (!alg) alg = strdup("MD5");
+	if (!qop) qop = strdup("");
+
+	*strchrnul(u->username, ':') = 0; // dobledot not allowed in unserid
+
+	if (!strcasecmp("auth-int", qop)) {
+		MD5_CTX context;
+		MD5_Init(&context);
+		MD5_Update(&context, u->buf + u->headlen, u->bufp - u->headlen);
+		MD5_Final(HEntity, &context);
+	}
+
+	DigestCalcHA1(alg, u->username, realm, u->password, nonce, cnonce, HA1);
+	DigestCalcResponse(HA1, nonce, nonce_count, cnonce, qop, u->method, u->path, HEntity, response);
+
+	if (*qop) {
+		char authformat[] = "Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\", algorithm=%s, cnonce=\"%s\", qop=%s, nc=%s";
+		authlen = strlen(authformat) + strlen(u->username) + strlen(realm) + strlen(nonce) + strlen(u->path) + HASHHEXLEN + strlen(alg) + strlen(cnonce) + strlen(qop) + strlen(nonce_count);
+		u->authorization = malloc(authlen + 1);
+		sprintf(u->authorization, authformat, u->username, realm, nonce, u->path, response, alg, cnonce, qop, nonce_count);
+	} else {
+		char authformat[] = "Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\", algorithm=%s";
+		authlen = strlen(authformat) + strlen(u->username) + strlen(realm) + strlen(nonce) + strlen(u->path) + HASHHEXLEN + strlen(alg);
+		u->authorization = malloc(authlen + 1);
+		sprintf(u->authorization, authformat, u->username, realm, nonce, u->path, response, alg);
+	}
+	if (opaq) {
+		char opaqfmt[] = ", opaque=\"%s\"";
+		u->authorization = realloc(u->authorization, authlen + strlen(opaq) + strlen(opaqfmt) + 1);
+		sprintf(u->authorization + authlen, opaqfmt, opaq);
+	}
+}
+#endif
+
 /**
  * HTTP Authentication
  * @see http://tools.ietf.org/html/rfc2617
@@ -1013,6 +1075,8 @@ static void parse_authchallenge(mcrawler_url *u, char *challenge) {
 	char *p = challenge, *scheme, *param, *value, *realm = NULL;
 	struct nv params[10];
 	int params_len = 0;
+
+	memset(params, 0, sizeof(params));
 
 	scheme = p;
 	p = strchr(p, ' ');
@@ -1031,7 +1095,7 @@ static void parse_authchallenge(mcrawler_url *u, char *challenge) {
 			return;
 		}
 		*p = 0; p++;
-		if (*p = '"') { // quoted string
+		if (*p == '"') { // quoted string
 			value = p + 1;
 			while (*p++ && *p != '"') {
 				if (*p == '\\') { // quoted pair
@@ -1059,6 +1123,7 @@ static void parse_authchallenge(mcrawler_url *u, char *challenge) {
 			} else {
 				params[params_len].name = param;
 				params[params_len].value = value;
+				params_len++;
 			}
 		}
 	}
@@ -1069,6 +1134,10 @@ static void parse_authchallenge(mcrawler_url *u, char *challenge) {
 
 	if (!strcasecmp(scheme, "basic")) {
 		basicauth(u, realm, params);
+#ifdef HAVE_LIBSSL
+	} else if (!strcasecmp(scheme, "digest")) {
+		digestauth(u, realm, params);
+#endif
 	} else {
 		debugf("[%d] unsupported auth scheme '%s'\n", u->index, scheme);
 		sprintf(u->error_msg, "Unsupported HTTP authentication scheme '%s'", scheme);
@@ -1515,6 +1584,14 @@ static void resolvelocation(mcrawler_url *u) {
 		u->post = NULL;
 		u->postlen = 0;
 	}
+	// Remove authorization or we should keep session for protection space
+	// @see http://tools.ietf.org/html/rfc2617#section-3.3
+	if (u->authorization) {
+		free(u->authorization);
+		u->authorization = NULL;
+		u->auth_attempt = 0;
+	}
+
 	reset_url(u);
 }
 
