@@ -997,7 +997,7 @@ free_struct:
 /**
  * http://tools.ietf.org/html/rfc2617#section-2
  */
-static void basicauth(mcrawler_url *u, char *realm, struct nv params[10]) {
+static void basicauth(mcrawler_url *u, struct challenge *ch) {
 	*strchrnul(u->username, ':') = 0; // dobledot not allowed in unserid
 
 	char userpass[strlen(u->username) + strlen(u->password) + 1 + 1]; // one for : and one for 0
@@ -1011,22 +1011,22 @@ static void basicauth(mcrawler_url *u, char *realm, struct nv params[10]) {
 /**
  * http://tools.ietf.org/html/rfc2617#section-3
  */
-static void digestauth(mcrawler_url *u, char *realm, struct nv params[10]) {
+static void digestauth(mcrawler_url *u, struct challenge *ch) {
 	char *nonce = NULL, *alg = NULL, *qop = NULL, *opaq = NULL;
 	char nonce_count[] = "00000001";
 	char cnonce[] = "97jGn565ggO9jsp";
 	HASHHEX HA1, HEntity, response;
 	size_t authlen;
 
-	for (int i = 0; i < 10 && params[i].name != NULL; i++) {
-		if (!strcmp("nonce", params[i].name)) nonce = params[i].value;
-		if (!strcmp("algorithm", params[i].name)) alg = params[i].value;
-		if (!strcmp("qop", params[i].name)) {
-			qop = params[i].value;
+	for (int i = 0; i < 10 && ch->params[i].name != NULL; i++) {
+		if (!strcmp("nonce", ch->params[i].name)) nonce = ch->params[i].value;
+		if (!strcmp("algorithm", ch->params[i].name)) alg = ch->params[i].value;
+		if (!strcmp("qop", ch->params[i].name)) {
+			qop = ch->params[i].value;
 			// take the first value
 			*strchrnul(qop, ',') = 0;
 		}
-		if (!strcmp("opaque", params[i].name)) opaq = params[i].value;
+		if (!strcmp("opaque", ch->params[i].name)) opaq = ch->params[i].value;
 	}
 
 	if (!nonce) {
@@ -1045,19 +1045,19 @@ static void digestauth(mcrawler_url *u, char *realm, struct nv params[10]) {
 		MD5_Final(HEntity, &context);
 	}
 
-	DigestCalcHA1(alg, u->username, realm, u->password, nonce, cnonce, HA1);
+	DigestCalcHA1(alg, u->username, ch->realm, u->password, nonce, cnonce, HA1);
 	DigestCalcResponse(HA1, nonce, nonce_count, cnonce, qop, u->method, u->path, HEntity, response);
 
 	if (*qop) {
 		char authformat[] = "Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\", algorithm=%s, cnonce=\"%s\", qop=%s, nc=%s";
-		authlen = strlen(authformat) + strlen(u->username) + strlen(realm) + strlen(nonce) + strlen(u->path) + HASHHEXLEN + strlen(alg) + strlen(cnonce) + strlen(qop) + strlen(nonce_count);
+		authlen = strlen(authformat) + strlen(u->username) + strlen(ch->realm) + strlen(nonce) + strlen(u->path) + HASHHEXLEN + strlen(alg) + strlen(cnonce) + strlen(qop) + strlen(nonce_count);
 		u->authorization = malloc(authlen + 1);
-		sprintf(u->authorization, authformat, u->username, realm, nonce, u->path, response, alg, cnonce, qop, nonce_count);
+		sprintf(u->authorization, authformat, u->username, ch->realm, nonce, u->path, response, alg, cnonce, qop, nonce_count);
 	} else {
 		char authformat[] = "Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\", algorithm=%s";
-		authlen = strlen(authformat) + strlen(u->username) + strlen(realm) + strlen(nonce) + strlen(u->path) + HASHHEXLEN + strlen(alg);
+		authlen = strlen(authformat) + strlen(u->username) + strlen(ch->realm) + strlen(nonce) + strlen(u->path) + HASHHEXLEN + strlen(alg);
 		u->authorization = malloc(authlen + 1);
-		sprintf(u->authorization, authformat, u->username, realm, nonce, u->path, response, alg);
+		sprintf(u->authorization, authformat, u->username, ch->realm, nonce, u->path, response, alg);
 	}
 	if (opaq) {
 		char opaqfmt[] = ", opaque=\"%s\"";
@@ -1068,79 +1068,126 @@ static void digestauth(mcrawler_url *u, char *realm, struct nv params[10]) {
 #endif
 
 /**
- * HTTP Authentication
- * @see http://tools.ietf.org/html/rfc2617
+ * Z hlavičky WWW-Authenitcate vyparsuje právě jednu neprázndou challenge
  */
-static void parse_authchallenge(mcrawler_url *u, char *challenge) {
-	char *p = challenge, *scheme, *param, *value, *realm = NULL;
-	struct nv params[10];
+static void parse_single_challenge(mcrawler_url *u, char **pp, struct challenge *ch) {
+	char *param, *value, *p = *pp;
 	int params_len = 0;
 
-	memset(params, 0, sizeof(params));
+	while (*p == ',') p++; // skip empty challenges
 
-	scheme = p;
+	ch->scheme = p;
 	p = strchr(p, ' ');
 	if (!p) {
-		debugf("[%d] auth challenge '%s' should contain at least realm\n", u->index, challenge);
+		debugf("[%d] auth challenge '%s' should contain at least realm\n", u->index, *pp);
+		*pp = p;
 		return;
 	}
 	*p = 0; p++;
-	while (*p == ' ') p++;
 
-	while (*p) {
+	while (1) {
+		while (*p == ' ' || *p == '\t' || *p == ',') p++;
+		if (!*p) break;
+
 		param = p;
-		p = strchr(p, '=');
+		p = strpbrk(p, " =");
 		if (!p) {
-			debugf("[%d] error parsing auth challenge: auth param '%s', contains no '='\n", u->index, param);
+			debugf("[%d] error parsing auth challenge: scheme should be terminated by space and param by '=' ('%s')'\n", u->index, param);
+			break;
+		}
+		if (*p == ' ') { // start of a new challenge
+			*pp = param;
 			return;
 		}
 		*p = 0; p++;
 		if (*p == '"') { // quoted string
 			value = p + 1;
-			while (*p++ && *p != '"') {
+			while (*(++p) && *p != '"') {
 				if (*p == '\\') { // quoted pair
 					memmove(p, p+1, strlen(p));
 				}
 			}
 			if (!*p) {
 				debugf("[%d] error parsing auth challenge: unterminated quoted string '%s'\n", u->index, value);
-				return;
+				break;
 			}
 		} else {
 			value = p;
 			p = strpbrk(p, " \t,");
+			if (p == NULL) {
+				p = value + strlen(value);
+			}
 		}
-		*p = 0; p++;
-
-		while (*p == ' ' || *p == '\t' || *p == ',') p++;
+		if (*p) {
+			*p = 0; p++;
+		}
 
 		if (!strcasecmp(param, "realm")) {
-			realm = value;
+			ch->realm = value;
 		} else {
 			if (params_len > 9) {
 				debugf("[%d] error parsing auth challenge: not enough memory for params\n", u->index);
 				break;
 			} else {
-				params[params_len].name = param;
-				params[params_len].value = value;
+				ch->params[params_len].name = param;
+				ch->params[params_len].value = value;
 				params_len++;
 			}
 		}
 	}
 
-	if (!realm) {
-		debugf("[%d] error parsing auth challenge: realm is required\n", u->index);
+	*pp = p;
+}
+
+/**
+ * HTTP Authentication
+ * @see http://tools.ietf.org/html/rfc2617
+ */
+static void parse_authchallenge(mcrawler_url *u, char *challenge) {
+	struct challenge challenges[3];
+	int i = 0;
+
+	char *p = challenge;
+	memset(challenges, 0, sizeof(challenges));
+
+	while (p && *p) {
+		if (i < 3) {
+			parse_single_challenge(u, &p, &challenges[i]);
+			i++;
+		} else {
+			debugf("[%d] error parsing auth challenge: not enough memory for challenges\n", u->index);
+			break;
+		}
 	}
 
-	if (!strcasecmp(scheme, "basic")) {
-		basicauth(u, realm, params);
+	if (u->authorization) {
+		free(u->authorization);
+		u->authorization = NULL;
+	}
+
+	int can_basic = -1, can_digest = -1;
+	char unsupp_schemes[128] = {0};
+
+	for (i = 0; i < 3 && challenges[i].scheme != NULL; i++) {
+		if (challenges[i].realm == NULL) {
+			debugf("[%d] missing realm for auth scheme %s\n", u->index, challenges[i].scheme);
+		} else if (!strcasecmp(challenges[i].scheme, "basic")) {
+			can_basic = i;
 #ifdef HAVE_LIBSSL
-	} else if (!strcasecmp(scheme, "digest")) {
-		digestauth(u, realm, params);
+		} else if (!strcasecmp(challenges[i].scheme, "digest")) {
+			can_digest = i;
 #endif
+		} else {
+			debugf("[%d] unsupported auth scheme '%s'\n", u->index, challenges[i].scheme);
+		}
+	}
+
+	if (can_digest > -1) {
+		digestauth(u, &challenges[can_digest]);
+	} else if (can_basic > -1) {
+		basicauth(u, &challenges[can_basic]);
 	} else {
-		debugf("[%d] unsupported auth scheme '%s'\n", u->index, scheme);
-		sprintf(u->error_msg, "Unsupported HTTP authentication scheme '%s'", scheme);
+		sprintf(u->error_msg, "No supported HTTP authentication scheme");
 	}
 }
 
@@ -1233,7 +1280,7 @@ static void header_callback(mcrawler_url *u, char *name, char *value) {
 	}
 
 	if (!strcasecmp(name, "WWW-Authenticate") && u->status == 401 && u->username[0]) {
-		// TODO: value can contain more than one challenge
+		// TODO: header can exists multiple times
 		parse_authchallenge(u, value);
 	}
 }

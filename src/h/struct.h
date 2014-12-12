@@ -15,6 +15,11 @@ static inline void free_nv(struct nv *nv) {
 	if (nv->value) free(nv->value);
 }
 
+struct challenge {
+	char *scheme, *realm;
+	struct nv params[10];
+};
+
 enum {
 	MCURL_STATES_IO = 1<<MCURL_S_CONNECT | 1<<MCURL_S_HANDSHAKE | 1<<MCURL_S_SENDREQUEST | 1<<MCURL_S_RECVREPLY,
 };
