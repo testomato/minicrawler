@@ -10,11 +10,6 @@ struct nv {
     char *name, *value;
 };
 
-static inline void free_nv(struct nv *nv) {
-	if (nv->name) free(nv->name);
-	if (nv->value) free(nv->value);
-}
-
 struct challenge {
 	char *scheme, *realm;
 	struct nv params[10];

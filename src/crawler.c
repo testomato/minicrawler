@@ -857,22 +857,20 @@ static void setcookie(mcrawler_url *u, char *str) {
 	mcrawler_cookie cookie;
 	struct nv attributes[10];
 	int att_len = 0;
-	char *p, *q, *r;
+	char *namevalue, *attributestr;
+	char *p, *q;
 	int i;
 
 	memset(&cookie, 0, sizeof(mcrawler_cookie));
 	memset(attributes, 0, sizeof(attributes));
 
+	namevalue = str;
 	p = strchrnul(str, ';');
-
-	char namevalue[p-str+1];
-	*(char*)mempcpy(namevalue, str, p-str) = 0;
-
-	char attributestr[strlen(p) + 1];
-	if (p[0] == ';') {
-		strcpy(attributestr, p);
+	if (*p == ';') {
+		*p = 0;
+		attributestr = p + 1;
 	} else {
-		attributestr[0] = '\0';
+		attributestr = p; // attribute string is empty
 	}
 
 	// parse name and value
@@ -880,11 +878,12 @@ static void setcookie(mcrawler_url *u, char *str) {
 		debugf("[%d] Cookie string '%s' lacks a '=' character\n", u->index, namevalue);
 		goto fail;
 	}
+	*p = 0; p++;
 
-	cookie.name = malloc(p - namevalue + 1);
-	cookie.value = malloc(strlen(namevalue) - (p-namevalue));
-	*(char*)mempcpy(cookie.name, namevalue, p - namevalue) = 0;
-	*(char*)mempcpy(cookie.value, p + 1, strlen(namevalue) - (p-namevalue) - 1) = 0;
+	cookie.name = malloc(p - namevalue);
+	cookie.value = malloc(strlen(p) + 1);
+	memcpy(cookie.name, namevalue, p - namevalue);
+	memcpy(cookie.value, p, strlen(p) + 1);
 
 	trim(cookie.name);
 	trim(cookie.value);
@@ -904,22 +903,20 @@ static void setcookie(mcrawler_url *u, char *str) {
 		}
 
 		attr = attributes + att_len++;
-		q = strchrnul(p+1, ';');
-		if ((r = strchr(p+1, '=')) != NULL && r < q) {
-			attr->name = malloc(r-(p+1)+1);
-			attr->value = malloc(q-r);
-			*(char*)mempcpy(attr->name, p+1, r-(p+1)) = 0;
-			*(char*)mempcpy(attr->value, r+1, q-r-1) = 0;
-		} else {
-			attr->name = malloc(q-(p+1)+1);
-			attr->value = malloc(1);
-			*(char*)mempcpy(attr->name, p+1, q-(p+1)) = 0;
-			attr->value[0] = '\0';
+
+		attr->name = p;
+		p = strchrnul(p, ';');
+		if (*p) {
+			*p = 0; p++;
+		}
+		if ((q = strchr(attr->name, '='))) {
+			*q = 0;
+			attr->value = q + 1;
+		} else { // value is empty
+			attr->value = attr->name + strlen(attr->name);
 		}
 		trim(attr->name);
 		trim(attr->value);
-		
-		p = q;
 	}
 
 	// process attributes
@@ -978,9 +975,9 @@ static void setcookie(mcrawler_url *u, char *str) {
 	}
 
 	if (t < sizeof(u->cookies)/sizeof(*u->cookies)) {
-		memcpy(&u->cookies[t], &cookie, sizeof(cookie));
+		u->cookies[t] = cookie;
 		debugf("[%d] Storing cookie #%d: name='%s', value='%s', domain='%s', host_only=%d, secure=%d\n",u->index,t,cookie.name,cookie.value,cookie.domain,cookie.host_only,cookie.secure);
-		goto free_struct;
+		return;
 	} else {
 		u->cookiecnt--;
 		debugf("[%d] Not enough memory for storing cookies\n",u->index);
@@ -988,10 +985,6 @@ static void setcookie(mcrawler_url *u, char *str) {
 
 fail:
 	free_cookie(&cookie);
-free_struct:
-	for (i = 0; i < att_len; i++) {
-		free_nv(&attributes[i]);
-	}
 }
 
 /**
