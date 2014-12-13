@@ -477,6 +477,9 @@ static void launchdns(mcrawler_url *u) {
 	int t;
 
 	debugf("[%d] Resolving %s starts\n", u->index, u->host);
+	if (u->aresch) {
+		ares_destroy(u->aresch);
+	}
 	t = ares_init((ares_channel *)&u->aresch);
 	if(t) {
 		debugf("[%d] ares_init failed\n", u->index);
@@ -647,13 +650,16 @@ static void genrequest(mcrawler_url *u) {
 	const char authorizationheader[] = "Authorization: ";
 	const char defaultagent[] = "minicrawler/%s";
 
+	size_t cookies_size = 0;
+	for (int i = 0; i < u->cookiecnt; i++) cookies_size += 1 + strlen(u->cookies[i].name) + strlen(u->cookies[i].value);
+
 	free(u->request);
 	u->request = malloc(
 			strlen(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
 			strlen(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
 			(u->authorization != NULL ? strlen(authorizationheader) + strlen(u->authorization) + 2 : 0) + // Authorization: ...\n
 			strlen(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
-			strlen(cookieheader) + 1024 * u->cookiecnt + 2 + // Cookie: %s; %s...\n
+			strlen(cookieheader) + cookies_size + 2 + // Cookie: %s; %s...\n
 			strlen(u->customheader) + 2 +
 			(u->options & 1<<MCURL_OPT_GZIP ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
 			(u->post != NULL ? strlen(contentlengthheader) + 6 + 2 + strlen(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
@@ -1257,6 +1263,7 @@ static void header_callback(mcrawler_url *u, char *name, char *value) {
 
 	if (!strcasecmp(name, "Content-Type")) {
 		char *p;
+		if (u->contenttype) free(u->contenttype);
 		if ((p = strstr(value, " charset="))) {
 			u->contenttype = malloc(p - value + 1);
 			memcpy(u->contenttype, value, p-value+1);
@@ -1588,6 +1595,8 @@ static void resolvelocation(mcrawler_url *u) {
 	if (uriToStringA(u->redirectedto, uri, chars + 1, NULL) != URI_SUCCESS) {
 		debugf("[%d] failed recomposing uri\n", u->index);
 	}
+	uriFreeUriMembersA(uri);
+	free(uri);
 
 	if (set_new_uri(u, u->redirectedto) == 0) {
 		return;

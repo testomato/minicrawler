@@ -47,10 +47,10 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 {
 	mcrawler_url *url;
 	long options = 0;
-	char customheader[4096];
-	char customagent[256];
-	char username[32];
-	char password[32];
+	char customheader[4096] = "";
+	char customagent[256] = "";
+	char username[32] = "";
+	char password[32] = "";
 	mcrawler_cookie cookies[COOKIESTORAGESIZE];
 	char *p, *q;
 	int ccnt = 0, i = 0;

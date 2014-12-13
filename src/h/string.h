@@ -50,7 +50,7 @@ static inline char *str_replace( char *dest,  const char *string, const char *su
 }
 
 static inline void trim(char *str) {
-	int len = strlen(str);
+	size_t len = strlen(str);
 	char *p = str;
 	while (len > 0 && (str[len-1] == ' ' || str[len-1] == '\t')) str[--len] = '\0';
 	while (*p != '\0' && (*p == ' ' || *p == '\t')) p++;
