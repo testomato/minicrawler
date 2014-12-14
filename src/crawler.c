@@ -886,10 +886,10 @@ static void setcookie(mcrawler_url *u, char *str) {
 	}
 	*p = 0; p++;
 
-	cookie.name = malloc(p - namevalue);
+	cookie.name = malloc(strlen(namevalue) + 1);
 	cookie.value = malloc(strlen(p) + 1);
-	memcpy(cookie.name, namevalue, p - namevalue);
-	memcpy(cookie.value, p, strlen(p) + 1);
+	strcpy(cookie.name, namevalue);
+	strcpy(cookie.value, p);
 
 	trim(cookie.name);
 	trim(cookie.value);
