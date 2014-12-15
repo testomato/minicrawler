@@ -1246,7 +1246,6 @@ static void parse_authchallenge(mcrawler_url *u, char *challenge) {
 	}
 
 	int can_basic = -1, can_digest = -1;
-	char unsupp_schemes[128] = {0};
 
 	for (i = 0; i < 3 && challenges[i].scheme != NULL; i++) {
 		if (challenges[i].realm == NULL) {
