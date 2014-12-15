@@ -970,14 +970,7 @@ static void setcookie(mcrawler_url *u, char *str) {
 
 		// The Domain Attribute
 		if (!strcasecmp(attr->name, "Domain")) {
-			char *domain;
-			domain = store_cookie_domain(attr, &cookie);
-			
-			// match request host
-			if (domain && ((p = strcasestr(u->host, domain)) == NULL || *(p+strlen(domain)+1) != '\0')) {
-				debugf("[%d] Domain in cookie string '%s%s' does not match request host '%s'... ignoring\n", u->index, namevalue, attributestr, u->host);
-				goto fail;
-			}
+			store_cookie_domain(attr, &cookie);
 
 			continue;
 		}
@@ -1008,6 +1001,12 @@ static void setcookie(mcrawler_url *u, char *str) {
 		cookie.domain = malloc(strlen(u->host) +1);
 		strcpy(cookie.domain, u->host);
 		cookie.host_only = 1;
+	} else {
+		// match request host
+		if ((p = strcasestr(u->host, cookie.domain)) == NULL || *(p+strlen(cookie.domain)+1) != 0) {
+			debugf("[%d] Domain '%s' in cookie string does not match request host '%s'... ignoring\n", u->index, cookie.domain, u->host);
+			goto fail;
+		}
 	}
 
 	if (cookie.expires < 0) {
