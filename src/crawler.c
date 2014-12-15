@@ -1374,7 +1374,7 @@ static int parsehead(mcrawler_url *u) {
 	char *p = buf, *q;
 	char *name, *value;
 
-	strncpy(buf, u->buf, u->headlen);
+	memcpy(buf, u->buf, u->headlen);
 	buf[u->headlen] = 0;
 
     if (strncmp("HTTP/1.0", p, 8) && strncmp("HTTP/1.1", p, 8)) {
@@ -1405,8 +1405,8 @@ static int parsehead(mcrawler_url *u) {
 		while (*p == ' ' || *p == '\t') p++;
 		value = p;
 		while (1) {
-			p = q = strpbrk(p, "\r\n");
-			assert(p != 0);
+			while (*p != '\r' && *p != '\n') p++;
+			q = p;
 			while (*q == '\r' || *q == '\n') q++;
 			if (*q == ' ' || *q == '\t') { // value continues
 				memmove(p, q, strlen(q) + 1);
