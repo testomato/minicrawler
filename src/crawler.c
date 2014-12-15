@@ -714,13 +714,13 @@ static void genrequest(mcrawler_url *u) {
 
 	// Cookie
 	for (int t = 0; t < u->cookiecnt; t++) {
-		char *p;
+		char *p, c;
 		// see http://tools.ietf.org/html/rfc6265 section 5.4
-		// TODO: The request-uri's path path-matches the cookie's path.
 		if (
-				((u->cookies[t].host_only == 1 && strcasecmp(u->host, u->cookies[t].domain) == 0) ||
-					(u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) != NULL && *(p+strlen(u->cookies[t].domain)+1) == '\0')) &&
-				(u->cookies[t].secure == 0 || strcmp(u->proto, "https") == 0)
+				((u->cookies[t].host_only == 1 && strcasecmp(u->host, u->cookies[t].domain) == 0) || // The cookie's host-only-flag is true and the canonicalized request-host is identical to the cookie's domain.
+					(u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) && *(p+strlen(u->cookies[t].domain)+1) == 0)) && //  Or: The cookie's host-only-flag is false and the canonicalized request-host domain-matches the cookie's domain.
+				(!strncmp(u->path, u->cookies[t].path, strlen(u->cookies[t].path)) && (u->cookies[t].path[strlen(u->cookies[t].path)-1] == '/' || (c = u->path[strlen(u->cookies[t].path)]) == '/' || c == '?' || c == 0)) && // The request-uri's path path-matches the cookie's path.
+				(u->cookies[t].secure == 0 || strcmp(u->proto, "https") == 0) //  If the cookie's secure-only-flag is true, then the request- uri's scheme must denote a "secure" protocol
 		) {
 			if (!r[0]) {
 				strcpy(r, cookieheader);
@@ -982,9 +982,25 @@ static void setcookie(mcrawler_url *u, char *str) {
 			continue;
 		}
 
+		// The Path Attribute
+		if (!strcasecmp(attr->name, "Path")) {
+			if (cookie.path) {
+				free(cookie.path);
+				cookie.path = NULL;
+			}
+			if (attr->value[0] == '/') {
+				cookie.path = malloc(strlen(attr->value) + 1);
+				strcpy(cookie.path, attr->value);
+			}
+
+			continue;
+		}
+
 		// The Secure Attribute
 		if (!strcasecmp(attr->name, "Secure")) {
 			cookie.secure = 1;
+
+			continue;
 		}
 	}
 
@@ -998,9 +1014,24 @@ static void setcookie(mcrawler_url *u, char *str) {
 		cookie.expires = LONG_MAX;
 	}
 
+	if (!cookie.path) {
+		// default-path, see http://tools.ietf.org/html/rfc6265#section-5.1.4
+		char *p = strchrnul(u->path, '?');
+		assert(p > u->path);
+		cookie.path = malloc(p - u->path);
+		*(char *)mempcpy(cookie.path, u->path, p - u->path - 1) = 0;
+		p = strrchr(cookie.path, '/');
+		if (p > cookie.path) {
+			*p = 0;
+		} else {
+			*(p + 1) = 0;
+		}
+	}
+
+
 	int t;
 	for (t = 0; t<u->cookiecnt; ++t) {
-		if(!strcasecmp(cookie.name,u->cookies[t].name) && !strcasecmp(cookie.domain,u->cookies[t].domain)) {
+		if(!strcasecmp(cookie.name,u->cookies[t].name) && !strcasecmp(cookie.domain,u->cookies[t].domain) && !strcmp(cookie.path,u->cookies[t].path)) {
 			break;
 		}
 	}
@@ -1014,7 +1045,7 @@ static void setcookie(mcrawler_url *u, char *str) {
 
 	if (t < sizeof(u->cookies)/sizeof(*u->cookies)) {
 		u->cookies[t] = cookie;
-		debugf("[%d] Storing cookie #%d: name='%s', value='%s', domain='%s', host_only=%d, secure=%d\n",u->index,t,cookie.name,cookie.value,cookie.domain,cookie.host_only,cookie.secure);
+		debugf("[%d] Storing cookie #%d: name='%s', value='%s', domain='%s', path='%s', host_only=%d, secure=%d\n",u->index,t,cookie.name,cookie.value,cookie.domain,cookie.path,cookie.host_only,cookie.secure);
 		return;
 	} else {
 		u->cookiecnt--;
