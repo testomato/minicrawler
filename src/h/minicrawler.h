@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 struct mcrawler_settings {
 	int debug;
@@ -11,7 +12,8 @@ typedef struct mcrawler_settings mcrawler_settings;
 
 struct mcrawler_cookie {
     char *name, *value, *domain, *path;
-	int secure, host_only, expire;
+	int secure, host_only;
+	time_t expires;
 };
 typedef struct mcrawler_cookie mcrawler_cookie;
 
@@ -73,7 +75,7 @@ static inline void cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src) {
 	strcpy(dst->path, src->path);
 	dst->host_only = src->host_only;
 	dst->secure = src->secure;
-	dst->expire = src->expire;
+	dst->expires = src->expires;
 }
 
 enum mcrawler_url_s {

@@ -80,7 +80,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 				cookies[ccnt].value = malloc(q-p);
 				cookies[ccnt].domain = malloc(q-p);
 				cookies[ccnt].path = malloc(q-p);
-				sscanf(p, "%s\t%d\t%s\t%d\t%d\t%s\t%s", cookies[ccnt].domain, &cookies[ccnt].host_only, cookies[ccnt].path, &cookies[ccnt].secure, &cookies[ccnt].expire, cookies[ccnt].name, cookies[ccnt].value);
+				sscanf(p, "%s\t%d\t%s\t%d\t%d\t%s\t%s", cookies[ccnt].domain, &cookies[ccnt].host_only, cookies[ccnt].path, &cookies[ccnt].secure, &cookies[ccnt].expires, cookies[ccnt].name, cookies[ccnt].value);
 				p = (q[0] == '\n') ? q + 1 : q;
 				ccnt++;
 			}
@@ -242,7 +242,7 @@ void output(mcrawler_url *u, void *arg) {
 		// netscape cookies.txt format
 		// @see http://www.cookiecentral.com/faq/#3.5
 		for (int t = 0; t < u->cookiecnt; t++) {
-			n = sprintf(h+hlen, "%s\t%d\t/\t%d\t0\t%s\t%s\n", u->cookies[t].domain, u->cookies[t].host_only/*, u->cookies[t].path*/, u->cookies[t].secure/*, u->cookies[t].expiration*/, u->cookies[t].name, u->cookies[t].value);
+			n = sprintf(h+hlen, "%s\t%d\t/\t%d\t%d\t%s\t%s\n", u->cookies[t].domain, u->cookies[t].host_only/*, u->cookies[t].path*/, u->cookies[t].secure, u->cookies[t].expires, u->cookies[t].name, u->cookies[t].value);
 			if (n > 0) hlen += n;
 		}
 	}

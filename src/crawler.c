@@ -6,11 +6,18 @@
 #include <stdlib.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <time.h>
 #ifdef HAVE_SYS_SELECT_H
 # include <sys/select.h> // select(.)
 #else
 # include <sys/time.h>
 # include <sys/types.h>
+#endif
+#ifdef HAVE_LIMITS_H
+# include <limits.h>
+#else
+# define LONG_MAX 2147483647
+# define LONG_MIN (-LONG_MAX - 1)
 #endif
 #include <ares.h>
 #ifdef HAVE_SYS_TYPES_H
@@ -636,6 +643,8 @@ static void opensocket(mcrawler_url *u)
 	}
 }
 
+static void remove_expired_cookies(mcrawler_url *u);
+
 /** socket bezi, posli dotaz
  * cookie header see http://tools.ietf.org/html/rfc6265 section 5.4
  */
@@ -650,6 +659,7 @@ static void genrequest(mcrawler_url *u) {
 	const char authorizationheader[] = "Authorization: ";
 	const char defaultagent[] = "minicrawler/%s";
 
+	remove_expired_cookies(u);
 	size_t cookies_size = 0;
 	for (int i = 0; i < u->cookiecnt; i++) cookies_size += 1 + strlen(u->cookies[i].name) + strlen(u->cookies[i].value);
 
@@ -856,7 +866,6 @@ static int eatchunked(mcrawler_url *u) {
 
 /** 
  * zapíše si do pole novou cookie (pokud ji tam ještě nemá; pokud má, tak ji nahradí)
- * kašleme na *cestu* a na dobu platnosti cookie (to by mělo být pro účely minicrawleru v pohodě)
  * see http://tools.ietf.org/html/rfc6265 section 5.2 and 5.3
  */
 static void setcookie(mcrawler_url *u, char *str) {
@@ -868,6 +877,7 @@ static void setcookie(mcrawler_url *u, char *str) {
 	int i;
 
 	memset(&cookie, 0, sizeof(mcrawler_cookie));
+	cookie.expires = -1;
 	memset(attributes, 0, sizeof(attributes));
 
 	namevalue = str;
@@ -929,29 +939,30 @@ static void setcookie(mcrawler_url *u, char *str) {
 	for (i = 0; i < att_len; i++) {
 		attr = attributes + i;
 
+		// The Expires Attribute
+		if (!strcasecmp(attr->name, "Expires")) {
+			time_t expires = parse_cookie_date(attr->value);
+			if (expires < 0) {
+				debugf("[%d] Failed to parse cookie date from '%s'\n", u->index, attr->value);
+			} else {
+				cookie.expires = expires;
+			}
+
+			continue;
+		}
+
 		// The Domain Attribute
 		if (!strcasecmp(attr->name, "Domain")) {
-			if (strlen(attr->value) == 0) {
-				debugf("[%d] Cookie string '%s%s' has empty value for domain attribute... ignoring\n", u->index, namevalue, attributestr);
-				goto fail;
-			}
-
-			// ignore leading '.'
-			if (attr->value[0] == '.') {
-				memmove(attr->value, attr->value + 1, strlen(attr->value));
-			}
-
-			// TODO: ignore public suffixes, see 5.3.5
+			char *domain;
+			domain = store_cookie_domain(attr, &cookie);
 			
 			// match request host
-			if ((p = strcasestr(u->host, attr->value)) == NULL || *(p+strlen(attr->value)+1) != '\0') {
+			if (domain && ((p = strcasestr(u->host, domain)) == NULL || *(p+strlen(domain)+1) != '\0')) {
 				debugf("[%d] Domain in cookie string '%s%s' does not match request host '%s'... ignoring\n", u->index, namevalue, attributestr, u->host);
 				goto fail;
 			}
 
-			cookie.domain = malloc(strlen(attr->value)+1);
-			strcpy(cookie.domain, attr->value);
-			cookie.host_only = 0;
+			continue;
 		}
 
 		// The Secure Attribute
@@ -964,6 +975,10 @@ static void setcookie(mcrawler_url *u, char *str) {
 		cookie.domain = malloc(strlen(u->host) +1);
 		strcpy(cookie.domain, u->host);
 		cookie.host_only = 1;
+	}
+
+	if (cookie.expires < 0) {
+		cookie.expires = LONG_MAX;
 	}
 
 	int t;
@@ -992,6 +1007,25 @@ static void setcookie(mcrawler_url *u, char *str) {
 fail:
 	free_cookie(&cookie);
 }
+
+// The user agent MUST evict all expired cookies from the cookie store
+// if, at any time, an expired cookie exists in the cookie store.
+static void remove_expired_cookies(mcrawler_url *u) {
+	time_t tim = time(NULL);
+	for (int t = 0; t < u->cookiecnt;) {
+		if (tim > u->cookies[t].expires) {
+			debugf("[%d] Cookie %s expired. Deleting\n", u->index, u->cookies[t].name);
+			free_cookie(&u->cookies[t]);
+			u->cookiecnt--;
+			if (t < u->cookiecnt) {
+				memmove(&u->cookies[t], &u->cookies[t+1], (u->cookiecnt-t)*sizeof(*u->cookies));
+			}
+		} else {
+			t++;
+		}
+	}
+}
+
 
 /**
  * http://tools.ietf.org/html/rfc2617#section-2
@@ -1434,6 +1468,8 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 	if (u->options & 1<<MCURL_OPT_CONVERT_TO_TEXT) {
 		u->bufp = converthtml2text((char *)u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
 	}
+
+	remove_expired_cookies(u);
 
 	u->timing.done = get_time_int();
 

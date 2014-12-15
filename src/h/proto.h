@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 #include <sys/types.h>
 
 #include "config.h"
@@ -28,3 +29,5 @@ int gunzip(unsigned char *out, int *outlen, unsigned char *in, int inlen);
 void *rpl_malloc(size_t n);
 int base64_len(int);
 void base64(char *, const void *, int);
+char *store_cookie_domain(const struct nv *attr, mcrawler_cookie *cookie);
+time_t parse_cookie_date(char *date);

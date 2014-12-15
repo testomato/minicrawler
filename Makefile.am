@@ -2,7 +2,7 @@
 DEFAULT_INCLUDES = 
 
 lib_LTLIBRARIES = libminicrawler.la
-libminicrawler_la_SOURCES = src/crawler.c src/cert.c src/conv.c src/converthtml2text.c src/entities.c src/inflate.c src/time.c src/malloc.c src/base64.c src/digcalc.c
+libminicrawler_la_SOURCES = src/crawler.c src/cert.c src/conv.c src/converthtml2text.c src/entities.c src/inflate.c src/time.c src/malloc.c src/base64.c src/digcalc.c src/cookies.c
 libminicrawler_la_LDFLAGS = -version-info 1:0:0
 pkginclude_HEADERS = src/h/minicrawler.h
 
