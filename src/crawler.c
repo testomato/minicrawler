@@ -951,6 +951,23 @@ static void setcookie(mcrawler_url *u, char *str) {
 			continue;
 		}
 
+		// The Max-Age Attribute
+		if (!strcasecmp(attr->name, "Max-Age")) {
+			char *p;
+			int max_age = strtol(attr->value, &p, 10);
+			if (*p != 0) {
+				debugf("[%d] Invalid Max-Age attribute '%s'\n", u->index, attr->value);
+				continue;
+			}
+			if (max_age <= 0) {
+				cookie.expires = (time_t)(0);
+			} else {
+				cookie.expires = time(NULL) + (time_t)max_age;
+			}
+
+			continue;
+		}
+
 		// The Domain Attribute
 		if (!strcasecmp(attr->name, "Domain")) {
 			char *domain;
