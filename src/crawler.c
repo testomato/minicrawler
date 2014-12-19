@@ -1021,8 +1021,8 @@ static void setcookie(mcrawler_url *u, char *str) {
 		// default-path, see http://tools.ietf.org/html/rfc6265#section-5.1.4
 		char *p = strchrnul(u->path, '?');
 		assert(p > u->path);
-		cookie.path = malloc(p - u->path);
-		*(char *)mempcpy(cookie.path, u->path, p - u->path - 1) = 0;
+		cookie.path = malloc(p - u->path + 1);
+		*(char *)mempcpy(cookie.path, u->path, p - u->path) = 0;
 		p = strrchr(cookie.path, '/');
 		if (p > cookie.path) {
 			*p = 0;
