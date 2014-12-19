@@ -20,7 +20,6 @@ void printusage()
 	         "         -A STRING  custom user agent (max 255 bytes)\n"
 	         "         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)\n"
 	         "         -c         convert content to text format (with UTF-8 encoding)\n"
-	         "         -d         enable debug messages (to stderr)\n"
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)\n"
 	         "         -g         accept gzip encoding\n"
 	         "         -h         enable output of HTTP headers\n"
@@ -31,6 +30,7 @@ void printusage()
 	         "         -pSTRING   password for HTTP authentication (basic or digest, max 31 bytes)\n"
 	         "         -tSECONDS  set timeout (default is 5 seconds)\n"
 	         "         -u STRING  username for HTTP authentication (basic or digest, max 31 bytes)\n"
+	         "         -v         verbose output (to stderr)\n"
 	         "         -w STRING  write this custom header to all requests (max 4095 bytes)\n"
 	         "\n   urloptions:\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"
@@ -61,7 +61,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 	for (int t = 1; t < argc; ++t) {
 
 		// options
-		if(!strcmp(argv[t], "-d")) {settings->debug=1; continue;}
+		if(!strcmp(argv[t], "-v")) {settings->debug=1; continue;}
 		if(!strcmp(argv[t], "-S")) {options |= 1<<MCURL_OPT_NONSSL; continue;}
 		if(!strcmp(argv[t], "-h")) {writehead=1; continue;}
 		if(!strcmp(argv[t], "-i")) {settings->impatient=1; continue;}
@@ -70,9 +70,9 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-g")) {options |= 1<<MCURL_OPT_GZIP; continue;}
 		if(!strncmp(argv[t], "-t", 2)) {settings->timeout = atoi(argv[t]+2); continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings->delay = atoi(argv[t]+2); continue;}
-		if(!strncmp(argv[t], "-w", 2)) {SAFE_STRCPY(customheader, argv[t+1]); t++; continue;}
-		if(!strncmp(argv[t], "-A", 2)) {str_replace(customagent, argv[t+1], "%version%", VERSION); t++; continue;}
-		if(!strncmp(argv[t], "-b", 2)) {
+		if(!strcmp(argv[t], "-w")) {SAFE_STRCPY(customheader, argv[t+1]); t++; continue;}
+		if(!strcmp(argv[t], "-A")) {str_replace(customagent, argv[t+1], "%version%", VERSION); t++; continue;}
+		if(!strcmp(argv[t], "-b")) {
 			p = argv[t+1];
 			while (p[0] != '\0' && ccnt < COOKIESTORAGESIZE) {
 				q = strchrnul(p, '\n');
@@ -99,7 +99,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 			t++;
 			continue;
 		}
-		if(!strncmp(argv[t], "-C", 2)) {
+		if(!strcmp(argv[t], "-C")) {
 			if (customheader[0]) {
 				str_replace(url->customheader, customheader, "%", argv[t+1]);
 			}

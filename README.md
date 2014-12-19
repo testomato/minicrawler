@@ -37,7 +37,6 @@ Where
          -A STRING  custom user agent (max 255 bytes)
          -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)
          -c         convert content to text format (with UTF-8 encoding)
-         -d         enable debug messages (to stderr)
          -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)
          -g         accept gzip encoding
          -h         enable output of HTTP headers
@@ -46,6 +45,7 @@ Where
          -S         disable SSL/TLS support
          -tSECONDS  set timeout (default is 5 seconds)
          -u STRING  username for HTTP authentication (basic or digest, max 31 bytes)
+         -v         verbose output (to stderr)
          -w STRING  write this custom header to all requests (max 4095 bytes)
 
    urloptions:
