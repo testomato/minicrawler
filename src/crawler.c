@@ -663,6 +663,10 @@ static void genrequest(mcrawler_url *u) {
 	size_t cookies_size = 0;
 	for (int i = 0; i < u->cookiecnt; i++) cookies_size += 1 + strlen(u->cookies[i].name) + strlen(u->cookies[i].value);
 
+	if (!u->method[0]) {
+		strcpy(u->method, "GET");
+	}
+
 	free(u->request);
 	u->request = malloc(
 			strlen(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
@@ -2048,7 +2052,6 @@ void mcrawler_init_url(mcrawler_url *u, const char *url) {
 	} else {
 		strcpy(u->rawurl, url);
 	}
-	strcpy(u->method, "GET");
 	u->contentlen = -1;
 
 	// init callbacks
