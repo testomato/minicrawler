@@ -98,7 +98,7 @@ Install following dependencies (including header files):
  * OpenSSL (optional)
 
 With apt-get: `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
-With [homebrew](http://brew.sh/): `brew install c-ares zlib uriparser openssl`
+With [homebrew](http://brew.sh/): `brew install c-ares zlib uriparser openssl automake`
 
 Then run
 ```
