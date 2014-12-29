@@ -2118,3 +2118,7 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 		debugf("All successful. Took %d ms.\n", get_time_int());
 	}
 }
+
+char *mcrawler_version() {
+	return VERSION;
+}
