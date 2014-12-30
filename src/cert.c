@@ -103,6 +103,7 @@ SSL_CTX *mossad(void) {
 	
 	cbio = BIO_new_mem_buf((void*)xxx, sizeof(cert));
 	cert = PEM_read_bio_X509(cbio, NULL, password_cb, (void*)psswd);
+	BIO_free(cbio);
 	if (cert != NULL) {
 		berr_exit("Can't read certificate from memory");
 	}
@@ -110,6 +111,7 @@ SSL_CTX *mossad(void) {
 
 	kbio = BIO_new_mem_buf((void*)xxx, -1);
 	rsa = PEM_read_bio_RSAPrivateKey(kbio, NULL, password_cb, (void*)psswd);
+	BIO_free(kbio);
 	if (rsa != NULL) {
 		berr_exit("Can't read key from memory");
 	}
@@ -122,8 +124,10 @@ SSL_CTX *mossad(void) {
 Free SSL context. After this function is called, SSL should not be in used.
 */
 void free_mossad(void) {
-	SSL_CTX_free(ctx);
-	ctx = NULL;
+	if (ctx) {
+		SSL_CTX_free(ctx);
+		ctx = NULL;
+	}
 }
 #endif
 #endif

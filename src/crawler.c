@@ -1489,6 +1489,7 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
 			u->bufp = u->headlen;
 		}
+		free(buf);
 	}
 
 	if (u->options & 1<<MCURL_OPT_CONVERT_TO_UTF8) {
@@ -2114,6 +2115,7 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 		}
 	} while(!done);
 	
+	free_mossad();
 	if(done) {
 		debugf("All successful. Took %d ms.\n", get_time_int());
 	}
