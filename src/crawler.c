@@ -661,7 +661,7 @@ static void genrequest(mcrawler_url *u) {
 
 	remove_expired_cookies(u);
 	size_t cookies_size = 0;
-	for (int i = 0; i < u->cookiecnt; i++) cookies_size += 1 + strlen(u->cookies[i].name) + strlen(u->cookies[i].value);
+	for (int i = 0; i < u->cookiecnt; i++) cookies_size += 3 + strlen(u->cookies[i].name) + strlen(u->cookies[i].value);
 
 	if (!u->method[0]) {
 		strcpy(u->method, "GET");
