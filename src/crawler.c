@@ -1474,12 +1474,10 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 		memcpy(buf, u->buf + u->headlen, u->bufp - u->headlen);
 		ret = gunzip(u->buf + u->headlen, &buflen, buf, u->bufp - u->headlen);
 		debugf("[%d] gzip decompress status: %d (input length: %d, output length: %d)\n", u->index, ret, u->bufp - u->headlen, buflen);
-		if (ret == 0) {
-			u->bufp = buflen + u->headlen;
-		} else {
+		u->bufp = buflen + u->headlen;
+		if (ret != 0) {
 			sprintf(u->error_msg, "Gzip decompression error %d", ret);
 			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
-			u->bufp = u->headlen;
 		}
 		free(buf);
 	}
