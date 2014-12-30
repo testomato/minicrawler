@@ -822,44 +822,36 @@ static int eatchunked(mcrawler_url *u) {
 	int movestart;
 
 	// čte velikost chunku
-	debugf("[%d] nextchunkedpos = %d; bufp = %d\n", u->index, u->nextchunkedpos, u->bufp);
-	for(t=u->nextchunkedpos, i=0; u->buf[t] != '\r' && u->buf[t] != '\n' && t < u->bufp; t++) {
-		if(i < 9) {
+	for (t=u->nextchunkedpos, i=0; u->buf[t] != '\r' && u->buf[t] != '\n' && t < u->bufp; t++) {
+		if (i < 9) {
 			hex[i++] = u->buf[t];
 		}
 	}
-	if(t >= u->bufp) {
-		debugf("[%d] Incorrectly ended chunksize!", u->index);
+	t += 2; // eat CRLF
+	if (t > u->bufp) {
+		debugf("[%d] Missing end of chunksize!", u->index);
 		return -1;
 	}
-	if(t < u->bufp && u->buf[t] == '\r') {
-		t++;
-	}
-	if(t < u->bufp && u->buf[t] == '\n') {
-		t++;
-	}
 
-	if(i == 0) {
-		debugf("[%d] Warning: empty string for chunksize\n",u->index);
-	}
+	assert(i > 0);
 	hex[i] = 0;
 	size = strtol((char *)hex, NULL, 16);
 
-	debugf("[%d] Chunksize at %d (now %d): '%s' (=%d)\n",u->index,u->nextchunkedpos,u->bufp,hex,size);
+	debugf("[%d] Chunksize at %d (buffer %d): '%s' (=%d)\n", u->index, u->nextchunkedpos, u->bufp, hex, size);
 
-	movestart=u->nextchunkedpos;
+	movestart = u->nextchunkedpos;
 	if (u->nextchunkedpos != u->headlen) {
-		movestart -= 2;
+		movestart -= 2; // CRLF before chunksize
 	}
 	assert(t <= u->bufp);
-	memmove(u->buf+movestart,u->buf+t,u->bufp-t);		// cely zbytek posun
-	u->bufp-=(t-movestart);					// ukazatel taky
+	memmove(u->buf+movestart, u->buf+t, u->bufp-t);		// cely zbytek posun
+	u->bufp -= (t-movestart);					// ukazatel taky
 	
-	u->nextchunkedpos=movestart+size+2;			// o 2 vic kvuli odradkovani na konci chunku
+	u->nextchunkedpos = movestart+size+2;			// 2 more for CRLF
 	
-	if(size == 0) {
+	if (size == 0) {
 		// a to je konec, pratele! ... taaadydaaadydaaa!
-		debugf("[%d] Chunksize=0 (end)\n",u->index);
+		debugf("[%d] Chunksize=0 (end)\n", u->index);
 		// zbytek odpovedi zahodime
 		u->bufp = movestart;
 		u->contentlen = movestart - u->headlen;
