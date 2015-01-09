@@ -1532,6 +1532,10 @@ static void reset_url(mcrawler_url *u) {
 	u->chunked = 0;
 	u->gzipped = 0;
 	u->ssl_options = 0;
+	if (u->contenttype) {
+		free(u->contenttype);
+		u->contenttype = NULL;
+	}
 
 	memset(&u->timing, 0, sizeof(u->timing));
 }
