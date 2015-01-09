@@ -147,7 +147,7 @@ static void sec_handshake(mcrawler_url *u) {
 		case SSL_ERROR_SYSCALL:
 			debugf("[%d] SSL_ERROR_SYSCALL (%d)\n", u->index, t);
 			if (t < 0) { // t == 0: unexpected EOF
-				sprintf(u->error_msg, "Unexpected SSL error during handshake");
+				sprintf(u->error_msg, "Unexpected SSL error during handshake (%m)");
 				set_atomic_int(&u->state, MCURL_S_ERROR);
 				return;
 			}
