@@ -75,6 +75,7 @@ Minicrawler puts its own headers into an output with the following meaning
  * **Timeout**: Reason of timeout in case of timeout
  * **Error-msg**: Error message in case of error (negative Status)
  * **Content-type**: Correct content type of outputed content
+ * **WWW-Authenticate**: WWW-Authenticate header
  * **Cookies**: Number of cookies followed by that number of lines of parsed cookies in Netscape/Mozilla file format
  * **Downtime**: Length of an interval between time of the first connection and time of the last received byte; time of the start of the first connection
  * **Timing**: Timing of request (DNS lookup, Initial connection, SSL, Request, Waiting, Content download, Total)

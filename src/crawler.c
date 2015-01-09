@@ -1355,9 +1355,13 @@ static void header_callback(mcrawler_url *u, char *name, char *value) {
 		return;
 	}
 
-	if (!strcasecmp(name, "WWW-Authenticate") && u->status == 401 && u->username[0]) {
-		// TODO: header can exists multiple times
-		parse_authchallenge(u, value);
+	if (!strcasecmp(name, "WWW-Authenticate")) {
+		if (u->wwwauthenticate) free(u->wwwauthenticate);
+		u->wwwauthenticate = strdup(value);
+		if (u->status == 401 && u->username[0]) {
+			// TODO: header can exists multiple times
+			parse_authchallenge(u, value);
+		}
 	}
 }
 
@@ -1535,6 +1539,10 @@ static void reset_url(mcrawler_url *u) {
 	if (u->contenttype) {
 		free(u->contenttype);
 		u->contenttype = NULL;
+	}
+	if (u->wwwauthenticate) {
+		free(u->wwwauthenticate);
+		u->wwwauthenticate = NULL;
 	}
 
 	memset(&u->timing, 0, sizeof(u->timing));

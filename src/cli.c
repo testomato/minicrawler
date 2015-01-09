@@ -234,12 +234,16 @@ void output(mcrawler_url *u, void *arg) {
 	}
 	if (u->contenttype && *u->contenttype) {
 		n = sprintf(h+hlen, "Content-type: %s", u->contenttype);
+		if (n > 0) hlen += n;
 		if (*u->charset) {
 			n = sprintf(h+hlen, "; charset=%s\n", u->charset);
 			if (n > 0) hlen += n;
 		} else {
 			*(h+hlen) = '\n'; hlen++;
 		}
+	}
+	if (u->wwwauthenticate && *u->wwwauthenticate) {
+		n = sprintf(h+hlen, "WWW-Authenticate: %s\n", u->wwwauthenticate);
 		if (n > 0) hlen += n;
 	}
 	if (u->cookiecnt) {

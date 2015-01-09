@@ -169,6 +169,7 @@ struct mcrawler_url {
 	// http auth
 	char username[32];
 	char password[32];
+	char *wwwauthenticate;
 	char *authorization;
 	int auth_attempt;
 
