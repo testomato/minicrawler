@@ -487,9 +487,13 @@ static void launchdns(mcrawler_url *u) {
 	if (u->aresch) {
 		ares_destroy(u->aresch);
 	}
-	t = ares_init((ares_channel *)&u->aresch);
+
+	struct ares_options opts;
+	opts.timeout = 5000;
+
+	t = ares_init_options((ares_channel *)&u->aresch, &opts, ARES_OPT_TIMEOUTMS);
 	if(t) {
-		debugf("[%d] ares_init failed\n", u->index);
+		debugf("[%d] ares_init failed (%d)\n", u->index, t);
 		sprintf(u->error_msg, "ares init failed");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
