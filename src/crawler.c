@@ -286,14 +286,14 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	
 	u=(mcrawler_url *)arg;
 	if (status != ARES_SUCCESS) {
-		if (u->addrtype == AF_INET) {
+		if (status == ARES_ENODATA && u->addrtype == AF_INET) {
 			// zkusíme ještě IPv6
 			u->addrtype = AF_INET6;
-			debugf("[%d] gethostbyname error: %d: %s -> switch to ipv6\n", u->index, *(int *) arg, ares_strerror(status));
+			debugf("[%d] gethostbyname error: no data -> switch to ipv6\n", u->index);
 			set_atomic_int(&u->state, MCURL_S_PARSEDURL);
 			return;
 		}
-		debugf("[%d] gethostbyname error: %d: %s\n", u->index, *(int *) arg, ares_strerror(status));
+		debugf("[%d] gethostbyname error: %d: %s (%d timeouts)\n", u->index, status, ares_strerror(status), timeouts);
 		sprintf(u->error_msg, "%s", ares_strerror(status));
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
