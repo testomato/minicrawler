@@ -150,7 +150,7 @@ static int format_timing(char *dest, mcrawler_timing *timing) {
 		if (n > 0) len += n;
 	}
 	if (timing->connectionstart) {
-		n = sprintf(dest+len, "Initial connection=%d ms; ", (timing->requeststart ? timing->requeststart : now) - timing->connectionstart);
+		n = sprintf(dest+len, "Initial connection=%d ms; ", (timing->sslstart ? timing->sslstart : (timing->requeststart ? timing->requeststart : now)) - timing->connectionstart);
 		if (n > 0) len += n;
 	}
 	if (timing->sslstart) {
