@@ -221,6 +221,10 @@ static ssize_t sec_read(const mcrawler_url *u, unsigned char *buf, const size_t 
 				debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
 				last_e = e;
 			}
+			if (last_e == 0) {
+				// error queue is empty and t == 0 => EOF that violates the protocol
+				return MCURL_IO_EOF;
+			}
 			const int n = sprintf(errbuf, "Downloading content failed");
 			if (last_e && n > 0) {
 				sprintf(errbuf + n, " (%s)", ERR_reason_error_string(last_e));
