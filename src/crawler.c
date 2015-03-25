@@ -1813,8 +1813,7 @@ static void readreply(mcrawler_url *u) {
 					// try to authorize
 					u->auth_attempt = 1;
 					reset_url(u);
-					set_atomic_int(&u->state, MCURL_S_GENREQUEST);
-					return; // do not close connection
+					set_atomic_int(&u->state, MCURL_S_GOTIP);
 				}
 			}
 		}
