@@ -98,11 +98,17 @@ Install following dependencies (including header files):
  * uriparser
  * OpenSSL (optional)
 
-With apt-get: `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
-With [homebrew](http://brew.sh/): `brew install c-ares zlib uriparser openssl automake`
+Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
+
+Mac with [homebrew](http://brew.sh/) run
+
+```bash
+brew update && brew install c-ares zlib uriparser openssl automake
+brew link --force openssl
+```
 
 Then run
-```
+```bash
 ./autogen.sh
 ./configure
 make
