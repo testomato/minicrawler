@@ -5,7 +5,7 @@ Minicrawler executes HTTP requests while handling cookies, network connection ma
 
 ## Usage
 
-```
+```c
 #include <minicrawler/minicrawler.h>
 
 static void onfinish(mcrawler_url *url, void *arg) {
@@ -98,14 +98,9 @@ Install following dependencies (including header files):
  * uriparser
  * OpenSSL (optional)
 
-Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
+On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
 
-Mac with [homebrew](http://brew.sh/) run
-
-```bash
-brew update && brew install c-ares zlib uriparser openssl automake
-brew link --force openssl
-```
+On OS X with homebrew run `brew install c-ares zlib uriparser openssl`
 
 Then run
 ```bash
