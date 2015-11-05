@@ -100,12 +100,9 @@ Install following dependencies (including header files):
 
 On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
 
-On OS X with homebrew run `brew install c-ares zlib uriparser openssl`
+On **OS X** with [homebrew](http://brew.sh/) run `brew install c-ares zlib uriparser openssl` and then: 
 
-Then run
-```bash
-./autogen.sh
-./configure
-make
-sudo make install
-```
+	bash ./autogen.sh
+	./configure LDFLAGS=-L/usr/local/lib CPPFLAGS=-I/usr/local/include
+	make
+	sudo make install
