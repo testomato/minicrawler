@@ -2088,6 +2088,7 @@ void mcrawler_init_url(mcrawler_url *u, const char *url) {
 	if (strlen(url) > MAXURLSIZE) {
 		*(char*)mempcpy(u->rawurl, url, MAXURLSIZE) = 0;
 		sprintf(u->error_msg, "URL is too long");
+		u->status = MCURL_S_JUSTBORN - MCURL_S_ERROR;
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 	} else {
 		strcpy(u->rawurl, url);
