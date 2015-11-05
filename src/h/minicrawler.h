@@ -134,7 +134,7 @@ enum mcrawler_url_options {
 
 enum {
 	BUFSIZE = 700*1024,
-	MAXURLSIZE = 4095,
+	MAXURLSIZE = 8191,
 	COOKIESTORAGESIZE = 25,
 };
 
