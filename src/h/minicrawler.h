@@ -210,6 +210,8 @@ struct mcrawler_url {
 	long options;
 
 	void *f;
+
+	void *userdata;
 };
 typedef struct mcrawler_url mcrawler_url;
 
