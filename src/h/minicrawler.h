@@ -224,3 +224,8 @@ void mcrawler_init_url(mcrawler_url *u, const char *url);
 void mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg);
 
 char *mcrawler_version();
+
+void *mcrawler_url_serialize(mcrawler_url *url, void **buffer, int *buffer_size);
+int   mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size);
+void *mcrawler_urls_serialize(mcrawler_url **urls, mcrawler_settings *settings, void **buffer, int *buffer_size);
+int mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings, void *buffer, int buffer_size);
