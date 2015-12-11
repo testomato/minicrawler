@@ -222,4 +222,5 @@ int   mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size)
 void *mcrawler_urls_serialize(mcrawler_url **urls, mcrawler_settings *settings, void **buffer, int *buffer_size);
 int   mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings, void *buffer, int buffer_size, void *(*alloc_func)(size_t size));
 
+void  mcrawler_free_url(mcrawler_url *);
 void  mcrawler_free_cookie(mcrawler_cookie *);
