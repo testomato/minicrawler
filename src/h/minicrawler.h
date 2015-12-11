@@ -56,13 +56,6 @@ static inline void free_addr(mcrawler_addr *addr) {
 	}
 }
 
-static inline void free_cookie(mcrawler_cookie *cookie) {
-	if (cookie->name) free(cookie->name);
-	if (cookie->value) free(cookie->value);
-	if (cookie->domain) free(cookie->domain);
-	if (cookie->path) free(cookie->path);
-}
-
 static inline void cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src) {
 	dst->name = malloc(strlen(src->name) + 1);
 	dst->value = malloc(strlen(src->value) + 1);
@@ -228,3 +221,5 @@ void *mcrawler_url_serialize(mcrawler_url *url, void **buffer, int *buffer_size)
 int   mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size);
 void *mcrawler_urls_serialize(mcrawler_url **urls, mcrawler_settings *settings, void **buffer, int *buffer_size);
 int   mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings, void *buffer, int buffer_size, void *(*alloc_func)(size_t size));
+
+void  mcrawler_free_cookie(mcrawler_cookie *);

@@ -135,7 +135,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 	free(url);
 
 	for (int t = 0; t < ccnt; t++) {
-		free_cookie(&cookies[t]);
+		mcrawler_free_cookie(&cookies[t]);
 	}
 }
 

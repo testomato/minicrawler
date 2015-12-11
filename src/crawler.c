@@ -1070,7 +1070,7 @@ static void setcookie(mcrawler_url *u, char *str) {
 	}
 
 	if (t<u->cookiecnt) { // už tam byla
-		free_cookie(&u->cookies[t]);
+		mcrawler_free_cookie(&u->cookies[t]);
 		debugf("[%d] Changed cookie\n",u->index);
 	} else {
 		u->cookiecnt++;
@@ -1086,7 +1086,7 @@ static void setcookie(mcrawler_url *u, char *str) {
 	}
 
 fail:
-	free_cookie(&cookie);
+	mcrawler_free_cookie(&cookie);
 }
 
 // The user agent MUST evict all expired cookies from the cookie store
@@ -1096,7 +1096,7 @@ static void remove_expired_cookies(mcrawler_url *u) {
 	for (int t = 0; t < u->cookiecnt;) {
 		if (tim > u->cookies[t].expires) {
 			debugf("[%d] Cookie %s expired. Deleting\n", u->index, u->cookies[t].name);
-			free_cookie(&u->cookies[t]);
+			mcrawler_free_cookie(&u->cookies[t]);
 			u->cookiecnt--;
 			if (t < u->cookiecnt) {
 				memmove(&u->cookies[t], &u->cookies[t+1], (u->cookiecnt-t)*sizeof(*u->cookies));
