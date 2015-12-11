@@ -12,13 +12,13 @@
 	char *password; \
 	char *error_msg; \
 	char *charset; \
-	tpl_bin post, buf; \
+	tpl_bin post, request, buf; \
 	mcrawler_cookie cookie; \
 	mcrawler_redirect_info redirect_info;
 
 #define URL_TPL_MAP \
 	tn = tpl_map( \
-		"issBssssIiisssssiBiS(iiiiiiiiiii)A(S(ssssiiI))A(S(si$(iiiiiiiiiii)))", \
+		"issBssssBIiisssssiBiS(iiiiiiiiiii)A(S(ssssiiI))A(S(si$(iiiiiiiiiii)))", \
 			&url->index, \
 			&rawurl, \
 			&method, \
@@ -27,6 +27,7 @@
 			&customheader, \
 			&username, \
 			&password, \
+			&request, \
 			&url->options, \
 			&url->state, \
 			&url->status, \
@@ -61,6 +62,9 @@ void *mcrawler_url_serialize(mcrawler_url *url, void **buffer, int *buffer_size)
 
 	post.sz = url->postlen;
 	post.addr = url->post;
+
+	request.sz = url->request_len;
+	request.addr = url->request;
 
 	buf.sz = url->bufp;
 	buf.addr = url->buf;
@@ -113,6 +117,9 @@ int mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size) {
 
 	url->post = post.addr;
 	url->postlen = post.sz;
+
+	url->request = request.addr;
+	url->request_len = request.sz;
 
 	memcpy(url->buf, buf.addr, buf.sz); free(buf.addr);
 	url->bufp = buf.sz;
