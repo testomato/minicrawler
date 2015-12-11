@@ -9,7 +9,6 @@ struct mcrawler_settings {
 	int impatient;
 	int delay;
 };
-typedef struct mcrawler_settings mcrawler_settings;
 
 struct mcrawler_cookie {
     char *name, *value, *domain, *path;
@@ -213,19 +212,19 @@ struct mcrawler_url {
 
 	void *userdata;
 };
-typedef struct mcrawler_url mcrawler_url;
 
+typedef struct mcrawler_settings mcrawler_settings;
+typedef struct mcrawler_url mcrawler_url;
 typedef void (*mcrawler_url_callback)(mcrawler_url*, void *);
 
-void mcrawler_init_settings(mcrawler_settings *settings);
+void  mcrawler_init_settings(mcrawler_settings *settings);
+void  mcrawler_init_url(mcrawler_url *u, const char *url);
 
-void mcrawler_init_url(mcrawler_url *u, const char *url);
-
-void mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg);
+void  mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg);
 
 char *mcrawler_version();
 
 void *mcrawler_url_serialize(mcrawler_url *url, void **buffer, int *buffer_size);
 int   mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size);
 void *mcrawler_urls_serialize(mcrawler_url **urls, mcrawler_settings *settings, void **buffer, int *buffer_size);
-int mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings, void *buffer, int buffer_size);
+int   mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings, void *buffer, int buffer_size, void *(*alloc_func)(size_t size));
