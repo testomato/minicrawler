@@ -1554,6 +1554,8 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 
 	remove_expired_cookies(u);
 
+	ares_destroy(u->aresch); u->aresch = NULL;
+
 	u->timing.done = get_time_int();
 
 	callback(u, callback_arg);
