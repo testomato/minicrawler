@@ -40,10 +40,16 @@ static long long get_uptime(void)
 #endif
 #endif
 
+#define HASH_SIZE 64
+static int hash_table[HASH_SIZE];
+
 static long long birth;
 void init_birth(void)
 {
 	birth = get_uptime();
+	for (int i = 0; i < HASH_SIZE; i++) {
+		hash_table[i] = INT_MIN;
+	}
 }
 
 /**
@@ -72,9 +78,6 @@ static unsigned hash_uns(const unsigned char key[16])
 	}
 	return hash;
 }
-
-#define HASH_SIZE 64
-int hash_table[] = { [0 ... (HASH_SIZE - 1)]=INT_MIN, };
 
 /**
  * Returns slot that is assigned to the supplied key.
@@ -105,7 +108,7 @@ int test_free_channel(const unsigned char u_ip[16], const unsigned milis, const 
 	if (force || (int)milis <= 0 || *slot + (int)milis <= now) {
 		return *slot = now;
 	}
-        else {
+	else {
 		return 0;
 	}
 }

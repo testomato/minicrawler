@@ -2126,6 +2126,9 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 	init_birth();
 
 	debug = settings->debug;
+
+	debugf("Go: timeout %d; delay %d\n", settings->timeout, settings->delay);
+
 	do {
 		done = 1;
 		change = 0;
