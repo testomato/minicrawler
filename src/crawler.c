@@ -147,7 +147,7 @@ static void sec_handshake(mcrawler_url *u) {
 		case SSL_ERROR_SYSCALL:
 			debugf("[%d] SSL_ERROR_SYSCALL (%d)\n", u->index, t);
 			if (t < 0) { // t == 0: unexpected EOF
-				sprintf(u->error_msg, "Unexpected SSL error during handshake (%m)");
+				sprintf(u->error_msg, "Unexpected SSL error during handshake (%.200m)");
 				set_atomic_int(&u->state, MCURL_S_ERROR);
 				return;
 			}
@@ -164,7 +164,7 @@ static void sec_handshake(mcrawler_url *u) {
 	if (lower_ssl_protocol(u) < 0) {
 		sprintf(u->error_msg, "SSL protocol error during handshake");
 		if (last_e) {
-			sprintf(u->error_msg + strlen(u->error_msg), " (%s)", ERR_reason_error_string(last_e));
+			sprintf(u->error_msg + strlen(u->error_msg), " (%.200s)", ERR_reason_error_string(last_e));
 		}
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
@@ -211,7 +211,7 @@ static ssize_t sec_read(const mcrawler_url *u, unsigned char *buf, const size_t 
 		case SSL_ERROR_SYSCALL:
 			debugf("[%d] SSL read failed: SSL_ERROR_SYSCALL (%d)\n", u->index, t);
 			if (t < 0) { // t == 0: unexpected EOF
-				sprintf(errbuf, "Downloading content failed (%m)");
+				sprintf(errbuf, "Downloading content failed (%.200m)");
 				return MCURL_IO_ERROR;
 			}
 		case SSL_ERROR_SSL:
@@ -227,7 +227,7 @@ static ssize_t sec_read(const mcrawler_url *u, unsigned char *buf, const size_t 
 			}
 			const int n = sprintf(errbuf, "Downloading content failed");
 			if (last_e && n > 0) {
-				sprintf(errbuf + n, " (%s)", ERR_reason_error_string(last_e));
+				sprintf(errbuf + n, " (%.200s)", ERR_reason_error_string(last_e));
 			}
 			return MCURL_IO_ERROR;
 		default:
@@ -260,7 +260,7 @@ static ssize_t sec_write(const mcrawler_url *u, const unsigned char *buf, const 
 		case SSL_ERROR_SYSCALL:
 			debugf("[%d] SSL write failed: SSL_ERROR_SYSCALL (%d)\n", u->index, t);
 			if (t < 0) { // t == 0: unexpected EOF
-				sprintf(errbuf, "Sending request failed (%m)");
+				sprintf(errbuf, "Sending request failed (%.200m)");
 				return MCURL_IO_ERROR;
 			}
 		case SSL_ERROR_SSL:
@@ -272,7 +272,7 @@ static ssize_t sec_write(const mcrawler_url *u, const unsigned char *buf, const 
 			}
 			const int n = sprintf(errbuf, "Sending request failed");
 			if (last_e && n > 0) {
-				sprintf(errbuf + n, " (%s)", ERR_reason_error_string(last_e));
+				sprintf(errbuf + n, " (%.200s)", ERR_reason_error_string(last_e));
 			}
 			return MCURL_IO_ERROR;
 		default:
@@ -298,7 +298,7 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 			return;
 		}
 		debugf("[%d] gethostbyname error: %d: %s (%d timeouts)\n", u->index, status, ares_strerror(status), timeouts);
-		sprintf(u->error_msg, "%s", ares_strerror(status));
+		sprintf(u->error_msg, "%.255s", ares_strerror(status));
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
@@ -585,7 +585,7 @@ static void connectsocket(mcrawler_url *u) {
 			set_atomic_int(&u->state, MCURL_S_GOTIP);
 			return;
 		}
-		sprintf(u->error_msg, "Failed to connect to host (%m)");
+		sprintf(u->error_msg, "Failed to connect to host (%.200m)");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		close(u->sockfd);
 		return;
@@ -601,7 +601,7 @@ static void connectsocket(mcrawler_url *u) {
 			set_atomic_int(&u->state, MCURL_S_GOTIP);
 			return;
 		}
-		sprintf(u->error_msg, "Failed to connect to host (%s)", strerror(result));
+		sprintf(u->error_msg, "Failed to connect to host (%.200s)", strerror(result));
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		close(u->sockfd);
 		return;
@@ -672,7 +672,7 @@ static void opensocket(mcrawler_url *u)
 		}
 		else {
 			debugf("%d: connect failed (%d, %s)\n", u->index, errno, strerror(errno));
-			sprintf(u->error_msg, "Failed to connect to host (%m)");
+			sprintf(u->error_msg, "Failed to connect to host (%.200m)");
 			set_atomic_int(&u->state, MCURL_S_ERROR);
 		}
 	} else {
@@ -1482,7 +1482,7 @@ ssize_t plain_read(const mcrawler_url *u, unsigned char *buf, const size_t size,
 		}
 	}
 	debugf("[%d] read failed: %m\n", u->index);
-	sprintf(errbuf, "Downloading content failed (%m)");
+	sprintf(errbuf, "Downloading content failed (%.200m)");
 	return MCURL_IO_ERROR;
 }
 
@@ -1501,7 +1501,7 @@ ssize_t plain_write(const mcrawler_url *u, const unsigned char *buf, const size_
 		}
 	}
 	debugf("[%d] write failed: %m\n", u->index);
-	sprintf(errbuf, "Sending request failed (%m)");
+	sprintf(errbuf, "Sending request failed (%.200m)");
 	return MCURL_IO_ERROR;
 }
 
@@ -1542,7 +1542,7 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 			strcpy(u->charset, "utf-8");
 		} else {
 			debugf("[%d] conversion error: %m\n", u->index);
-			sprintf(u->error_msg, "Charset conversion error (%m)");
+			sprintf(u->error_msg, "Charset conversion error (%.200m)");
 			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
 			u->bufp = u->headlen;  // discard whole input in case of error
 		}
@@ -1660,7 +1660,7 @@ static void resolvelocation(mcrawler_url *u) {
 
 	if (!urlencode(u->location)) {
 		debugf("[%d] Not enough memory for urlencode '%s'\n", u->index, u->location);
-		sprintf(u->error_msg, "URL is too long");
+		sprintf(u->error_msg, "Redirect location is too long");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
@@ -1684,7 +1684,7 @@ static void resolvelocation(mcrawler_url *u) {
 		uriFreeUriMembersA(&locUri);
 
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, u->location);
-		sprintf(u->error_msg, "Failed to parse URL %s", u->location);
+		sprintf(u->error_msg, "Failed to parse URL %.200s", u->location);
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
@@ -1704,7 +1704,7 @@ static void resolvelocation(mcrawler_url *u) {
 		free(uri);
 
 		debugf("[%d] error: url='%s' failed to resolve\n", u->index, u->location);
-		sprintf(u->error_msg, "Failed to resolve URL %s", u->location);
+		sprintf(u->error_msg, "Failed to resolve URL %.200s", u->location);
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
