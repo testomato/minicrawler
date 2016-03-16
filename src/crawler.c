@@ -691,6 +691,7 @@ static void genrequest(mcrawler_url *u) {
 	const char hostheader[] = "Host: ";
 	const char useragentheader[] = "User-Agent: ";
 	const char cookieheader[] = "Cookie: ";
+	const char acceptheader[] = "Accept: */*";
 	const char gzipheader[] = "Accept-Encoding: gzip";
 	const char contentlengthheader[] = "Content-Length: ";
 	const char contenttypeheader[] = "Content-Type: application/x-www-form-urlencoded";
@@ -709,6 +710,7 @@ static void genrequest(mcrawler_url *u) {
 	u->request = malloc(
 			strlen(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
 			strlen(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
+			strlen(acceptheader) + 2 + // Accept: */*\n
 			(u->authorization != NULL ? strlen(authorizationheader) + strlen(u->authorization) + 2 : 0) + // Authorization: ...\n
 			strlen(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
 			strlen(cookieheader) + cookies_size + 2 + // Cookie: %s; %s...\n
@@ -736,6 +738,15 @@ static void genrequest(mcrawler_url *u) {
 		if (s > 0) r += s;
 	}
 	r = stpcpy(r, "\r\n");
+
+	// Accept
+	char *p = strstr(u->customheader, "Accept:");
+	if (p && (p == u->customheader || *(p-1) == '\n')) {
+		// Accept header is located in custom header -> skip
+	} else {
+		r = stpcpy(r, acceptheader);
+		r = stpcpy(r, "\r\n");
+	}
 
 	// Authorization
 	if (u->authorization != NULL) {
