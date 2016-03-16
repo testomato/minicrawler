@@ -3,7 +3,7 @@
 enum {
 	DEFAULT_TIMEOUT = 5,
 	DEFAULT_DELAY = 100,
-	MAX_REDIRECTS = 20,
+	MAX_REDIRECTS = 21,
 };
 
 struct nv {
