@@ -771,7 +771,7 @@ static void genrequest(mcrawler_url *u) {
 		// see http://tools.ietf.org/html/rfc6265 section 5.4
 		if (
 				((u->cookies[t].host_only == 1 && strcasecmp(u->host, u->cookies[t].domain) == 0) || // The cookie's host-only-flag is true and the canonicalized request-host is identical to the cookie's domain.
-					(u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) && *(p+strlen(u->cookies[t].domain)+1) == 0)) && //  Or: The cookie's host-only-flag is false and the canonicalized request-host domain-matches the cookie's domain.
+					(u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) && *(p+strlen(u->cookies[t].domain)) == 0)) && //  Or: The cookie's host-only-flag is false and the canonicalized request-host domain-matches the cookie's domain.
 				(!strncmp(u->path, u->cookies[t].path, strlen(u->cookies[t].path)) && (u->cookies[t].path[strlen(u->cookies[t].path)-1] == '/' || (c = u->path[strlen(u->cookies[t].path)]) == '/' || c == '?' || c == 0)) && // The request-uri's path path-matches the cookie's path.
 				(u->cookies[t].secure == 0 || strcmp(u->proto, "https") == 0) //  If the cookie's secure-only-flag is true, then the request- uri's scheme must denote a "secure" protocol
 		) {
@@ -1048,7 +1048,7 @@ static void setcookie(mcrawler_url *u, char *str) {
 		cookie.host_only = 1;
 	} else {
 		// match request host
-		if ((p = strcasestr(u->host, cookie.domain)) == NULL || *(p+strlen(cookie.domain)+1) != 0) {
+		if ((p = strcasestr(u->host, cookie.domain)) == NULL || *(p+strlen(cookie.domain)) != 0) {
 			debugf("[%d] Domain '%s' in cookie string does not match request host '%s'... ignoring\n", u->index, cookie.domain, u->host);
 			goto fail;
 		}
