@@ -101,7 +101,7 @@ int urlencode(char *src)
 {
 	char buf[MAXURLSIZE + 1];
 	unsigned char c, *str;
-	int bp = 0, escape_sq_br = 0, slash_cnt = 0, question_mark_cnt = 0;
+	int bp = 0, escape_sq_br = 0, slash_cnt = 0, question_mark_cnt = 0, hash_cnt = 0;
 
 	str = (unsigned char*)src;
 	while ((c = *str++) != '\0') {
@@ -111,12 +111,16 @@ int urlencode(char *src)
 		if (c == '?') {
 			question_mark_cnt++;
 		}
-		if (slash_cnt == 3 || question_mark_cnt == 1) {
+		if (c == '#') {
+			hash_cnt++;
+		}
+		if (slash_cnt == 3 || question_mark_cnt == 1 || hash_cnt == 1) {
 			// hranaté závorky nemůžeme escapovat v authority
 			escape_sq_br = 1;
 		}
 		if (c <= 0x20 ||
 				c == 0x22 ||
+				(hash_cnt > 1 && c == 0x23) ||
 				c == 0x3C ||
 				c == 0x3E ||
 				c == 0x5C ||
