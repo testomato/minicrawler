@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([minicrawler], [3.1.2], [admins@wikidi.com])
+AC_INIT([minicrawler], [3.1.3], [admins@wikidi.com])
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 
