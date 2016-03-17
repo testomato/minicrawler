@@ -112,3 +112,29 @@ int test_free_channel(const unsigned char u_ip[16], const unsigned milis, const 
 		return 0;
 	}
 }
+
+#ifndef HAVE_TIMEGM
+/**
+ * Portable version of timegm
+ */
+time_t
+timegm(struct tm *tm)
+{
+   time_t ret;
+   char *tz;
+
+   tz = getenv("TZ");
+   if (tz)
+	   tz = strdup(tz);
+   setenv("TZ", "", 1);
+   tzset();
+   ret = mktime(tm);
+   if (tz) {
+	   setenv("TZ", tz, 1);
+	   free(tz);
+   } else
+	   unsetenv("TZ");
+   tzset();
+   return ret;
+}
+#endif

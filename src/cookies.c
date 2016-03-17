@@ -114,5 +114,5 @@ next:
 	tm.tm_year = year - 1900;
 	tm.tm_isdst = 0;
 
-	return mktime(&tm);
+	return timegm(&tm);
 }

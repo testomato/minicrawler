@@ -19,6 +19,9 @@ void init_birth(void);
 int get_time_int(void);
 unsigned get_time_slot(const unsigned char key[16]);
 int test_free_channel(const unsigned char u_ip[16], const unsigned milis, const int force);
+#ifndef HAVE_TIMEGM
+time_t timegm(struct tm *tm);
+#endif
 int converthtml2text(char *s, int len);
 int conv_charset(mcrawler_url *u);
 char *detect_charset_from_html(char *s, const unsigned len, unsigned *charset_len);
