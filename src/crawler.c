@@ -511,9 +511,6 @@ static void launchdns(mcrawler_url *u) {
 	int t;
 
 	debugf("[%d] Resolving %s starts\n", u->index, u->host);
-	if (u->aresch) {
-		ares_destroy(u->aresch);
-	}
 
 	// check syntax
 	if (!checkDomainNameSyntax(u->host)) {
@@ -525,6 +522,10 @@ static void launchdns(mcrawler_url *u) {
 
 	struct ares_options opts;
 	opts.timeout = 5000;
+
+	if (u->aresch) {
+		ares_destroy(u->aresch);
+	}
 
 	t = ares_init_options((ares_channel *)&u->aresch, &opts, ARES_OPT_TIMEOUTMS);
 	if(t) {
@@ -1566,7 +1567,10 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 
 	remove_expired_cookies(u);
 
-	ares_destroy(u->aresch); u->aresch = NULL;
+	if (u->aresch) {
+		ares_destroy(u->aresch);
+		u->aresch = NULL;
+	}
 
 	u->timing.done = get_time_int();
 
