@@ -173,6 +173,7 @@ static void sec_handshake(mcrawler_url *u) {
 		// zkusíme ještě jednou
 		SSL_shutdown(u->ssl);
 		SSL_free(u->ssl);
+		u->ssl = NULL;
 		close(u->sockfd);
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		return;
@@ -1957,7 +1958,10 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 				if (lower_ssl_protocol(u) == 0) {
 					debugf("[%d] SSL handshake timeout (%d ms), closing connection\n", u->index, timeout);
 
-					SSL_free(u->ssl);
+					if (u->ssl) {
+						SSL_free(u->ssl);
+						u->ssl = NULL;
+					}
 					close(u->sockfd);
 					set_atomic_int(&u->state, MCURL_S_GOTIP);
 				}
