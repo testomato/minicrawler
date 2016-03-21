@@ -17,7 +17,6 @@ AC_PROG_LIBTOOL
 
 # Checks for libraries.
 AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares]))
-AC_CHECK_LIB([uriparser], [uriParseUriA], [], AC_MSG_ERROR([please install uriparser]))
 AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([please install zlib]))
 AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv]))
 AC_ARG_WITH([ssl],
@@ -43,5 +42,5 @@ AC_CHECK_FUNC([clock_gettime], [], AC_CHECK_FUNC([gettimeofday], [], AC_MSG_ERRO
 AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday timegm])
 ##AC_CHECK_FUNCS([memmove memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
 
-AC_CONFIG_FILES([Makefile libminicrawler.pc])
+AC_CONFIG_FILES([Makefile libminicrawler.pc libminicrawler-urlparser.pc])
 AC_OUTPUT

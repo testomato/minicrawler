@@ -1,0 +1,11 @@
+prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libminicrawler-urlparser
+Description: WHATWG URL parser in C
+
+Version: @VERSION@
+URL: https://github.com/testomato/minicrawler
+Libs: -L${libdir} -lminicrawler-urlparser
+Cflags: -I${includedir}

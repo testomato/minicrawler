@@ -36,8 +36,8 @@
 # include <openssl/md5.h>
 # include <openssl/err.h>
 #endif
-#include <uriparser/Uri.h>
 
+#include "url/minicrawler-urlparser.h"
 #include "h/string.h"
 #include "h/proto.h"
 #include "h/digcalc.h"
@@ -364,99 +364,75 @@ static int check_proto(mcrawler_url *u);
  * Nastaví proto, host, port a path
  * rawurl musí obsahovat scheme a authority!
  */
-static int set_new_uri(mcrawler_url *u, char *rawurl) {
-	int r;
-	UriUriA *uri;
+static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base) {
+	mcrawler_parser_url *url = (mcrawler_parser_url *)malloc(sizeof(mcrawler_parser_url));
 
-	if (u->uri != NULL) {
-		uriFreeUriMembersA(u->uri);
-		free(u->uri);
-	}
-
-	UriParserStateA state;
-
-	u->uri = uri = (UriUriA *)malloc(sizeof(UriUriA));
-	state.uri = uri;
-
-	if (uriParseUriA(&state, rawurl) != URI_SUCCESS) {
+	if (mcrawler_parser_parse(url, rawurl, base) != MCRAWLER_PARSER_SUCCESS) {
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, rawurl);
 		sprintf(u->error_msg, "Failed to parse URL");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
+		mcrawler_parser_free_url(url);
+		free(url);
 		return 0;
 	}
 
-	if (uri->scheme.first == NULL) {
+	if (!url->scheme[0]) {
 		debugf("[%d] error: url='%s' has no scheme\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no scheme");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
+		mcrawler_parser_free_url(url);
+		free(url);
 		return 0;
 	}
-	SAFE_STRNCPY(u->proto, uri->scheme.first, uri->scheme.afterLast - uri->scheme.first);
+	SAFE_STRCPY(u->proto, url->scheme);
 
 	if (check_proto(u) == -1) {
+		mcrawler_parser_free_url(url);
+		free(url);
 		return 0;
 	}
 
-	if (uri->hostText.first == NULL) {
+	if (url->host == NULL || url->non_relative) {
 		debugf("[%d] error: url='%s' has no host\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no host");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
+		mcrawler_parser_free_url(url);
+		free(url);
 		return 0;
 	}
-	SAFE_STRNCPY(u->host, uri->hostText.first, uri->hostText.afterLast - uri->hostText.first);
 
-	if (uri->portText.first == NULL) {
-		u->port = parse_proto(u->proto);
+	// serialized host in url->host->domain
+	SAFE_STRCPY(u->host, url->host->domain);
+
+	if (url->port) {
+		u->port = url->port;
 	} else {
-		r = sscanf(uri->portText.first, "%d", &u->port);
-		if (r == 0) { // prázdný port
-			u->port = parse_proto(u->proto);
-		}
+		u->port = parse_proto(u->proto);
 	}
 
 	// recompose path + query
 	if (u->path != NULL) free(u->path);
-	u->path = malloc(strlen(rawurl)); // path nebude delší, než celé URL
-	char *p = u->path;
-	if (uri->pathHead != NULL) {
-		UriPathSegmentA *walker = uri->pathHead;
-		do {
-			*p++ = '/';
-			const int chars = (int)(walker->text.afterLast - walker->text.first);
-			memcpy(p, walker->text.first, chars);
-			p += chars;
-			walker = walker->next;
-		} while (walker != NULL);
-	} else {
-		*p++ = '/';
-	}
-	if (uri->query.first != NULL) {
-		*p++ = '?';
-		const int chars = (int)(uri->query.afterLast - uri->query.first);
-		memcpy(p, uri->query.first, chars);
-		p += chars;
-	}
-	*p = '\0';
+	u->path = mcrawler_parser_serialize_path_and_query(url);
 
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 
-	if (uri->hostData.ip4 != NULL) {
+	if (url->host->type == MCRAWLER_PARSER_HOST_IPV4) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
 		u->addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
 		memset(u->addr, 0, sizeof(mcrawler_addr));
-		memcpy(u->addr->ip, uri->hostData.ip4->data, 4);
+		memcpy(u->addr->ip, url->host->ipv4, 4);
 		u->addr->type = AF_INET;
 		u->addr->length = 4;
 		u->addr->next = NULL;
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		debugf("[%d] go directly to ipv4\n", u->index);
-	} else if (uri->hostData.ip6 != NULL) {
+	} else if (url->host->type == MCRAWLER_PARSER_HOST_IPV6) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
 		u->addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
 		memset(u->addr, 0, sizeof(mcrawler_addr));
-		memcpy(u->addr->ip, uri->hostData.ip6->data, 16);
+		memcpy(u->addr->ip, url->host->ipv6, 16);
 		u->addr->type = AF_INET6;
 		u->addr->length = 16;
 		u->addr->next = NULL;
@@ -465,6 +441,12 @@ static int set_new_uri(mcrawler_url *u, char *rawurl) {
 	} else {
 		set_atomic_int(&u->state, MCURL_S_PARSEDURL);
 	}
+
+	if (u->uri != NULL) {
+		mcrawler_parser_free_url(u->uri);
+		free(u->uri);
+	}
+	u->uri = url;
 	return 1;
 }
 
@@ -473,13 +455,7 @@ static int set_new_uri(mcrawler_url *u, char *rawurl) {
  */
 static void parseurl(mcrawler_url *u) {
 	debugf("[%d] Parse url='%s'\n", u->index, u->rawurl);
-	if (!urlencode(u->rawurl)) {
-		debugf("[%d] Not enough memory for urlencode '%s'\n", u->index, u->rawurl);
-		sprintf(u->error_msg, "URL is too long");
-		set_atomic_int(&u->state, MCURL_S_ERROR);
-		return;
-	}
-	if (set_new_uri(u, u->rawurl) == 0) {
+	if (set_new_url(u, u->rawurl, NULL) == 0) {
 		return;
 	}
 }
@@ -1675,78 +1651,12 @@ static void resolvelocation(mcrawler_url *u) {
 
 	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
 
-	if (!urlencode(u->location)) {
-		debugf("[%d] Not enough memory for urlencode '%s'\n", u->index, u->location);
-		sprintf(u->error_msg, "Redirect location is too long");
-		set_atomic_int(&u->state, MCURL_S_ERROR);
+	if (set_new_url(u, u->location, u->uri) == 0) {
 		return;
 	}
 
-	// workaround for uriparser bug with resolving URI "/"
-	if (u->location[0] == '/' && (
-				u->location[1] == 0 ||
-				u->location[1] == '?' ||
-				u->location[1] == '#'
-				)
-	   ) {
-		memmove(u->location + 2, u->location + 1, strlen(u->location));
-		u->location[1] = '.';
-	}
-
-	UriParserStateA state;
-	UriUriA locUri, *uri;
-
-	state.uri = &locUri;
-	if (uriParseUriA(&state, u->location) != URI_SUCCESS) {
-		uriFreeUriMembersA(&locUri);
-
-		debugf("[%d] error: url='%s' failed to parse\n", u->index, u->location);
-		sprintf(u->error_msg, "Failed to parse URL %.200s", u->location);
-		set_atomic_int(&u->state, MCURL_S_ERROR);
-		return;
-	}
-
-	// méně striktní resolvování url ve tvaru http:g
-	// see http://tools.ietf.org/html/rfc3986#section-5 section 5.4.2
-	if (locUri.scheme.first != NULL && locUri.hostText.first == NULL && locUri.pathHead != NULL && locUri.pathHead->text.first != NULL) {
-		locUri.hostText = ((UriUriA *)u->uri)->hostText;
-		locUri.hostData = ((UriUriA *)u->uri)->hostData;
-	}
-
-	uri = (UriUriA *)malloc(sizeof(UriUriA));
-
-	if (uriAddBaseUriA(uri, &locUri, u->uri) != URI_SUCCESS) {
-		uriFreeUriMembersA(&locUri);
-		uriFreeUriMembersA(uri);
-		free(uri);
-
-		debugf("[%d] error: url='%s' failed to resolve\n", u->index, u->location);
-		sprintf(u->error_msg, "Failed to resolve URL %.200s", u->location);
-		set_atomic_int(&u->state, MCURL_S_ERROR);
-		return;
-	}
-
-	uriFreeUriMembersA(&locUri);
-
-	// normalizujeme
-	uriNormalizeSyntaxA(uri);
-
-	int chars;
-	chars = 0;
-	if (u->redirectedto != NULL) free(u->redirectedto);
-	if (uriToStringCharsRequiredA(uri, &chars) != URI_SUCCESS) {
-		debugf("[%d] failed recomposing uri\n", u->index);
-	}
-	u->redirectedto = malloc(chars + 1);
-	if (uriToStringA(u->redirectedto, uri, chars + 1, NULL) != URI_SUCCESS) {
-		debugf("[%d] failed recomposing uri\n", u->index);
-	}
-	uriFreeUriMembersA(uri);
-	free(uri);
-
-	if (set_new_uri(u, u->redirectedto) == 0) {
-		return;
-	}
+	free(u->redirectedto);
+	u->redirectedto = mcrawler_parser_serialize(u->uri, 0);
 
 	if (strcmp(u->host, ohost) == 0) {
 		// muzes se pripojit na tu puvodni IP

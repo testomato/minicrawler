@@ -9,6 +9,7 @@ config.h*
 stamp-h*
 /minicrawler
 /libminicrawler.pc
+/libminicrawler-urlparser.pc
 
 # GNU Build System
 /autom4te.cache
