@@ -1347,7 +1347,8 @@ static void header_callback(mcrawler_url *u, char *name, char *value) {
 		return;
 	}
 
-	if (!strcasecmp(name, "Location") || !strcasecmp(name, "Refresh")) {
+	if ((!strcasecmp(name, "Location") && (u->status >= 300 || u->status < 400)) ||
+			!strcasecmp(name, "Refresh")) {
 		if (!strcasecmp(name, "Refresh")) {
 			if (strncmp(value, "0;url=", 6)) {
 				return;
