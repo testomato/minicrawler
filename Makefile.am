@@ -10,8 +10,19 @@ libminicrawler_la_SOURCES = src/crawler.c src/cert.c src/conv.c src/converthtml2
 libminicrawler_la_LDFLAGS = -version-info 2:0:0
 
 bin_PROGRAMS = minicrawler
+
 minicrawler_SOURCES = src/main.c src/cli.c $(libminicrawler_la_SOURCES)
 minicrawler_CFLAGS = $(AM_CFLAGS)
+
+check_PROGRAMS = test/urlparser
+
+test_urlparser_SOURCES = test/urlparser.c test/json/json.c $(libminicrawler_urlparser_la_SOURCES)
+test_urlparser_CFLAGS = $(AM_CFLAGS)
+test_urlparser_LDFLAGS = -lm
+#test_urlparser_LDADD = libminicrawler-urlparser.la
+
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
+TESTS = test/run
 
 pkginclude_HEADERS = src/url/minicrawler-urlparser.h src/h/minicrawler.h
 pkgconfigdir = $(libdir)/pkgconfig

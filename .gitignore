@@ -7,9 +7,16 @@
 *.la
 config.h*
 stamp-h*
+test-suite.log
 /minicrawler
 /libminicrawler.pc
 /libminicrawler-urlparser.pc
+
+# make check files
+/test/urlparser
+/test/run
+/test/run.log
+/test/run.trs
 
 # GNU Build System
 /autom4te.cache

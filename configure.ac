@@ -14,6 +14,7 @@ if test "${ac_cv_prog_cc_c99}" = "no"; then
 	AC_MSG_ERROR([your compiler does not support ISO Standard C 99])
 fi
 AC_PROG_LIBTOOL
+AC_PROG_AWK
 
 # Checks for libraries.
 AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares]))
@@ -43,4 +44,5 @@ AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday timegm])
 ##AC_CHECK_FUNCS([memmove memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
 
 AC_CONFIG_FILES([Makefile libminicrawler.pc libminicrawler-urlparser.pc])
+AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AC_OUTPUT
