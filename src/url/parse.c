@@ -327,6 +327,7 @@ int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, const char *input
 	if (*p == ':') {
 		// If remaining does not start with ":", syntax violation, return failure.
 		if (p[1] != ':') {
+			debugf("IPv6 syntax violation (5.1) at %s\n", p);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 		// Increase pointer by two.
@@ -339,12 +340,14 @@ Main:
 	while ((c = *p)) {
 		// If piece pointer is eight, syntax violation, return failure.
 		if (p_piece - address == 8) {
+			debugf("IPv6 syntax violation (6.1) at %s\n", p);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 		// If c is ":", run these inner substeps:
 		if (c == ':') {
 			// If compress pointer is non-null, syntax violation, return failure.
 			if (p_compress) {
+				debugf("IPv6 syntax violation (6.2.1) at %s\n", p);
 				return MCRAWLER_PARSER_FAILURE;
 			}
 			// Increase pointer and piece pointer by one, set compress pointer to piece pointer, and then jump to Main.
@@ -365,6 +368,7 @@ Main:
 		case '.':
 			// If length is 0, syntax violation, return failure.
 			if (length == 0) {
+				debugf("IPv6 syntax violation (6.5) at %s\n", p);
 				return MCRAWLER_PARSER_FAILURE;
 			}
 			// Decrease pointer by length.
@@ -376,6 +380,7 @@ Main:
 			p++;
 			// If c is the EOF code point, syntax violation, return failure.
 			if (*p == 0) {
+				debugf("IPv6 syntax violation (6.5) at %s\n", p);
 				return MCRAWLER_PARSER_FAILURE;
 			}
 			break;
@@ -384,6 +389,7 @@ Main:
 		// Anything but the EOF code point
 		default:
 			// Syntax violation, return failure.
+			debugf("IPv6 syntax violation (6.5) at %s\n", p);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 		// Set piece to value.
@@ -399,6 +405,7 @@ Main:
 	// IPv4: If piece pointer is greater than six, syntax violation, return failure.
 IPv4:
 	if (p_piece - address > 6) {
+		debugf("IPv6 syntax violation (8.1) at %s\n", p);
 		return MCRAWLER_PARSER_FAILURE;
 	}
 	// Let dots seen be 0.
@@ -409,6 +416,7 @@ IPv4:
 		uint16_t value = -1;
 		// If c is not an ASCII digit, syntax violation, return failure.
 		if (!is_ascii_digit(c)) {
+			debugf("IPv6 syntax violation (10.2) at %s\n", p);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 		// While c is an ASCII digit, run these subsubsteps:
@@ -420,6 +428,7 @@ IPv4:
 				value = number;
 			// Otherwise, if value is 0, syntax violation, return failure.
 			} else if (value == 0) {
+				debugf("IPv6 syntax violation (10.3.2) at %s\n", p);
 				return MCRAWLER_PARSER_FAILURE;
 			// Otherwise, set value to value × 10 + number.
 			} else {
@@ -429,11 +438,13 @@ IPv4:
 			p++;
 			// If value is greater than 255, syntax violation, return failure.
 			if (value > 255) {
+				debugf("IPv6 syntax violation (10.3.4) at %s\n", p);
 				return MCRAWLER_PARSER_FAILURE;
 			}
 		}
 		// If dots seen is less than 3 and c is not a ".", syntax violation, return failure.
 		if (dots_seen < 3 && c != '.') {
+			debugf("IPv6 syntax violation (10.4) at %s\n", p);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 		// Set piece to piece × 0x100 + value.
@@ -448,6 +459,7 @@ IPv4:
 		}
 		// If dots seen is 3 and c is not the EOF code point, syntax violation, return failure.
 		if (dots_seen == 3 && *p != 0) {
+			debugf("IPv6 syntax violation (10.8) at %s\n", p);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 		// Increase dots seen by one.
@@ -469,6 +481,7 @@ Finale:
 		}
 	// Otherwise, if compress pointer is null and piece pointer is not eight, syntax violation, return failure.
 	} else if (p_piece - address != 8) {
+		debugf("IPv6 syntax violation (12) at %s\n", p);
 		return MCRAWLER_PARSER_FAILURE;
 	}
 	// Return address.
@@ -571,12 +584,14 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 	// If any but the last item in numbers is greater than 255, return failure.
 	for (int i = 0; i < count - 1; i++) {
 		if (numbers[i] > 255) {
+			debugf("IPv4 syntax violation (8) at %s\n", parts[i]);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 	}
 	// If the last item in numbers is greater than or equal to 256^(5 − the number of items in numbers), syntax violation, return failure.
 	if (count > 0 && numbers[count - 1] >= 1LL<<(8*(5-count))) {
 		// count == 0: number cannot be grater than 2^32
+		debugf("IPv4 syntax violation (10) at %s\n", parts[count - 1]);
 		return MCRAWLER_PARSER_FAILURE;
 	}
 	// Let ipv4 be the last item in numbers.
@@ -610,6 +625,7 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 	if (input[0] == '[') {
 		// If input does not end with "]", syntax violation, return failure.
 		if (input[len - 1] != ']') {
+			debugf("Host syntax violation (1.1) for %s\n", input);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 		char *inp = strdup(input + 1);
@@ -626,7 +642,9 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 	char *asciiDomain = domain;
 	// If asciiDomain is failure, return failure.
 	// If asciiDomain contains U+0000, U+0009, U+000A, U+000D, U+0020, "#", "%", "/", ":", "?", "@", "[", "\", or "]", syntax violation, return failure.
-	if (strpbrk(asciiDomain, "\x09\x0A\x09\x20#%/:?@[\\]")) {
+	char *q;
+	if ((q = strpbrk(asciiDomain, "\x09\x0A\x09\x20#%/:?@[\\]"))) {
+		debugf("Host syntax violation (5) for %s at %s\n", input, q);
 		return MCRAWLER_PARSER_FAILURE;
 	}
 	// Let ipv4Host be the result of IPv4 parsing asciiDomain.
@@ -717,7 +735,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					if (!strcmp("file", url->scheme)) {
 						// If remaining does not start with "//", syntax violation.
 						if (p[1] != '/' || p[2] != '/') {
-							debugf("syntax violation at %s\n", p);
+							debugf("syntax violation (scheme 2.5.1) at %s\n", p);
 						}
 						// Set state to file state.
 						state = FILE_STATE;
@@ -749,7 +767,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 			case NO_SCHEME:
 				// If base is null, or base’s non-relative flag is set and c is not "#", syntax violation, return failure.
 				if (!base || (base->non_relative && c != '#')) {
-					debugf("Syntax violation at %s\n", p);
+					debugf("Syntax violation (no scheme 1) at %s\n", p);
 					return MCRAWLER_PARSER_FAILURE;
 				// Otherwise, if base’s non-relative flag is set and c is "#", set url’s scheme to base’s scheme, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, set url’s non-relative flag, and set state to fragment state.
 				} else if (base->non_relative && c == '#') {
@@ -776,7 +794,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					p++;
 				// Otherwise, syntax violation, set state to relative state and decrease pointer by one.
 				} else {
-					debugf("Syntax violation at %s\n", p);
+					debugf("Syntax violation (special relative or authority) at %s\n", p);
 					state = RELATIVE;
 					p--;
 				}
@@ -832,7 +850,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					default:
 						// If url is special and c is "\", syntax violation, set state to relative slash state.
 						if (c == '\\' && is_special(url)) {
-							debugf("Syntax violation at %s\n", p);
+							debugf("Syntax violation (relative) at %s\n", p);
 							state = RELATIVE_SLASH;
 						} else {
 							// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, and then remove url’s path’s last entry, if any.
@@ -857,7 +875,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 				if (c == '/' || (c == '\\' && is_special(url))) {
 					// If c is "\", syntax violation.
 					if (c == '\\') {
-						debugf("Syntax violation at %s\n", p);
+						debugf("Syntax violation (relative slash 1.1) at %s\n", p);
 					}
 					// Set state to special authority ignore slashes state.
 					state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
@@ -878,7 +896,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					p++;
 				// Otherwise, syntax violation, set state to special authority ignore slashes state, and decrease pointer by one.
 				} else {
-					debugf("Syntax violation at %s\n", p);
+					debugf("Syntax violation (special authority slashes) at %s\n", p);
 					state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
 					p--;
 				}
@@ -890,14 +908,14 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					p--;
 				} else {
 					// Otherwise, syntax violation.
-					debugf("Syntax violation at %s\n", p);
+					debugf("Syntax violation (special authority ignore slashes) at %s\n", p);
 				}
 				break;
 			case AUTHORITY:
 				// If c is "@", run these substeps:
 				if (c == '@') {
 					// Syntax violation.
-					debugf("Syntax violation at %s\n", p);
+					debugf("Syntax violation (authority 1.1) at %s\n", p);
 					// If the @ flag is set, prepend "%40" to buffer.
 					if (flag_at) {
 						memmove(buf + 3, buf, bufp);
@@ -1016,7 +1034,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						long port = atol(buf);
 						// If port is greater than 2^16 − 1, syntax violation, return failure.
 						if (port > (1L<<16) - 1) {
-							debugf("Syntax violation at %s\n", p);
+							debugf("Syntax violation (port 2.1.2) at %s\n", p);
 							return MCRAWLER_PARSER_FAILURE;
 						}
 						// Set url’s port to null, if port is url’s scheme’s default port, and to port otherwise.
@@ -1033,7 +1051,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					p--;
 				// Otherwise, syntax violation, return failure.
 				} else {
-					debugf("Syntax violation at %s\n", p);
+					debugf("Syntax violation (port 3) at %s\n", p);
 					return MCRAWLER_PARSER_FAILURE;
 				}
 				break;
@@ -1051,7 +1069,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						break;
 					case '\\':
 						// If c is "\", syntax violation.
-						debugf("Syntax violation at %s\n", p);
+						debugf("Syntax violation (\\) at %s\n", p);
 					case '/':
 						// Set state to file slash state.
 						state = FILE_SLASH;
@@ -1092,7 +1110,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 							// This is a (platform-independent) Windows drive letter quirk.
 						// Otherwise, if base is non-null and base’s scheme is "file", syntax violation.
 						} else if (base && !strcmp(base->scheme, "file")) {
-							debugf("Syntax violation at %s\n", p);
+							debugf("Syntax violation (file otherwise 2) at %s\n", p);
 						}
 						// Set state to path state, and decrease pointer by one.
 						state = PATH;
@@ -1104,7 +1122,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 				if (c == '/' || c == '\\') {
 					// If c is "\", syntax violation.
 					if (c == '\\') {
-						debugf("Syntax violation at %s\n", p);
+						debugf("Syntax violation (\\) at %s\n", p);
 					}
 					// Set state to file host state.
 					state = FILE_HOST;
@@ -1127,7 +1145,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					buf[bufp] = 0;
 					// If buffer is a Windows drive letter, syntax violation, set state to path state.
 					if (is_windows_drive_letter(buf) && buf[2] == 0) {
-						debugf("Syntax violation at %s\n", p);
+						debugf("Syntax violation (file host 1.1) at %s\n", p);
 						state = PATH;
 						// This is a (platform-independent) Windows drive letter quirk. buffer is not reset here and instead used in the path state.
 					// Otherwise, if buffer is the empty string, set state to path start state.
@@ -1158,7 +1176,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 			case PATH_START:
 				// If url is special and c is "\", syntax violation.
 				if (c == '\\' && is_special(url)) {
-					debugf("Syntax violation at %s\n", p);
+					debugf("Syntax violation (\\) at %s\n", p);
 				}
 				// Set state to path state, and if neither c is "/", nor url is special and c is "\", decrease pointer by one.
 				state = PATH;
@@ -1178,7 +1196,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 				) {
 					// If url is special and c is "\", syntax violation.
 					if (c == '\\' && is_special(url)) {
-						debugf("Syntax violation at %s\n", p);
+						debugf("Syntax violation (\\) at %s\n", p);
 					}
 					buf[bufp] = 0;
 					// If buffer is a double-dot path segment, pop url’s path, and then if neither c is "/", nor url is special and c is "\", append the empty string to url’s path.
@@ -1198,7 +1216,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						if (url->path[0] == NULL && !strcmp(url->scheme, "file") && is_windows_drive_letter(buf) && buf[2] == 0) {
 							// If url’s host is non-null, syntax violation.
 							if (url->host) {
-								debugf("Syntax violation at %s\n", p);
+								debugf("Syntax violation (path 1.4.1.1) at %s\n", p);
 								free(url->host);
 							}
 							// Set url’s host to null and replace the second code point in buffer with ":".
