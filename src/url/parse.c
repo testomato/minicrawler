@@ -129,11 +129,12 @@ static inline void percent_encode(char *buf, char c) {
 	sprintf(buf, "%%%2.2X", c);
 }
 
-static void percent_decode(char *output, char *input) {
+static void percent_decode(char *output, const char *input) {
 	// Let output be an empty byte sequence.
 	int outp = 0;
 	// For each byte byte in input, run these steps:
-	char c, *p = input;
+	const char *p = input;
+	char c;
 	while ((c = *p++)) {
 		// If byte is not `%`, append byte to output.
 		if (c != '%') {
@@ -312,7 +313,7 @@ char *mcrawler_parser_serialize(mcrawler_parser_url *url, int exclude_fragment) 
 }
 
 
-int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, char *input) {
+int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, const char *input) {
 	// Let address be a new IPv6 address with its 16-bit pieces initialized to 0.
 	uint16_t address[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 	// Let piece pointer be a pointer into address’s 16-bit pieces, initially zero (pointing to the first 16-bit piece), and let piece be the 16-bit piece it points to.
@@ -320,7 +321,8 @@ int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, char *input) {
 	// Let compress pointer be another pointer into address’s 16-bit pieces, initially null and pointing to nothing.
 	uint16_t *p_compress = NULL;
 	// Let pointer be a pointer into input, initially zero (pointing to the first code point).
-	char c, *p = input;
+	const char *p = input;
+	char c;
 	// If c is ":", run these substeps:
 	if (*p == ':') {
 		// If remaining does not start with ":", syntax violation, return failure.
@@ -525,7 +527,7 @@ static int parse_ipv4_number(uint32_t *number, char *input, int *syntaxViolation
 	return MCRAWLER_PARSER_SUCCESS;
 }
 
-int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, char *input) {
+int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input) {
 	// Let syntaxViolationFlag be unset.
 	int syntaxViolationFlag = 0;
 	// Let parts be input split on ".".
@@ -596,7 +598,7 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, char *input) {
 	return MCRAWLER_PARSER_SUCCESS;
 }
 
-int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, char *input) {
+int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input) {
 	memset(host, 0, sizeof(mcrawler_parser_url_host));
 
 	if (!input) {
@@ -610,9 +612,12 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, char *input) {
 		if (input[len - 1] != ']') {
 			return MCRAWLER_PARSER_FAILURE;
 		}
-		input[len - 1] = 0;
+		char *inp = strdup(input + 1);
+		inp[len - 2] = 0;
 		// Return the result of IPv6 parsing input with its leading "[" and trailing "]" removed.
-		return mcrawler_parser_parse_ipv6(host, input + 1);
+		int r = mcrawler_parser_parse_ipv6(host, input + 1);
+		free(inp);
+		return r;
 	}
 	// Let domain be the result of UTF-8 decode without BOM on the percent decoding of UTF-8 encode on input.
 	char domain[len + 1];
@@ -638,15 +643,17 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, char *input) {
 	host->domain = strdup(asciiDomain);
 	return MCRAWLER_PARSER_SUCCESS;
 }
-int mcrawler_parser_parse(mcrawler_parser_url *url, char *input, mcrawler_parser_url *base)
+int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcrawler_parser_url *base)
 {
 	memset(url, 0, sizeof(*url));
 
-	if (!input) {
+	if (!input_par) {
 		return MCRAWLER_PARSER_FAILURE;
 	}
 
-	size_t len = strlen(input);
+	size_t len = strlen(input_par);
+	char input[len + 1];
+	strcpy(input, input_par);
 
 	// Set url to a new URL.
 	url->scheme = empty(8);

@@ -30,10 +30,10 @@ typedef struct mcrawler_parser_url {
 	void *object;
 } mcrawler_parser_url;
 
-int mcrawler_parser_parse(mcrawler_parser_url *url, char *input, mcrawler_parser_url *base);
-int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, char *input);
-int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, char *input);
-int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, char *input);
+int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input, mcrawler_parser_url *base);
+int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input);
+int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, const char *input);
+int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input);
 void mcrawler_parser_free_url(mcrawler_parser_url *url);
 char *mcrawler_parser_serialize_ipv6(mcrawler_parser_url_host *host);
 char *mcrawler_parser_serialize_ipv4(mcrawler_parser_url_host *host);
