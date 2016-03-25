@@ -7,6 +7,7 @@
 #include <unicode/uidna.h>
 
 #include "minicrawler-urlparser.h"
+#include "alloc.h"
 
 #define debugf(...)   {fprintf(stderr, __VA_ARGS__);}
 
@@ -33,6 +34,21 @@ typedef enum {
 	QUERY,
 	FRAGMENT
 } state;
+
+static inline char *strdupnul(const char *s) {
+	return s ? strdup(s) : NULL;
+}
+
+static inline mcrawler_parser_url_host *dup_host(mcrawler_parser_url_host *host) {
+	if (!host) {
+		return NULL;
+	}
+
+	mcrawler_parser_url_host *new = (mcrawler_parser_url_host *)malloc(sizeof(mcrawler_parser_url_host));
+	memcpy(new, host, sizeof(mcrawler_parser_url_host));
+	new->domain = strdupnul(host->domain);
+	return new;
+}
 
 static void trim_controls_and_space(char *str) {
 	size_t len = strlen(str);
@@ -79,41 +95,10 @@ static inline int is_special(mcrawler_parser_url *url) {
 	return 0;
 }
 
-static inline int pathlen(char **path) {
-	int len = 0;
-	while (*path++) len++;
-	return len;
-}
-
-static inline char **dup_path(char **path) {
-	int len = pathlen(path);
-	char **p = (char **)malloc((len + 1) * sizeof(char *));
-	for (int i = 0; i < len; i++) {
-		p[i] = strdup(path[i]);
-	}
-	p[len] = 0;
-	return p;
-}
-
-static inline mcrawler_parser_url_host *dup_host(mcrawler_parser_url_host *host) {
-	if (host) {
-		mcrawler_parser_url_host *new = (mcrawler_parser_url_host *)malloc(sizeof(mcrawler_parser_url_host));
-		new = host;
-		new->domain = strdupnul(host->domain);
-		return new;
-	} else {
-		return NULL;
-	}
-}
-
 static inline void pop_path(mcrawler_parser_url *url) {
 	// if url’s scheme is not "file" or url’s path does not contain a single string that is a normalized Windows drive letter, remove url’s path’s last string, if any.
-	if (strcmp(url->scheme, "file") || !(pathlen(url->path) == 1 && is_normalized_windows_drive_letter(url->path[0]))) {
-		int len = pathlen(url->path);
-		if (len > 0) {
-			free(url->path[len - 1]);
-			url->path[len - 1] = 0;
-		}
+	if (strcmp(url->scheme, "file") || !(url->path_len == 1 && is_normalized_windows_drive_letter(url->path[0]))) {
+		do_pop_path(url);
 	}
 }
 
@@ -203,54 +188,6 @@ static inline int is_double_dot(char *s) {
 	return !strcmp(s, "..") || !strcasecmp(s, ".%2e") || !strcasecmp(s, "%2e.") || !strcasecmp(s, "%2e%2e");
 }
 
-static inline char *empty(int size) {
-	char *e = (char *)malloc(size ? size : 1024);
-	*e = 0;
-	return e;
-}
-
-static inline void append(char **buf, char c) {
-	size_t len = strlen(*buf);
-	size_t size = sizeof(*buf);
-	if (len + 2 > size) {
-		if (size <= 1) {
-			*buf = realloc(*buf, 1024);
-		} else {
-			*buf = realloc(*buf, 2 * size);
-		}
-	}
-	(*buf)[len] = c;
-	(*buf)[len + 1] = 0;
-}
-
-static inline void append_s(char **buf, char *s) {
-	size_t len = strlen(*buf);
-	size_t size = sizeof(*buf);
-	size_t s_size = strlen(s);
-	if (len + 1 + s_size > size) {
-		if (size <= s_size) {
-			*buf = realloc(*buf, 1024 > len + 1 + s_size ? 1024 : len + 1 + s_size);
-		} else {
-			*buf = realloc(*buf, 2 * size);
-		}
-	}
-	strcpy(*buf + len, s);
-}
-
-static inline void append_path(char ***p_path, char *s) {
-	size_t len = pathlen(*p_path);
-	size_t size = sizeof(*p_path)/sizeof(char *);
-	if (len + 2 > size) {
-		if (size <= 1) {
-			*p_path = (char **)realloc(*p_path, 8 * sizeof(char *));
-		} else {
-			*p_path = (char **)realloc(*p_path, 2 * size * sizeof(char *));
-		}
-	}
-	(*p_path)[len] = strdup(s);
-	(*p_path)[len + 1] = NULL;
-}
-
 
 char *mcrawler_parser_serialize_ipv6(mcrawler_parser_url_host *host) {
 	char straddr[INET6_ADDRSTRLEN];
@@ -301,44 +238,46 @@ char *mcrawler_parser_serialize_path_and_query(mcrawler_parser_url *url) {
 
 char *mcrawler_parser_serialize(mcrawler_parser_url *url, int exclude_fragment) {
 	// Let output be url’s scheme and ":" concatenated.
-	char *output = empty(0);
-	append_s(&output, url->scheme);
-	append(&output, ':');
+	int outp = 0;
+	size_t outsz = 128;
+	char *output = malloc(outsz);
+	append_s(&output, &outsz, &outp, url->scheme);
+	append_c(&output, &outsz, &outp, ':');
 	// If url’s host is non-null:
 	if (url->host) {
 		// Append "//" to output.
-		append_s(&output, "//");
+		append_s(&output, &outsz, &outp, "//");
 		// If url’s username is not the empty string or url’s password is non-null, run these substeps:
 		if (url->username[0] || url->password) {
 			// Append url’s username to output.
-			append_s(&output, url->username);
+			append_s(&output, &outsz, &outp, url->username);
 			// If url’s password is non-null, append ":", followed by url’s password, to output.
 			if (url->password) {
-				append(&output, ':');
-				append_s(&output, url->password);
+				append_c(&output, &outsz, &outp, ':');
+				append_s(&output, &outsz, &outp, url->password);
 			}
 			// Append "@" to output.
-			append(&output, '@');
+			append_c(&output, &outsz, &outp, '@');
 		}
 		// Append url’s host, serialized, to output.
-		append_s(&output, url->host->domain);
+		append_s(&output, &outsz, &outp, url->host->domain);
 		// If url’s port is non-null, append ":" followed by url’s port, serialized, to output.
 		if (url->port_not_null) {
 			char pstr[6]; // port is < 2^16
 			sprintf(pstr, ":%d", url->port);
-			append_s(&output, pstr);
+			append_s(&output, &outsz, &outp, pstr);
 		}
 	// Otherwise, if url’s host is null and url’s scheme is "file", append "//" to output.
 	} else if (!url->host && !strcmp(url->scheme, "file")) {
-		append_s(&output, "//");
+		append_s(&output, &outsz, &outp, "//");
 	}
 	char *path = mcrawler_parser_serialize_path_and_query(url);
-	append_s(&output, path);
+	append_s(&output, &outsz, &outp, path);
 	free(path);
 	// If the exclude fragment flag is unset and url’s fragment is non-null, append "#", followed by url’s fragment, to output.
 	if (!exclude_fragment && url->fragment) {
-		append(&output, '#');
-		append_s(&output, url->fragment);
+		append_c(&output, &outsz, &outp, '#');
+		append_s(&output, &outsz, &outp, url->fragment);
 	}
 	// Return output.
 	return output;
@@ -705,10 +644,9 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 	host->domain = strdup(asciiDomain);
 	return MCRAWLER_PARSER_SUCCESS;
 }
-int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcrawler_parser_url *base)
-{
-	memset(url, 0, sizeof(*url));
 
+int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const mcrawler_parser_url *base)
+{
 	if (!input_par) {
 		return MCRAWLER_PARSER_FAILURE;
 	}
@@ -718,10 +656,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 	strcpy(input, input_par);
 
 	// Set url to a new URL.
-	url->scheme = empty(8);
-	url->username = empty(0);
-	url->path = (char **)malloc(8 * sizeof(char *));
-	url->path[0] = NULL;
+	init_url(url);
 
 	// Remove any leading and trailing C0 controls and space from input.
 	trim_controls_and_space(input);
@@ -772,7 +707,8 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 				// Otherwise, if c is ":", run these substeps:
 				} else if (c == ':') {
 					// Set url’s scheme to buffer.
-					url->scheme = strndup(buf, bufp);
+					buf[bufp] = 0;
+					replace_scheme(url, buf);
 					// Set buffer to the empty string.
 					bufp = 0;
 					// If url’s scheme is "file", run these subsubsteps:
@@ -798,7 +734,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					// Otherwise, set url’s non-relative flag, append an empty string to url’s path, and set state to non-relative path state.
 					} else {
 						url->non_relative = 1;
-						append_path(&url->path, "");
+						append_path(url, "");
 						state = NON_RELATIVE_PATH;
 					}
 				// Otherwise, if state override is not given, set buffer to the empty string, state to no scheme state, and start over (from the first code point in input).
@@ -815,10 +751,10 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					return MCRAWLER_PARSER_FAILURE;
 				// Otherwise, if base’s non-relative flag is set and c is "#", set url’s scheme to base’s scheme, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, set url’s non-relative flag, and set state to fragment state.
 				} else if (base->non_relative && c == '#') {
-					url->scheme = strdup(base->scheme);
-					url->path = dup_path(base->path);
-					url->query = strdup(base->query);
-					url->fragment = empty(0);
+					replace_scheme(url, base->scheme);
+					replace_path(url, (const char **)base->path);
+					url->query = strdupnul(base->query);
+					init_fragment(url);
 					url->non_relative = 1;
 					state = FRAGMENT;
 				// Otherwise, if base’s scheme is not "file", set state to relative state and decrease pointer by one.
@@ -855,17 +791,17 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 				break;
 			case RELATIVE:
 				// Set url’s scheme to base’s scheme, and then, switching on c:
-				url->scheme = strdup(base->scheme);
+				replace_scheme(url, base->scheme);
 				switch (c) {
 					case 0:
 						// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, and url’s query to base’s query.
-						url->username = strdup(base->username);
-						url->password = strdup(base->password);
+						replace_username(url, base->username);
+						url->password = strdupnul(base->password);
 						url->host = dup_host(base->host);
 						url->port = base->port;
 						url->port_not_null = base->port_not_null;
-						url->path = dup_path(base->path);
-						url->query = strdup(base->query);
+						replace_path(url, (const char **)base->path);
+						url->query = strdupnul(base->query);
 						break;
 					case '/':
 						// Set state to relative slash state.
@@ -873,25 +809,25 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						break;
 					case '?':
 						// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, url’s query to the empty string, and state to query state.
-						url->username = strdup(base->username);
-						url->password = strdup(base->password);
+						replace_username(url, base->username);
+						url->password = strdupnul(base->password);
 						url->host = dup_host(base->host);
 						url->port = base->port;
 						url->port_not_null = base->port_not_null;
-						url->path = dup_path(base->path);
-						url->query = empty(0);
+						replace_path(url, (const char **)base->path);
+						init_query(url);
 						state = QUERY;
 						break;
 					case '#':
 						// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, and state to fragment state.
-						url->username = strdup(base->username);
-						url->password = strdup(base->password);
+						replace_username(url, base->username);
+						url->password = strdupnul(base->password);
 						url->host = dup_host(base->host);
 						url->port = base->port;
 						url->port_not_null = base->port_not_null;
-						url->path = dup_path(base->path);
-						url->query = strdup(base->query);
-						url->fragment = empty(0);
+						replace_path(url, (const char **)base->path);
+						url->query = strdupnul(base->query);
+						init_fragment(url);
 						state = FRAGMENT;
 						break;
 					default:
@@ -901,17 +837,13 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 							state = RELATIVE_SLASH;
 						} else {
 							// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, and then remove url’s path’s last entry, if any.
-							url->username = strdup(base->username);
-							url->password = strdup(base->password);
+							replace_username(url, base->username);
+							url->password = strdupnul(base->password);
 							url->host = dup_host(base->host);
 							url->port = base->port;
 							url->port_not_null = base->port_not_null;
-							url->path = dup_path(base->path);
-							len = pathlen(url->path);
-							if (len > 0) {
-								free(url->path[len - 1]);
-								url->path[len - 1] = 0;
-							}
+							replace_path(url, (const char **)base->path);
+							do_pop_path(url);
 							// Set state to path state, and decrease pointer by one.
 							state = PATH;
 							p--;
@@ -929,8 +861,8 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
 				// Otherwise, set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, state to path state, and then, decrease pointer by one.
 				} else {
-					url->username = strdup(base->username);
-					url->password = strdup(base->password);
+					replace_username(url, base->username);
+					url->password = strdupnul(base->password);
 					url->host = dup_host(base->host);
 					url->port = base->port;
 					url->port_not_null = base->port_not_null;
@@ -974,10 +906,12 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					// Set the @ flag.
 					flag_at = 1;
 					// For each codePoint in buffer, run these substeps:
+					int username_p = strlen(url->username);
+					int password_p = url->password ? strlen(url->password) : 0;
 					for (int i = 0; i < bufp; i++) {
 						// If codePoint is ":" and url’s password is null, set url’s password to the empty string and run these substeps for the next code point.
 						if (buf[i] == ':' && !url->password) {
-							url->password = empty(0);
+							init_password(url);
 							continue;
 						}
 						// Let encodedCodePoints be the result of running UTF-8 percent encode codePoint using the userinfo encode set.
@@ -989,7 +923,11 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						}
 						// If url’s password is non-null, append encodedCodePoints to url’s password.
 						// Otherwise, append encodedCodePoints to url’s username.
-						append_s(url->password ? &url->password : &url->username, encodedCodePoints);
+						if (url->password) {
+							append_password(url, &password_p, encodedCodePoints);
+						} else {
+							append_username(url, &username_p, encodedCodePoints);
+						}
 					}
 					// Set buffer to the empty string.
 					bufp = 0;
@@ -1023,6 +961,8 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					buf[bufp] = 0;
 					url->host = (mcrawler_parser_url_host *)malloc(sizeof (mcrawler_parser_url_host));
 					if (mcrawler_parser_parse_host(url->host, buf) == MCRAWLER_PARSER_FAILURE) {
+						free(url->host);
+						url->host = NULL;
 						return MCRAWLER_PARSER_FAILURE;
 					}
 					// Set url’s host to host, buffer to the empty string, and state to port state.
@@ -1046,6 +986,8 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					buf[bufp] = 0;
 					url->host = (mcrawler_parser_url_host *)malloc(sizeof (mcrawler_parser_url_host));
 					if (mcrawler_parser_parse_host(url->host, buf) == MCRAWLER_PARSER_FAILURE) {
+						free(url->host);
+						url->host = NULL;
 						return MCRAWLER_PARSER_FAILURE;
 					}
 					// Set url’s host to host, buffer to the empty string, and state to path start state.
@@ -1107,14 +1049,14 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 				break;
 			case FILE_STATE:
 				// Set url’s scheme to "file", and then, switching on c:
-				url->scheme = strdup("file");
+				replace_scheme(url, "file");
 				switch (c) {
 					case 0:
 						// If base is non-null and base’s scheme is "file", set url’s host to base’s host, url’s path to base’s path, and url’s query to base’s query.
 						if (base && !strcmp(base->scheme, "file")) {
 							url->host = dup_host(base->host);
-							url->path = dup_path(base->path);
-							url->query = strdup(base->query);
+							replace_path(url, (const char **)base->path);
+							url->query = strdupnul(base->query);
 						}
 						break;
 					case '\\':
@@ -1128,8 +1070,8 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						// If base is non-null and base’s scheme is "file", set url’s host to base’s host, url’s path to base’s path, url’s query to the empty string, and state to query state.
 						if (base && !strcmp(base->scheme, "file")) {
 							url->host = dup_host(base->host);
-							url->path = dup_path(base->path);
-							url->query = empty(0);
+							replace_path(url, (const char **)base->path);
+							init_query(url);
 							state = QUERY;
 						}
 						break;
@@ -1137,9 +1079,9 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						// If base is non-null and base’s scheme is "file", set url’s host to base’s host, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, and state to fragment state.
 						if (base && !strcmp(base->scheme, "file")) {
 							url->host = dup_host(base->host);
-							url->path = dup_path(base->path);
-							url->query = strdup(base->query);
-							url->fragment = empty(0);
+							replace_path(url, (const char **)base->path);
+							url->query = strdupnul(base->query);
+							init_fragment(url);
 							state = FRAGMENT;
 						}
 						break;
@@ -1155,7 +1097,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						)) {
 							// then set url’s host to base’s host, url’s path to base’s path, and then pop url’s path.
 							url->host = dup_host(base->host);
-							url->path = dup_path(base->path);
+							replace_path(url, (const char **)base->path);
 							pop_path(url);
 							// This is a (platform-independent) Windows drive letter quirk.
 						// Otherwise, if base is non-null and base’s scheme is "file", syntax violation.
@@ -1179,8 +1121,8 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 				// Otherwise, run these substeps:
 				} else {
 					// If base is non-null, base’s scheme is "file", and base’s path first string is a normalized Windows drive letter, append base’s path first string to url’s path.
-					if (base && !strcmp(base->scheme, "file") && pathlen(base->path) >= 1 && is_normalized_windows_drive_letter(base->path[0])) {
-						append_path(&url->path, base->path[0]);
+					if (base && !strcmp(base->scheme, "file") && base->path_len >= 1 && is_normalized_windows_drive_letter(base->path[0])) {
+						append_path(url, base->path[0]);
 						// This is a (platform-independent) Windows drive letter quirk. Both url’s and base’s host are null under these conditions and therefore not copied.
 					}
 					// Set state to path state, and decrease pointer by one.
@@ -1253,12 +1195,12 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					if (is_double_dot(buf)) {
 						pop_path(url);
 						if (c != '/' && !(c == '\\' && is_special(url))) {
-							append_path(&url->path, "");
+							append_path(url, "");
 						}
 					// Otherwise, if buffer is a single-dot path segment and if neither c is "/", nor url is special and c is "\", append the empty string to url’s path.
 					} else if (is_single_dot(buf)) {
 						if (c != '/' && !(c == '\\' && is_special(url))) {
-							append_path(&url->path, "");
+							append_path(url, "");
 						}
 					// Otherwise, if buffer is not a single-dot path segment, run these subsubsteps:
 					} else {
@@ -1275,18 +1217,18 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 							// This is a (platform-independent) Windows drive letter quirk.
 						}
 						// Append buffer to url’s path.
-						append_path(&url->path, buf);
+						append_path(url, buf);
 					}
 					// Set buffer to the empty string.
 					bufp = 0;
 					// If c is "?", set url’s query to the empty string, and state to query state.
 					if (c == '?') {
-						url->query = empty(0);
+						init_query(url);
 						state = QUERY;
 					}
 					// If c is "#", set url’s fragment to the empty string, and state to fragment state.
 					if (c == '#') {
-						url->fragment = empty(0);
+						init_fragment(url);
 						state = FRAGMENT;
 					}
 				// Otherwise, run these steps:
@@ -1315,11 +1257,11 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 			case NON_RELATIVE_PATH:
 				// If c is "?", set url’s query to the empty string and state to query state.
 				if (c == '?') {
-					url->query = empty(0);
+					init_query(url);
 					state = QUERY;
 				// Otherwise, if c is "#", set url’s fragment to the empty string and state to fragment state.
 				} else if (c == '#') {
-					url->fragment = empty(0);
+					init_fragment(url);
 					state = FRAGMENT;
 				// Otherwise, run these substeps:
 				} else {
@@ -1332,9 +1274,9 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						if (is_simple_encode_set(c)) {
 							char encodedCodePoints[4];
 							percent_encode(encodedCodePoints, c);
-							append_s(&url->path[0], encodedCodePoints);
+							append_path0_s(url, encodedCodePoints);
 						} else {
-							append(&url->path[0], c);
+							append_path0_c(url, c);
 						}
 					}
 				}
@@ -1346,22 +1288,23 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					// If url is not special or url’s scheme is either "ws" or "wss", set encoding to UTF-8.
 					// Set buffer to the result of encoding buffer using encoding.
 					// For each byte in buffer run these subsubsteps:
+					int query_p = strlen(url->query);
 					for (int i = 0; i < bufp; i++) {
 						// If byte is less than 0x21, greater than 0x7E, or is 0x22, 0x23, 0x3C, or 0x3E, append byte, percent encoded, to url’s query.
 						if (buf[i] < 0x21 || buf[i] > 0x7E || buf[i] == 0x22 || buf[i] == 0x23 || buf[i] == 0x3C || buf[i] == 0x3E) {
 							char encodedCodePoints[4];
 							percent_encode(encodedCodePoints, buf[i]);
-							append_s(&url->query, encodedCodePoints);
+							append_query_s(url, &query_p, encodedCodePoints);
 						// Otherwise, append a code point whose value is byte to url’s query.
 						} else {
-							append(&url->query, buf[i]);
+							append_query_c(url, &query_p, buf[i]);
 						}
 					}
 					// Set buffer to the empty string.
 					bufp = 0;
 					// If c is "#", set url’s fragment to the empty string, and state to fragment state.
 					if (c == '#') {
-						url->fragment = empty(0);
+						init_fragment(url);
 						state = FRAGMENT;
 					}
 				// Otherwise, run these substeps:
@@ -1383,7 +1326,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						// If c is not a URL code point and not "%", syntax violation.
 						// If c is "%" and remaining does not start with two ASCII hex digits, syntax violation.
 						// Append c to url’s fragment.
-						append(&url->fragment, c);
+						append_fragment(url, c);
 						// Unfortunately not using percent-encoding is intentional as implementations with majority market share exhibit this behavior.
 				}
 				break;

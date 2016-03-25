@@ -25,13 +25,14 @@ typedef struct mcrawler_parser_url {
 	unsigned int port;
 	int port_not_null;
 	char **path;
+	unsigned int path_len;
 	char *query;
 	char *fragment;
 	int non_relative;
 	void *object;
 } mcrawler_parser_url;
 
-int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input, mcrawler_parser_url *base);
+int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input, const mcrawler_parser_url *base);
 int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input);
 int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, const char *input);
 int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input);
