@@ -130,7 +130,7 @@ static inline void percent_encode(char *buf, char c) {
 	sprintf(buf, "%%%2.2X", c);
 }
 
-static void percent_decode(char *output, const char *input) {
+static void percent_decode(char *output, int *length, const char *input) {
 	// Let output be an empty byte sequence.
 	int outp = 0;
 	// For each byte byte in input, run these steps:
@@ -162,6 +162,7 @@ static void percent_decode(char *output, const char *input) {
 	}
 	// Return output.	
 	output[outp] = 0;
+	*length = outp;
 }
 
 static int domain_to_ascii(char *result, int length, char *domain) {
@@ -665,7 +666,12 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 	}
 	// Let domain be the result of UTF-8 decode without BOM on the percent decoding of UTF-8 encode on input.
 	char domain[len + 1];
-	percent_decode(domain, input);
+	percent_decode(domain, (int *)&len, input);
+	// U+0000 is not allowed in domain (see 5)
+	if (strlen(domain) != len) {
+		debugf("Host parsing failure (5) for %s\n", input);
+		return MCRAWLER_PARSER_FAILURE;
+	}
 	// Let asciiDomain be the result of running domain to ASCII on domain.
 	char asciiDomain[256]; // we will reject asciiDomain longer that 255 chars
 	if (domain_to_ascii(asciiDomain, 256, domain) == MCRAWLER_PARSER_FAILURE) {
