@@ -590,7 +590,7 @@ static void JSON_encode_write_string(struct JSON_encoder_state *pState, const ch
 
 static void JSON_encode_string(struct JSON_encoder_state *pState, struct JSON_Value *pValue) {
     JSON_encode_write_char(pState, '\"');
-    const char *pCh= pValue->string_value;
+    const unsigned char *pCh= (unsigned char *)pValue->string_value;
     for (;*pCh!='\0';++pCh) {
         switch (*pCh) {
             case '\"': JSON_encode_write_string(pState, "\\\""); break;

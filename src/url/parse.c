@@ -44,15 +44,15 @@ static void trim_controls_and_space(char *str) {
 	}
 }
 
-static inline int is_ascii_alpha(char c) {
+static inline int is_ascii_alpha(unsigned char c) {
 	return (0x41 <= c && c <= 0x5A) || (0x61 <= c && c <= 0x7A);
 }
 
-static inline int is_ascii_digit(char c) {
+static inline int is_ascii_digit(unsigned char c) {
 	return 0x30 <= c && c <= 0x39;
 }
 
-static inline int is_ascii_hexdigit(char c) {
+static inline int is_ascii_hexdigit(unsigned char c) {
 	return is_ascii_digit(c) || (0x41 <= c && c <= 0x46) || (0x61 <= c && c <= 0x66);
 }
 
@@ -64,7 +64,7 @@ static inline int is_normalized_windows_drive_letter(char *s) {
 	return is_ascii_alpha(s[0]) && s[1] == ':' && s[3] == 0;
 }
 
-static inline char tolowercase(char c) {
+static inline char tolowercase(unsigned char c) {
 	return c >= 0x41 && c <= 0x5A ? c + (0x61-0x41) : c;
 }
 
@@ -96,10 +96,14 @@ static inline char **dup_path(char **path) {
 }
 
 static inline mcrawler_parser_url_host *dup_host(mcrawler_parser_url_host *host) {
-	mcrawler_parser_url_host *new = (mcrawler_parser_url_host *)malloc(sizeof(mcrawler_parser_url_host));
-	new = host;
-	new->domain = strdup(host->domain);
-	return new;
+	if (host) {
+		mcrawler_parser_url_host *new = (mcrawler_parser_url_host *)malloc(sizeof(mcrawler_parser_url_host));
+		new = host;
+		new->domain = strdupnul(host->domain);
+		return new;
+	} else {
+		return NULL;
+	}
 }
 
 static inline void pop_path(mcrawler_parser_url *url) {
@@ -114,19 +118,19 @@ static inline void pop_path(mcrawler_parser_url *url) {
 }
 
 
-static inline int is_simple_encode_set(char c) {
-	return c < 0x20 && c >= 0x7F;
+static inline int is_simple_encode_set(unsigned char c) {
+	return c < 0x20 || c >= 0x7F;
 }
 
-static inline int is_default_encode_set(char c) {
+static inline int is_default_encode_set(unsigned char c) {
 	return is_simple_encode_set(c) || c == 0x20 || c == '"' || c == '#' || c == '<' || c == '>' || c == '?' || c == '`' || c == '{' || c == '}';
 }
 
-static inline int is_userinfo_encode_set(char c) {
+static inline int is_userinfo_encode_set(unsigned char c) {
 	return is_default_encode_set(c) || c == '/' || c == ':' || c == ';' || c == '=' || c == '@' || c == '[' || c == ']' || c == '\\' || c == '^' || c == '|';
 }
 
-static inline void percent_encode(char *buf, char c) {
+static inline void percent_encode(char *buf, unsigned char c) {
 	sprintf(buf, "%%%2.2X", c);
 }
 
@@ -546,8 +550,9 @@ static int parse_ipv4_number(uint32_t *number, char *input, int *syntaxViolation
 	if (input[0] == 0) {
 		*number = 0;
 		return MCRAWLER_PARSER_SUCCESS;
+	}
 	// Otherwise, if input contains at least two code points and the first code point is "0", run these substeps:
-	} else if (input[0] == '0' && input[1]) {
+	if (R != 16 && input[0] == '0' && input[1]) {
 		// Set syntaxViolationFlag.
 		*syntaxViolationFlag = 1;
 		// Remove the first code point from input.
@@ -586,10 +591,11 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 	}
 	// If the last item in parts is the empty string, set syntaxViolationFlag and remove the last item from parts.
 	if (count <= 5 && strlen(parts[count - 1]) == 0) {
+		syntaxViolationFlag = 1;
 		count--;
 	}
 	// If parts has more than four items, return input.
-	if (count > 4) {
+	if (count > 4 || count == 0) {
 		return MCRAWLER_PARSER_SUCCESS;
 	}
 	// Let numbers be the empty list.
@@ -961,8 +967,8 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					debugf("Syntax violation (authority 1.1) at %s\n", p);
 					// If the @ flag is set, prepend "%40" to buffer.
 					if (flag_at) {
-						memmove(buf + 3, buf, bufp);
-						strcpy(buf, "%40");
+						memmove(buf + 3, buf, bufp + 1);
+						strncpy(buf, "%40", 3);
 						bufp += 3;
 					}
 					// Set the @ flag.
@@ -1071,7 +1077,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					(c == '\\' && is_special(url))
 				) {
 					// If buffer is not the empty string, run these subsubsteps:
-					if (!bufp) {
+					if (bufp) {
 						// Let port be the mathematical integer value that is represented by buffer in radix-10 using ASCII digits for digits with values 0 through 9.
 						buf[bufp] = 0;
 						long port = atol(buf);
@@ -1298,7 +1304,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						if (is_default_encode_set(c)) {
 							char encodedCodePoints[4];
 							percent_encode(encodedCodePoints, c);
-							strcpy(buf, encodedCodePoints);
+							strcpy(buf + bufp, encodedCodePoints);
 							bufp += strlen(encodedCodePoints);
 						} else {
 							buf[bufp++] = c;
