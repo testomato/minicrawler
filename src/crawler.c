@@ -404,7 +404,7 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base)
 	// serialized host in url->host->domain
 	SAFE_STRCPY(u->host, url->host->domain);
 
-	if (url->port) {
+	if (url->port_not_null) {
 		u->port = url->port;
 	} else {
 		u->port = parse_proto(u->proto);

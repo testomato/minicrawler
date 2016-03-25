@@ -318,7 +318,7 @@ char *mcrawler_parser_serialize(mcrawler_parser_url *url, int exclude_fragment) 
 		// Append url’s host, serialized, to output.
 		append_s(&output, url->host->domain);
 		// If url’s port is non-null, append ":" followed by url’s port, serialized, to output.
-		if (url->port) {
+		if (url->port_not_null) {
 			char pstr[6]; // port is < 2^16
 			sprintf(pstr, ":%d", url->port);
 			append_s(&output, pstr);
@@ -850,6 +850,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						url->password = strdup(base->password);
 						url->host = dup_host(base->host);
 						url->port = base->port;
+						url->port_not_null = base->port_not_null;
 						url->path = dup_path(base->path);
 						url->query = strdup(base->query);
 						break;
@@ -863,6 +864,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						url->password = strdup(base->password);
 						url->host = dup_host(base->host);
 						url->port = base->port;
+						url->port_not_null = base->port_not_null;
 						url->path = dup_path(base->path);
 						url->query = empty(0);
 						state = QUERY;
@@ -873,6 +875,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						url->password = strdup(base->password);
 						url->host = dup_host(base->host);
 						url->port = base->port;
+						url->port_not_null = base->port_not_null;
 						url->path = dup_path(base->path);
 						url->query = strdup(base->query);
 						url->fragment = empty(0);
@@ -889,6 +892,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 							url->password = strdup(base->password);
 							url->host = dup_host(base->host);
 							url->port = base->port;
+							url->port_not_null = base->port_not_null;
 							url->path = dup_path(base->path);
 							len = pathlen(url->path);
 							if (len > 0) {
@@ -916,6 +920,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 					url->password = strdup(base->password);
 					url->host = dup_host(base->host);
 					url->port = base->port;
+					url->port_not_null = base->port_not_null;
 					state = PATH;
 					p--;
 				}
@@ -1070,8 +1075,9 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, mcraw
 						}
 						// Set url’s port to null, if port is url’s scheme’s default port, and to port otherwise.
 						if (is_special(url) == port) {
-							url->port = 0;
+							url->port_not_null = 0;
 						} else {
+							url->port_not_null = 1;
 							url->port = port;
 						}
 						// Set buffer to the empty string.

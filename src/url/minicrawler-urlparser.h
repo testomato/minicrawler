@@ -23,6 +23,7 @@ typedef struct mcrawler_parser_url {
 	char *password;
 	mcrawler_parser_url_host *host;
 	unsigned int port;
+	int port_not_null;
 	char **path;
 	char *query;
 	char *fragment;

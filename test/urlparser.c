@@ -51,14 +51,14 @@ int main(int argc, char *argv[]) {
 	if (url.host) {
 		host = malloc(strlen(url.host->domain) + 7);
 		strcpy(host, url.host->domain);
-		if (url.port) {
+		if (url.port_not_null) {
 			sprintf(host + strlen(url.host->domain), ":%d", url.port);
 		}
 	} else {
 		host = strdup("");
 	}
 	char port[6] = "";
-	if (url.port) {
+	if (url.port_not_null) {
 		sprintf(port, "%d", url.port);
 	}
 	char *path = mcrawler_parser_serialize_path_and_query(&url);
