@@ -19,6 +19,7 @@ AC_PROG_AWK
 # Checks for libraries.
 AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares]))
 AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([please install zlib]))
+AC_CHECK_LIB([icuuc], [uidna_nameToASCII_55], [], AC_MSG_ERROR([please install libicu]))
 AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv]))
 AC_ARG_WITH([ssl],
 			[AS_HELP_STRING([--without-ssl], [disable support for https])],

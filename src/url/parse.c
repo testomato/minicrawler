@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <unicode/uidna.h>
 
 #include "minicrawler-urlparser.h"
 
@@ -161,6 +162,32 @@ static void percent_decode(char *output, const char *input) {
 	}
 	// Return output.	
 	output[outp] = 0;
+}
+
+static int domain_to_ascii(char *result, int length, char *domain) {
+	// Let result be the result of running Unicode ToASCII with domain_name set to domain, UseSTD3ASCIIRules set to false, processing_option set to Transitional_Processing, and VerifyDnsLength set to false.
+	if (domain[0] == 0) {
+		result[0] = 0;
+		return MCRAWLER_PARSER_SUCCESS;
+	}
+
+	UErrorCode error = 0;
+	UIDNA *idna = uidna_openUTS46(UIDNA_DEFAULT, &error);
+	if (U_FAILURE(error)) {
+		debugf("Error %s (%d) for %s\n", u_errorName(error), error, domain);
+		return MCRAWLER_PARSER_FAILURE;
+	}
+	error = 0;
+	UIDNAInfo info = UIDNA_INFO_INITIALIZER;
+	uidna_nameToASCII_UTF8(idna, domain, -1, result, length, &info, &error);
+	uidna_close(idna);
+	if (U_SUCCESS(error) && error != U_STRING_NOT_TERMINATED_WARNING && info.errors == 0) {
+		return MCRAWLER_PARSER_SUCCESS;
+	}
+	if (error) {
+		debugf("Error %s (%d) for %s\n", u_errorName(error), error, domain);
+	}
+	return MCRAWLER_PARSER_FAILURE;
 }
 
 static inline int is_single_dot(char *s) {
@@ -639,8 +666,12 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 	char domain[len + 1];
 	percent_decode(domain, input);
 	// Let asciiDomain be the result of running domain to ASCII on domain.
-	char *asciiDomain = domain;
-	// If asciiDomain is failure, return failure.
+	char asciiDomain[256]; // we will reject asciiDomain longer that 255 chars
+	if (domain_to_ascii(asciiDomain, 256, domain) == MCRAWLER_PARSER_FAILURE) {
+		// If asciiDomain is failure, return failure.
+		debugf("Host parsing failure (4) for %s\n", input);
+		return MCRAWLER_PARSER_FAILURE;
+	}
 	// If asciiDomain contains U+0000, U+0009, U+000A, U+000D, U+0020, "#", "%", "/", ":", "?", "@", "[", "\", or "]", syntax violation, return failure.
 	char *q;
 	if ((q = strpbrk(asciiDomain, "\x09\x0A\x09\x20#%/:?@[\\]"))) {
