@@ -378,18 +378,17 @@ Main:
 				return MCRAWLER_PARSER_FAILURE;
 			}
 			// Increase pointer and piece pointer by one, set compress pointer to piece pointer, and then jump to Main.
-			p++; p_piece++; p_compress = p_piece;
+			c = *++p; p_piece++; p_compress = p_piece;
 			goto Main;
 		}
 		// Let value and length be 0.
-		uint16_t value, length = 0;
+		uint16_t value = 0, length = 0;
 		// While length is less than 4 and c is an ASCII hex digit, set value to value × 0x10 + c interpreted as hexadecimal number, and increase pointer and length by one.
 		while (length < 4 && is_ascii_hexdigit(c)) {
 			char temp[2] = {c, 0};
 			value = value * 0x10 + strtol(temp, NULL, 16);
-			p++; length++;
+			c = *++p; length++;
 		}
-		c = *p;
 		// Switching on c:
 		switch (c) {
 		case '.':
@@ -404,7 +403,7 @@ Main:
 			goto IPv4;
 		case ':':
 			// Increase pointer by one.
-			p++;
+			c = *++p;
 			// If c is the EOF code point, syntax violation, return failure.
 			if (*p == 0) {
 				debugf("IPv6 syntax violation (6.5) at %s\n", p);
@@ -440,7 +439,8 @@ IPv4:
 	// While c is not the EOF code point, run these substeps:
 	while ((c = *p)) {
 		// Let value be null.
-		uint16_t value = -1;
+		int value_null = 1;
+		uint16_t value;
 		// If c is not an ASCII digit, syntax violation, return failure.
 		if (!is_ascii_digit(c)) {
 			debugf("IPv6 syntax violation (10.2) at %s\n", p);
@@ -451,8 +451,9 @@ IPv4:
 			// Let number be c interpreted as decimal number.
 			uint16_t number = c - 0x30;
 			// If value is null, set value to number.
-			if (value == -1) {
+			if (value_null) {
 				value = number;
+				value_null = 0;
 			// Otherwise, if value is 0, syntax violation, return failure.
 			} else if (value == 0) {
 				debugf("IPv6 syntax violation (10.3.2) at %s\n", p);
@@ -462,7 +463,7 @@ IPv4:
 				value = value * 10 + number;
 			}
 			// Increase pointer by one.
-			p++;
+			c = *++p;
 			// If value is greater than 255, syntax violation, return failure.
 			if (value > 255) {
 				debugf("IPv6 syntax violation (10.3.4) at %s\n", p);
@@ -482,10 +483,10 @@ IPv4:
 		}
 		// If c is not the EOF code point, increase pointer by one.
 		if (c != 0) {
-			p++;
+			c = *++p;
 		}
 		// If dots seen is 3 and c is not the EOF code point, syntax violation, return failure.
-		if (dots_seen == 3 && *p != 0) {
+		if (dots_seen == 3 && c != 0) {
 			debugf("IPv6 syntax violation (10.8) at %s\n", p);
 			return MCRAWLER_PARSER_FAILURE;
 		}
@@ -658,7 +659,7 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 		char *inp = strdup(input + 1);
 		inp[len - 2] = 0;
 		// Return the result of IPv6 parsing input with its leading "[" and trailing "]" removed.
-		int r = mcrawler_parser_parse_ipv6(host, input + 1);
+		int r = mcrawler_parser_parse_ipv6(host, inp);
 		free(inp);
 		return r;
 	}
