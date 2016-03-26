@@ -463,6 +463,7 @@ Finale:
 	}
 	memcpy(host->ipv6, address, 16);
 	char *ipv6str = mcrawler_parser_serialize_ipv6(host);
+	free(host->domain);
 	host->domain = malloc(strlen(ipv6str) + 3);
 	host->domain[0] = '[';
 	strcpy(host->domain + 1, ipv6str);
@@ -535,6 +536,7 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 	}
 	// If parts has more than four items, return input.
 	if (count > 4 || count == 0) {
+		free(parts[0]);
 		return MCRAWLER_PARSER_SUCCESS;
 	}
 	// Let numbers be the empty list.
@@ -544,12 +546,14 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 		// If part is the empty string, return input.
 		if (strlen(parts[i]) == 0) {
 			// 0..0x300 is a domain, not an IPv4 address.
+			free(parts[0]);
 			return MCRAWLER_PARSER_SUCCESS;
 		}
 		// Let n be the result of parsing part using syntaxViolationFlag.
 		// If n is failure, return input.
 		// Append n to numbers.
 		if (parse_ipv4_number(&numbers[i], parts[i], &syntaxViolationFlag) == MCRAWLER_PARSER_FAILURE) {
+			free(parts[0]);
 			return MCRAWLER_PARSER_SUCCESS;
 		}
 	}
@@ -559,6 +563,7 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 	for (int i = 0; i < count - 1; i++) {
 		if (numbers[i] > 255) {
 			debugf("IPv4 syntax violation (8) at %s\n", parts[i]);
+			free(parts[0]);
 			return MCRAWLER_PARSER_FAILURE;
 		}
 	}
@@ -566,6 +571,7 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 	if (count > 0 && numbers[count - 1] >= 1LL<<(8*(5-count))) {
 		// count == 0: number cannot be grater than 2^32
 		debugf("IPv4 syntax violation (10) at %s\n", parts[count - 1]);
+		free(parts[0]);
 		return MCRAWLER_PARSER_FAILURE;
 	}
 	// Let ipv4 be the last item in numbers.
@@ -583,7 +589,9 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 	host->type = MCRAWLER_PARSER_HOST_IPV4;
 	ipv4 = htonl(ipv4);
 	memcpy(host->ipv4, &ipv4, 4);
+	free(host->domain);
 	host->domain = mcrawler_parser_serialize_ipv4(host);
+	free(parts[0]);
 	return MCRAWLER_PARSER_SUCCESS;
 }
 
@@ -641,6 +649,7 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 
 	// Return asciiDomain if the Unicode flag is unset, and the result of running domain to Unicode on asciiDomain otherwise.
 	host->type = MCRAWLER_PARSER_HOST_DOMAIN;
+	free(host->domain);
 	host->domain = strdup(asciiDomain);
 	return MCRAWLER_PARSER_SUCCESS;
 }
