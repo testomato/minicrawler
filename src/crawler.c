@@ -460,41 +460,12 @@ static void parseurl(mcrawler_url *u) {
 	}
 }
 
-/**
- * Check syntax of domain name
- * @see https://tools.ietf.org/html/rfc1034#section-3.5
- * @see http://tools.ietf.org/html/rfc1123#page-13
- */
-static int checkDomainNameSyntax(const char *domain) {
-	const char *p, *s = domain;
-
-	while (*(p = s++) != 0) {
-		if (*p == '-' && (p == domain || *(p-1) == '.' || *(p+1) == 0 || *(p+1) == '.')) {
-			// dash can be only in the middle of a label
-			return 0;
-		} else if (*p == '.' || *p == '-' || (*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z')) {
-			//ok
-		} else {
-			return 0;
-		}
-	}
-	return 1;
-}
-
 /** spusti preklad pres ares
  */
 static void launchdns(mcrawler_url *u) {
 	int t;
 
 	debugf("[%d] Resolving %s starts\n", u->index, u->host);
-
-	// check syntax
-	if (!checkDomainNameSyntax(u->host)) {
-		debugf("[%d] invalid host!)\n", u->index);
-		sprintf(u->error_msg, "Invalid domain name");
-		set_atomic_int(&u->state, MCURL_S_ERROR);
-		return;
-	}
 
 	struct ares_options opts;
 	opts.timeout = 5000;
