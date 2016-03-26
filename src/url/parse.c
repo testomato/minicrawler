@@ -30,7 +30,7 @@ typedef enum {
 	FILE_HOST,
 	PATH_START,
 	PATH,
-	NON_RELATIVE_PATH,
+	CANNOT_BE_A_BASE_URL_PATH,
 	QUERY,
 	FRAGMENT
 } state;
@@ -205,7 +205,7 @@ char *mcrawler_parser_serialize_path_and_query(mcrawler_parser_url *url) {
 	char *part, **p = url->path;
 	size_t pathlen = 0;
 
-	if (url->non_relative) {
+	if (url->cannot_be_a_base_url) {
 		pathlen = strlen(url->path[0]);
 	} else {
 		while ((part = *p++)) {
@@ -215,7 +215,7 @@ char *mcrawler_parser_serialize_path_and_query(mcrawler_parser_url *url) {
 	char *path = malloc(pathlen + (url->query ? strlen(url->query) + 2 : 0) + 1);
 	int pathp = 0;
 	// If url’s non-relative flag is set, append the first string in url’s path to output.
-	if (url->non_relative) {
+	if (url->cannot_be_a_base_url) {
 		strcpy(path, url->path[0]);
 		pathp += strlen(path);
 	// Otherwise, append "/", followed by the strings in url’s path (including empty strings), separated from each other by "/", to output.
@@ -742,9 +742,9 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 						p++;
 					// Otherwise, set url’s non-relative flag, append an empty string to url’s path, and set state to non-relative path state.
 					} else {
-						url->non_relative = 1;
+						url->cannot_be_a_base_url = 1;
 						append_path(url, "");
-						state = NON_RELATIVE_PATH;
+						state = CANNOT_BE_A_BASE_URL_PATH;
 					}
 				// Otherwise, if state override is not given, set buffer to the empty string, state to no scheme state, and start over (from the first code point in input).
 				} else {
@@ -755,16 +755,16 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 				break;
 			case NO_SCHEME:
 				// If base is null, or base’s non-relative flag is set and c is not "#", syntax violation, return failure.
-				if (!base || (base->non_relative && c != '#')) {
+				if (!base || (base->cannot_be_a_base_url && c != '#')) {
 					debugf("Syntax violation (no scheme 1) at %s\n", p);
 					return MCRAWLER_PARSER_FAILURE;
 				// Otherwise, if base’s non-relative flag is set and c is "#", set url’s scheme to base’s scheme, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, set url’s non-relative flag, and set state to fragment state.
-				} else if (base->non_relative && c == '#') {
+				} else if (base->cannot_be_a_base_url && c == '#') {
 					replace_scheme(url, base->scheme);
 					replace_path(url, (const char **)base->path);
 					url->query = strdupnul(base->query);
 					init_fragment(url);
-					url->non_relative = 1;
+					url->cannot_be_a_base_url = 1;
 					state = FRAGMENT;
 				// Otherwise, if base’s scheme is not "file", set state to relative state and decrease pointer by one.
 				} else if (!base->scheme || strcmp(base->scheme, "file")) {
@@ -1263,7 +1263,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 					}
 				}
 				break;
-			case NON_RELATIVE_PATH:
+			case CANNOT_BE_A_BASE_URL_PATH:
 				// If c is "?", set url’s query to the empty string and state to query state.
 				if (c == '?') {
 					init_query(url);

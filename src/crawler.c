@@ -392,7 +392,7 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base)
 		return 0;
 	}
 
-	if (url->host == NULL || url->non_relative) {
+	if (url->host == NULL || url->cannot_be_a_base_url) {
 		debugf("[%d] error: url='%s' has no host\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no host");
 		set_atomic_int(&u->state, MCURL_S_ERROR);

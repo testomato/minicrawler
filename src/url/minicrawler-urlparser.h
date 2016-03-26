@@ -28,7 +28,7 @@ typedef struct mcrawler_parser_url {
 	unsigned int path_len;
 	char *query;
 	char *fragment;
-	int non_relative;
+	int cannot_be_a_base_url;
 	void *object;
 } mcrawler_parser_url;
 
