@@ -14,7 +14,6 @@ test-suite.log
 
 # make check files
 /test/urlparser
-/test/run
 /test/run.log
 /test/run.trs
 
