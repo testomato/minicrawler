@@ -1,36 +1,87 @@
-minicrawler
+Minicrawler
 ===========
 
-Minicrawler executes HTTP requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread* by opening a socket for each connection. Minicrawler is licensed under the [AGPL license](license.txt).
+Minicrawler parses URLs, executes HTTP requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread* by opening a socket for each connection. The whole Minicrawler suite is licensed under the [AGPL license](license.txt).
 
-## Usage
+## URL Parser Library (libminicrawler-urlparser)
+
+[WHATWG URL Standard](https://url.spec.whatwg.org/) compliant parsing library written in C. It is fast and has only one external dependency – libicu.
+The library is licensed under the [AGPL license](license.txt).
+
+### Usage
 
 ```c
-#include <minicrawler/minicrawler.h>
+#include <minicrawler/minicrawler-urlparser.h>
 
-static void onfinish(mcrawler_url *url, void *arg) {
-	printf("%d: Status: %d\n", url->index, url->status);
-}
+/**
+ * First argument input URL, second (optional) base URL
+ */
+int main(int argc, char *argv[]) {
+	if (argc < 2) {
+		return 2;
+	}
 
-void main() {
-	mcrawler_url url;
-	mcrawler_url *urls[] = {&url, NULL};
-	mcrawler_settings settings;
-	memset(&url, 0, sizeof(mcrawler_url));
-	mcrawler_init_url(&url, "http://example.com");
-	mcrawler_init_settings(&settings);
-	mcrawler_go(urls, &settings, &onfinish, NULL);
+	char *input = argv[1];
+	char *base = NULL;
+	if (argc > 2) {
+		base = argv[2];
+	}
+	
+	mcrawler_parser_url url, *base_url = NULL;
+
+	if (base) {
+		base_url = (mcrawler_parser_url *)malloc(sizeof(mcrawler_parser_url));
+		if (mcrawler_parser_parse(base_url, base, NULL) == MCRAWLER_PARSER_FAILURE) {
+			printf("Invalid base URL\n");
+			return 1;
+		}
+	}
+
+	if (mcrawler_parser_parse(&url, input, base_url) == MCRAWLER_PARSER_FAILURE) {
+		printf("Invalid URL\n");
+		return 1;
+	}
+
+	printf("Result: %s\n", mcrawler_parser_serialize(&url, 0));
+	return 0;
 }
 ```
 
-## Command line API
+More in [test/urlparser.c](test/urlparser.c).
+
+
+## Minicrawler Library (libminicrawler) Usage
+
+```c
+#include <stdio.h>
+#include <minicrawler/minicrawler.h>
+
+static void onfinish(mcrawler_url *url, void *arg) {
+    printf("%d: Status: %d\n", url->index, url->status);
+}
+
+void main() {
+    mcrawler_url url[2];
+    mcrawler_url *urls[] = {&url[0], &url[1], NULL};
+    mcrawler_settings settings;
+    memset(&url[0], 0, sizeof(mcrawler_url));
+    memset(&url[1], 0, sizeof(mcrawler_url));
+    mcrawler_init_url(&url[0], "http://example.com");
+    url[0].index = 0;
+    mcrawler_init_url(&url[1], "http://example.com");
+    url[1].index = 1;
+    mcrawler_init_settings(&settings);
+    mcrawler_go(urls, &settings, &onfinish, NULL);
+}
+```
+
+## Minicrawler Binary Usage
+
+`minicrawler [options] [urloptions] url [[url2options] url2]...`
 
 ### Options
 
 ```
-Usage:   minicrawler [options] [urloptions] url [[url2options] url2]...
-
-Where
    options:
          -6         resolve host to IPv6 address only
          -8         convert from page encoding to UTF-8
@@ -53,12 +104,10 @@ Where
          -P STRING  HTTP POST parameters
          -X STRING  custom request HTTP method, no validation performed (max 15 bytes)
 ```
-Options can be get by calling minicrawler without any options.
 
+### Output header
 
-### Output headers
-
-Minicrawler puts its own headers into an output with the following meaning
+Minicrawler prepends its own header into the output with the following meaning
 
  * **URL**: Requested URL
  * **Redirected-To**: Final absolute URL
@@ -76,36 +125,37 @@ Minicrawler puts its own headers into an output with the following meaning
  * **Error-msg**: Error message in case of error (negative Status)
  * **Content-type**: Correct content type of outputed content
  * **WWW-Authenticate**: WWW-Authenticate header
- * **Cookies**: Number of cookies followed by that number of lines of parsed cookies in Netscape/Mozilla file format
+ * **Cookies**: Number of cookies followed by that number of lines of parsed cookies in [Netscape/Mozilla file format](http://www.cookiecentral.com/faq/#3.5)
  * **Downtime**: Length of an interval between time of the first connection and time of the last received byte; time of the start of the first connection
  * **Timing**: Timing of request (DNS lookup, Initial connection, SSL, Request, Waiting, Content download, Total)
  * **Index**: Index of URL from command line
 
-## 3rd party libraries
+## Dependencies
 
- * asynchronous hostname resolving - [c-ares](http://c-ares.haxx.se/)
- * gzipped content - [zlib](http://zlib.net/)
- * URL parsing and resolving - [uriparser](http://uriparser.sourceforge.net/)
+ * Asynchronous hostname resolving - [c-ares](http://c-ares.haxx.se/)
+ * Gzip decoding - [zlib](http://zlib.net/)
  * TLS/SSL - [OpenSSL](https://www.openssl.org/)
+ * Unicode processing - [ICU](http://site.icu-project.org/)
 
 ## Build
 
-Tested platforms: Debian Linux, OS X
+Tested platforms: Debian Linux, Red Hat Linux, OS X.
 
-Install following dependencies (including header files):
+Install following dependencies (including header files, i.e. dev packages):
  * c-ares
  * zlib1g
- * uriparser
+ * icu
  * OpenSSL (optional)
 
-On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev liburiparser-dev libssl-dev`
+On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev`
 
-On OS X with homebrew run `brew install c-ares zlib uriparser openssl`
+On OS X with homebrew run `brew install c-ares zlib icu openssl`
 
 Then run
 ```bash
 ./autogen.sh
-./configure
+./configure [--without-ssl]
 make
+[make check]
 sudo make install
 ```
