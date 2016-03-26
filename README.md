@@ -132,10 +132,10 @@ Minicrawler prepends its own header into the output with the following meaning
 
 ## Dependencies
 
- * Asynchronous hostname resolving - [c-ares](http://c-ares.haxx.se/)
- * Gzip decoding - [zlib](http://zlib.net/)
- * TLS/SSL - [OpenSSL](https://www.openssl.org/)
- * Unicode processing - [ICU](http://site.icu-project.org/)
+ * Asynchronous hostname resolving – [c-ares](http://c-ares.haxx.se/)
+ * Gzip decoding – [zlib](http://zlib.net/)
+ * TLS/SSL – [OpenSSL](https://www.openssl.org/)
+ * Unicode processing – [ICU](http://site.icu-project.org/)
 
 ## Build
 
@@ -159,3 +159,10 @@ make
 [make check]
 sudo make install
 ```
+
+## Users
+
+ * [Testomato](https://testomato.com) – A simple website monitoring tool
+ * [Flowreader](https://flowreader.com/) – A modern reader with a social twist
+ * [add me here](mailto:jan.prachar@wikidi.com)
+
