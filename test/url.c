@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -41,44 +40,19 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 
-	// see https://url.spec.whatwg.org/#api
-	char *href = mcrawler_url_serialize_url(&url, 0);
-	char protocol[strlen(url.scheme) + 2];
-	strcpy(protocol, url.scheme); strcat(protocol, ":");
-	char *password = url.password ? url.password : strdup("");
-	char *hostname = url.host ? url.host->domain : strdup("");
-	char *host;
-	if (url.host) {
-		host = malloc(strlen(url.host->domain) + 7);
-		strcpy(host, url.host->domain);
-		if (url.port_not_null) {
-			sprintf(host + strlen(url.host->domain), ":%d", url.port);
-		}
-	} else {
-		host = strdup("");
-	}
-	char port[6] = "";
-	if (url.port_not_null) {
-		sprintf(port, "%d", url.port);
-	}
-	char *path = mcrawler_url_serialize_path_and_query(&url);
-	*(strchrnul(path, '?')) = 0;
-	char query[url.query ? strlen(url.query) + 2 : 1];
-	if (url.query && url.query[0]) {
-		strcpy(query, "?"); strcat(query, url.query);
-	} else {
-		query[0] = 0;
-	}
-	char fragment[url.fragment ? strlen(url.fragment) + 2 : 1];
-	if (url.fragment && url.fragment[0]) {
-		strcpy(fragment, "#"); strcat(fragment, url.fragment);
-	} else {
-		fragment[0] = 0;
-	}
+	char *href = mcrawler_url_get_href(&url);
+	char *protocol = mcrawler_url_get_protocol(&url);
+	char *username = mcrawler_url_get_username(&url);
+	char *password = mcrawler_url_get_password(&url);
+	char *hostname = mcrawler_url_get_hostname(&url);
+	char *host = mcrawler_url_get_host(&url);
+	char *port = mcrawler_url_get_port(&url);
+	char *pathname = mcrawler_url_get_pathname(&url);
+	char *search = mcrawler_url_get_search(&url);
+	char *hash = mcrawler_url_get_hash(&url);
 
-	printf("{\"input\": %s, \"base\": %s, \"href\": %s, \"protocol\": %s, \"username\": %s, \"password\": %s, \"host\": %s, \"hostname\": %s, \"port\": %s, \"pathname\": %s, \"search\": %s, \"hash\": %s}", encode(input), encode(base), encode(href), encode(protocol), encode(url.username), encode(password), encode(host), encode(hostname), encode(port), encode(path), encode(query), encode(fragment));
+	printf("{\"input\": %s, \"base\": %s, \"href\": %s, \"protocol\": %s, \"username\": %s, \"password\": %s, \"host\": %s, \"hostname\": %s, \"port\": %s, \"pathname\": %s, \"search\": %s, \"hash\": %s}", encode(input), encode(base), encode(href), encode(protocol), encode(username), encode(password), encode(host), encode(hostname), encode(port), encode(pathname), encode(search), encode(hash));
 
  
 	exit(0);
 }
-

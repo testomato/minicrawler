@@ -3,7 +3,7 @@ DEFAULT_INCLUDES =
 
 lib_LTLIBRARIES = libminicrawler-url.la libminicrawler.la
 
-libminicrawler_url_la_SOURCES = src/url/parse.c src/url/serialize.c src/url/alloc.c
+libminicrawler_url_la_SOURCES = src/url/parse.c src/url/serialize.c src/url/api.c src/url/alloc.c
 libminicrawler_url_la_LDFLAGS = -version-info 1:0:0
 
 libminicrawler_la_SOURCES = src/crawler.c src/cert.c src/conv.c src/converthtml2text.c src/entities.c src/inflate.c src/time.c src/malloc.c src/base64.c src/digcalc.c src/cookies.c src/tpl/tpl.c src/serialize.c src/memory.c $(libminicrawler_url_la_SOURCES)

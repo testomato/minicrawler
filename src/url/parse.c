@@ -645,7 +645,7 @@ int mcrawler_url_parse(mcrawler_url_url *url, const char *input_par, const mcraw
 					} else if (p[1] == '/') {
 						state = PATH_OR_AUTHORITY;
 						p++;
-					// Otherwise, set url’s non-relative flag, append an empty string to url’s path, and set state to non-relative path state.
+					// Otherwise, set url’s cannot-be-a-base-URL flag, append an empty string to url’s path, and set state to cannot-be-a-base-URL path state.
 					} else {
 						url->cannot_be_a_base_url = 1;
 						append_path(url, "");
@@ -659,11 +659,11 @@ int mcrawler_url_parse(mcrawler_url_url *url, const char *input_par, const mcraw
 				}
 				break;
 			case NO_SCHEME:
-				// If base is null, or base’s non-relative flag is set and c is not "#", syntax violation, return failure.
+				// If base is null, or base’s cannot-be-a-base-URL flag is set and c is not "#", syntax violation, return failure.
 				if (!base || (base->cannot_be_a_base_url && c != '#')) {
 					debugf("Syntax violation (no scheme 1) at %s\n", p);
 					return MCRAWLER_URL_FAILURE;
-				// Otherwise, if base’s non-relative flag is set and c is "#", set url’s scheme to base’s scheme, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, set url’s non-relative flag, and set state to fragment state.
+				// Otherwise, if base’s cannot-be-a-base-URL flag is set and c is "#", set url’s scheme to base’s scheme, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, set url’s cannot-be-a-base-URL flag, and set state to fragment state.
 				} else if (base->cannot_be_a_base_url && c == '#') {
 					replace_scheme(url, base->scheme);
 					replace_path(url, (const char **)base->path);
