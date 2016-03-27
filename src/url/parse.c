@@ -6,7 +6,7 @@
 #include <arpa/inet.h>
 #include <unicode/uidna.h>
 
-#include "minicrawler-urlparser.h"
+#include "minicrawler-url.h"
 #include "alloc.h"
 
 #define debugf(...)   {fprintf(stderr, __VA_ARGS__);}
@@ -39,13 +39,13 @@ static inline char *strdupnul(const char *s) {
 	return s ? strdup(s) : NULL;
 }
 
-static inline mcrawler_parser_url_host *dup_host(mcrawler_parser_url_host *host) {
+static inline mcrawler_url_host *dup_host(mcrawler_url_host *host) {
 	if (!host) {
 		return NULL;
 	}
 
-	mcrawler_parser_url_host *new = (mcrawler_parser_url_host *)malloc(sizeof(mcrawler_parser_url_host));
-	memcpy(new, host, sizeof(mcrawler_parser_url_host));
+	mcrawler_url_host *new = (mcrawler_url_host *)malloc(sizeof(mcrawler_url_host));
+	memcpy(new, host, sizeof(mcrawler_url_host));
 	new->domain = strdupnul(host->domain);
 	return new;
 }
@@ -84,7 +84,7 @@ static inline char tolowercase(unsigned char c) {
 	return c >= 0x41 && c <= 0x5A ? c + (0x61-0x41) : c;
 }
 
-static inline int is_special(mcrawler_parser_url *url) {
+static inline int is_special(mcrawler_url_url *url) {
 	if (!strcmp("http", url->scheme)) return 80;
 	if (!strcmp("https", url->scheme)) return 443;
 	if (!strcmp("ftp", url->scheme)) return 21;
@@ -95,7 +95,7 @@ static inline int is_special(mcrawler_parser_url *url) {
 	return 0;
 }
 
-static inline void pop_path(mcrawler_parser_url *url) {
+static inline void pop_path(mcrawler_url_url *url) {
 	// if url’s scheme is not "file" or url’s path does not contain a single string that is a normalized Windows drive letter, remove url’s path’s last string, if any.
 	if (strcmp(url->scheme, "file") || !(url->path_len == 1 && is_normalized_windows_drive_letter(url->path[0]))) {
 		do_pop_path(url);
@@ -158,26 +158,26 @@ static int domain_to_ascii(char *result, int length, char *domain) {
 	// Let result be the result of running Unicode ToASCII with domain_name set to domain, UseSTD3ASCIIRules set to false, processing_option set to Transitional_Processing, and VerifyDnsLength set to false.
 	if (domain[0] == 0) {
 		result[0] = 0;
-		return MCRAWLER_PARSER_SUCCESS;
+		return MCRAWLER_URL_SUCCESS;
 	}
 
 	UErrorCode error = 0;
 	UIDNA *idna = uidna_openUTS46(UIDNA_DEFAULT, &error);
 	if (U_FAILURE(error)) {
 		debugf("Error %s (%d) for %s\n", u_errorName(error), error, domain);
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	error = 0;
 	UIDNAInfo info = UIDNA_INFO_INITIALIZER;
 	uidna_nameToASCII_UTF8(idna, domain, -1, result, length, &info, &error);
 	uidna_close(idna);
 	if (U_SUCCESS(error) && error != U_STRING_NOT_TERMINATED_WARNING && info.errors == 0) {
-		return MCRAWLER_PARSER_SUCCESS;
+		return MCRAWLER_URL_SUCCESS;
 	}
 	if (error) {
 		debugf("Error %s (%d) for %s\n", u_errorName(error), error, domain);
 	}
-	return MCRAWLER_PARSER_FAILURE;
+	return MCRAWLER_URL_FAILURE;
 }
 
 static inline int is_single_dot(char *s) {
@@ -189,102 +189,7 @@ static inline int is_double_dot(char *s) {
 }
 
 
-char *mcrawler_parser_serialize_ipv6(mcrawler_parser_url_host *host) {
-	char straddr[INET6_ADDRSTRLEN];
-	inet_ntop(AF_INET6, host->ipv6, straddr, sizeof(straddr));
-	return strdup(straddr);
-}
-
-char *mcrawler_parser_serialize_ipv4(mcrawler_parser_url_host *host) {
-	char straddr[INET_ADDRSTRLEN];
-	inet_ntop(AF_INET, host->ipv4, straddr, sizeof(straddr));
-	return strdup(straddr);
-}
-
-char *mcrawler_parser_serialize_path_and_query(mcrawler_parser_url *url) {
-	char *part, **p = url->path;
-	size_t pathlen = 0;
-
-	if (url->cannot_be_a_base_url) {
-		pathlen = strlen(url->path[0]);
-	} else {
-		while ((part = *p++)) {
-			pathlen += strlen(part) + 1;
-		}
-	}
-	char *path = malloc(pathlen + (url->query ? strlen(url->query) + 2 : 0) + 1);
-	int pathp = 0;
-	// If url’s non-relative flag is set, append the first string in url’s path to output.
-	if (url->cannot_be_a_base_url) {
-		strcpy(path, url->path[0]);
-		pathp += strlen(path);
-	// Otherwise, append "/", followed by the strings in url’s path (including empty strings), separated from each other by "/", to output.
-	} else {
-		p = url->path;
-		while ((part = *p++)) {
-			path[pathp++] = '/';
-			strcpy(path + pathp, part);
-			pathp += strlen(part);
-		}
-	}
-	// If url’s query is non-null, append "?", followed by url’s query, to output.
-	if (url->query) {
-		path[pathp++] = '?';
-		strcpy(path + pathp, url->query);
-	}
-
-	return path;
-}
-
-char *mcrawler_parser_serialize(mcrawler_parser_url *url, int exclude_fragment) {
-	// Let output be url’s scheme and ":" concatenated.
-	int outp = 0;
-	size_t outsz = 128;
-	char *output = malloc(outsz);
-	append_s(&output, &outsz, &outp, url->scheme);
-	append_c(&output, &outsz, &outp, ':');
-	// If url’s host is non-null:
-	if (url->host) {
-		// Append "//" to output.
-		append_s(&output, &outsz, &outp, "//");
-		// If url’s username is not the empty string or url’s password is non-null, run these substeps:
-		if (url->username[0] || url->password) {
-			// Append url’s username to output.
-			append_s(&output, &outsz, &outp, url->username);
-			// If url’s password is non-null, append ":", followed by url’s password, to output.
-			if (url->password) {
-				append_c(&output, &outsz, &outp, ':');
-				append_s(&output, &outsz, &outp, url->password);
-			}
-			// Append "@" to output.
-			append_c(&output, &outsz, &outp, '@');
-		}
-		// Append url’s host, serialized, to output.
-		append_s(&output, &outsz, &outp, url->host->domain);
-		// If url’s port is non-null, append ":" followed by url’s port, serialized, to output.
-		if (url->port_not_null) {
-			char pstr[6]; // port is < 2^16
-			sprintf(pstr, ":%d", url->port);
-			append_s(&output, &outsz, &outp, pstr);
-		}
-	// Otherwise, if url’s host is null and url’s scheme is "file", append "//" to output.
-	} else if (!url->host && !strcmp(url->scheme, "file")) {
-		append_s(&output, &outsz, &outp, "//");
-	}
-	char *path = mcrawler_parser_serialize_path_and_query(url);
-	append_s(&output, &outsz, &outp, path);
-	free(path);
-	// If the exclude fragment flag is unset and url’s fragment is non-null, append "#", followed by url’s fragment, to output.
-	if (!exclude_fragment && url->fragment) {
-		append_c(&output, &outsz, &outp, '#');
-		append_s(&output, &outsz, &outp, url->fragment);
-	}
-	// Return output.
-	return output;
-}
-
-
-int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, const char *input) {
+int mcrawler_url_parse_ipv6(mcrawler_url_host *host, const char *input) {
 	// Let address be a new IPv6 address with its 16-bit pieces initialized to 0.
 	uint16_t address[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 	// Let piece pointer be a pointer into address’s 16-bit pieces, initially zero (pointing to the first 16-bit piece), and let piece be the 16-bit piece it points to.
@@ -299,7 +204,7 @@ int mcrawler_parser_parse_ipv6(mcrawler_parser_url_host *host, const char *input
 		// If remaining does not start with ":", syntax violation, return failure.
 		if (p[1] != ':') {
 			debugf("IPv6 syntax violation (5.1) at %s\n", p);
-			return MCRAWLER_PARSER_FAILURE;
+			return MCRAWLER_URL_FAILURE;
 		}
 		// Increase pointer by two.
 		p += 2;
@@ -312,14 +217,14 @@ Main:
 		// If piece pointer is eight, syntax violation, return failure.
 		if (p_piece - address == 8) {
 			debugf("IPv6 syntax violation (6.1) at %s\n", p);
-			return MCRAWLER_PARSER_FAILURE;
+			return MCRAWLER_URL_FAILURE;
 		}
 		// If c is ":", run these inner substeps:
 		if (c == ':') {
 			// If compress pointer is non-null, syntax violation, return failure.
 			if (p_compress) {
 				debugf("IPv6 syntax violation (6.2.1) at %s\n", p);
-				return MCRAWLER_PARSER_FAILURE;
+				return MCRAWLER_URL_FAILURE;
 			}
 			// Increase pointer and piece pointer by one, set compress pointer to piece pointer, and then jump to Main.
 			c = *++p; p_piece++; p_compress = p_piece;
@@ -339,7 +244,7 @@ Main:
 			// If length is 0, syntax violation, return failure.
 			if (length == 0) {
 				debugf("IPv6 syntax violation (6.5) at %s\n", p);
-				return MCRAWLER_PARSER_FAILURE;
+				return MCRAWLER_URL_FAILURE;
 			}
 			// Decrease pointer by length.
 			p -= length;
@@ -351,7 +256,7 @@ Main:
 			// If c is the EOF code point, syntax violation, return failure.
 			if (*p == 0) {
 				debugf("IPv6 syntax violation (6.5) at %s\n", p);
-				return MCRAWLER_PARSER_FAILURE;
+				return MCRAWLER_URL_FAILURE;
 			}
 			break;
 		case 0:
@@ -360,7 +265,7 @@ Main:
 		default:
 			// Syntax violation, return failure.
 			debugf("IPv6 syntax violation (6.5) at %s\n", p);
-			return MCRAWLER_PARSER_FAILURE;
+			return MCRAWLER_URL_FAILURE;
 		}
 		// Set piece to value.
 		*p_piece = value;
@@ -376,7 +281,7 @@ Main:
 IPv4:
 	if (p_piece - address > 6) {
 		debugf("IPv6 syntax violation (8.1) at %s\n", p);
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	// Let dots seen be 0.
 	int dots_seen = 0;
@@ -388,7 +293,7 @@ IPv4:
 		// If c is not an ASCII digit, syntax violation, return failure.
 		if (!is_ascii_digit(c)) {
 			debugf("IPv6 syntax violation (10.2) at %s\n", p);
-			return MCRAWLER_PARSER_FAILURE;
+			return MCRAWLER_URL_FAILURE;
 		}
 		// While c is an ASCII digit, run these subsubsteps:
 		while (is_ascii_digit(c = *p)) {
@@ -401,7 +306,7 @@ IPv4:
 			// Otherwise, if value is 0, syntax violation, return failure.
 			} else if (value == 0) {
 				debugf("IPv6 syntax violation (10.3.2) at %s\n", p);
-				return MCRAWLER_PARSER_FAILURE;
+				return MCRAWLER_URL_FAILURE;
 			// Otherwise, set value to value × 10 + number.
 			} else {
 				value = value * 10 + number;
@@ -411,13 +316,13 @@ IPv4:
 			// If value is greater than 255, syntax violation, return failure.
 			if (value > 255) {
 				debugf("IPv6 syntax violation (10.3.4) at %s\n", p);
-				return MCRAWLER_PARSER_FAILURE;
+				return MCRAWLER_URL_FAILURE;
 			}
 		}
 		// If dots seen is less than 3 and c is not a ".", syntax violation, return failure.
 		if (dots_seen < 3 && c != '.') {
 			debugf("IPv6 syntax violation (10.4) at %s\n", p);
-			return MCRAWLER_PARSER_FAILURE;
+			return MCRAWLER_URL_FAILURE;
 		}
 		// Set piece to piece × 0x100 + value.
 		*p_piece = *p_piece * 0x100 + value;
@@ -432,7 +337,7 @@ IPv4:
 		// If dots seen is 3 and c is not the EOF code point, syntax violation, return failure.
 		if (dots_seen == 3 && c != 0) {
 			debugf("IPv6 syntax violation (10.8) at %s\n", p);
-			return MCRAWLER_PARSER_FAILURE;
+			return MCRAWLER_URL_FAILURE;
 		}
 		// Increase dots seen by one.
 		dots_seen++;
@@ -454,21 +359,21 @@ Finale:
 	// Otherwise, if compress pointer is null and piece pointer is not eight, syntax violation, return failure.
 	} else if (p_piece - address != 8) {
 		debugf("IPv6 syntax violation (12) at %s\n", p);
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	// Return address.
-	host->type = MCRAWLER_PARSER_HOST_IPV6;
+	host->type = MCRAWLER_URL_HOST_IPV6;
 	for (int i = 0; i < 8; i++) {
 		address[i] = htons(address[i]);
 	}
 	memcpy(host->ipv6, address, 16);
-	char *ipv6str = mcrawler_parser_serialize_ipv6(host);
+	char *ipv6str = mcrawler_url_serialize_ipv6(host);
 	free(host->domain);
 	host->domain = malloc(strlen(ipv6str) + 3);
 	host->domain[0] = '[';
 	strcpy(host->domain + 1, ipv6str);
 	strcpy(host->domain + 1 + strlen(ipv6str), "]");
-	return MCRAWLER_PARSER_SUCCESS;
+	return MCRAWLER_URL_SUCCESS;
 }
 
 static int parse_ipv4_number(uint32_t *number, char *input, int *syntaxViolationFlag) {
@@ -489,7 +394,7 @@ static int parse_ipv4_number(uint32_t *number, char *input, int *syntaxViolation
 	// If input is the empty string, return zero.
 	if (input[0] == 0) {
 		*number = 0;
-		return MCRAWLER_PARSER_SUCCESS;
+		return MCRAWLER_URL_SUCCESS;
 	}
 	// Otherwise, if input contains at least two code points and the first code point is "0", run these substeps:
 	if (R != 16 && input[0] == '0' && input[1]) {
@@ -503,18 +408,18 @@ static int parse_ipv4_number(uint32_t *number, char *input, int *syntaxViolation
 	}
 	// If input contains a code point that is not a radix-R digit, and return failure.
 	if (strspn(input, allowed) < strlen(input)) {
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	// Return the mathematical integer value that is represented by input in radix-R notation, using ASCII hex digits for digits with values 0 through 15.
 	long long int n = strtoll(input, NULL, R);
 	if (n >= 1LL<<32) {
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	*number = (uint32_t)n;
-	return MCRAWLER_PARSER_SUCCESS;
+	return MCRAWLER_URL_SUCCESS;
 }
 
-int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input) {
+int mcrawler_url_parse_ipv4(mcrawler_url_host *host, const char *input) {
 	// Let syntaxViolationFlag be unset.
 	int syntaxViolationFlag = 0;
 	// Let parts be input split on ".".
@@ -537,7 +442,7 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 	// If parts has more than four items, return input.
 	if (count > 4 || count == 0) {
 		free(parts[0]);
-		return MCRAWLER_PARSER_SUCCESS;
+		return MCRAWLER_URL_SUCCESS;
 	}
 	// Let numbers be the empty list.
 	uint32_t numbers[4];
@@ -547,14 +452,14 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 		if (strlen(parts[i]) == 0) {
 			// 0..0x300 is a domain, not an IPv4 address.
 			free(parts[0]);
-			return MCRAWLER_PARSER_SUCCESS;
+			return MCRAWLER_URL_SUCCESS;
 		}
 		// Let n be the result of parsing part using syntaxViolationFlag.
 		// If n is failure, return input.
 		// Append n to numbers.
-		if (parse_ipv4_number(&numbers[i], parts[i], &syntaxViolationFlag) == MCRAWLER_PARSER_FAILURE) {
+		if (parse_ipv4_number(&numbers[i], parts[i], &syntaxViolationFlag) == MCRAWLER_URL_FAILURE) {
 			free(parts[0]);
-			return MCRAWLER_PARSER_SUCCESS;
+			return MCRAWLER_URL_SUCCESS;
 		}
 	}
 	// If syntaxViolationFlag is set, syntax violation.
@@ -564,7 +469,7 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 		if (numbers[i] > 255) {
 			debugf("IPv4 syntax violation (8) at %s\n", parts[i]);
 			free(parts[0]);
-			return MCRAWLER_PARSER_FAILURE;
+			return MCRAWLER_URL_FAILURE;
 		}
 	}
 	// If the last item in numbers is greater than or equal to 256^(5 − the number of items in numbers), syntax violation, return failure.
@@ -572,7 +477,7 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 		// count == 0: number cannot be grater than 2^32
 		debugf("IPv4 syntax violation (10) at %s\n", parts[count - 1]);
 		free(parts[0]);
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	// Let ipv4 be the last item in numbers.
 	uint32_t ipv4 = numbers[count - 1];
@@ -586,20 +491,20 @@ int mcrawler_parser_parse_ipv4(mcrawler_parser_url_host *host, const char *input
 		// Increment counter by one.
 	}
 	// Return ipv4.
-	host->type = MCRAWLER_PARSER_HOST_IPV4;
+	host->type = MCRAWLER_URL_HOST_IPV4;
 	ipv4 = htonl(ipv4);
 	memcpy(host->ipv4, &ipv4, 4);
 	free(host->domain);
-	host->domain = mcrawler_parser_serialize_ipv4(host);
+	host->domain = mcrawler_url_serialize_ipv4(host);
 	free(parts[0]);
-	return MCRAWLER_PARSER_SUCCESS;
+	return MCRAWLER_URL_SUCCESS;
 }
 
-int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input) {
-	memset(host, 0, sizeof(mcrawler_parser_url_host));
+int mcrawler_url_parse_host(mcrawler_url_host *host, const char *input) {
+	memset(host, 0, sizeof(mcrawler_url_host));
 
 	if (!input) {
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 
 	size_t len = strlen(input);
@@ -608,12 +513,12 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 		// If input does not end with "]", syntax violation, return failure.
 		if (input[len - 1] != ']') {
 			debugf("Host syntax violation (1.1) for %s\n", input);
-			return MCRAWLER_PARSER_FAILURE;
+			return MCRAWLER_URL_FAILURE;
 		}
 		char *inp = strdup(input + 1);
 		inp[len - 2] = 0;
 		// Return the result of IPv6 parsing input with its leading "[" and trailing "]" removed.
-		int r = mcrawler_parser_parse_ipv6(host, inp);
+		int r = mcrawler_url_parse_ipv6(host, inp);
 		free(inp);
 		return r;
 	}
@@ -623,41 +528,41 @@ int mcrawler_parser_parse_host(mcrawler_parser_url_host *host, const char *input
 	// U+0000 is not allowed in domain (see 5)
 	if (strlen(domain) != len) {
 		debugf("Host parsing failure (5) for %s\n", input);
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	// Let asciiDomain be the result of running domain to ASCII on domain.
 	char asciiDomain[256]; // we will reject asciiDomain longer that 255 chars
-	if (domain_to_ascii(asciiDomain, 256, domain) == MCRAWLER_PARSER_FAILURE) {
+	if (domain_to_ascii(asciiDomain, 256, domain) == MCRAWLER_URL_FAILURE) {
 		// If asciiDomain is failure, return failure.
 		debugf("Host parsing failure (4) for %s\n", input);
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	// If asciiDomain contains U+0000, U+0009, U+000A, U+000D, U+0020, "#", "%", "/", ":", "?", "@", "[", "\", or "]", syntax violation, return failure.
 	char *q;
 	if ((q = strpbrk(asciiDomain, "\x09\x0A\x09\x20#%/:?@[\\]"))) {
 		debugf("Host syntax violation (5) for %s at %s\n", input, q);
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 	// Let ipv4Host be the result of IPv4 parsing asciiDomain.
 	// If ipv4Host is an IPv4 address or failure, return ipv4Host.
-	if (mcrawler_parser_parse_ipv4(host, asciiDomain) == MCRAWLER_PARSER_FAILURE) {
-		return MCRAWLER_PARSER_FAILURE;
+	if (mcrawler_url_parse_ipv4(host, asciiDomain) == MCRAWLER_URL_FAILURE) {
+		return MCRAWLER_URL_FAILURE;
 	}
-	if (host->type == MCRAWLER_PARSER_HOST_IPV4) {
-		return MCRAWLER_PARSER_SUCCESS;
+	if (host->type == MCRAWLER_URL_HOST_IPV4) {
+		return MCRAWLER_URL_SUCCESS;
 	}
 
 	// Return asciiDomain if the Unicode flag is unset, and the result of running domain to Unicode on asciiDomain otherwise.
-	host->type = MCRAWLER_PARSER_HOST_DOMAIN;
+	host->type = MCRAWLER_URL_HOST_DOMAIN;
 	free(host->domain);
 	host->domain = strdup(asciiDomain);
-	return MCRAWLER_PARSER_SUCCESS;
+	return MCRAWLER_URL_SUCCESS;
 }
 
-int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const mcrawler_parser_url *base)
+int mcrawler_url_parse(mcrawler_url_url *url, const char *input_par, const mcrawler_url_url *base)
 {
 	if (!input_par) {
-		return MCRAWLER_PARSER_FAILURE;
+		return MCRAWLER_URL_FAILURE;
 	}
 
 	size_t len = strlen(input_par);
@@ -757,7 +662,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 				// If base is null, or base’s non-relative flag is set and c is not "#", syntax violation, return failure.
 				if (!base || (base->cannot_be_a_base_url && c != '#')) {
 					debugf("Syntax violation (no scheme 1) at %s\n", p);
-					return MCRAWLER_PARSER_FAILURE;
+					return MCRAWLER_URL_FAILURE;
 				// Otherwise, if base’s non-relative flag is set and c is "#", set url’s scheme to base’s scheme, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, set url’s non-relative flag, and set state to fragment state.
 				} else if (base->cannot_be_a_base_url && c == '#') {
 					replace_scheme(url, base->scheme);
@@ -963,16 +868,16 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 				if (c == ':' && !flag_sq) {
 					// If url is special and buffer is the empty string, return failure.
 					if (bufp == 0 && is_special(url)) {
-						return MCRAWLER_PARSER_FAILURE;
+						return MCRAWLER_URL_FAILURE;
 					}
 					// Let host be the result of host parsing buffer.
 					// If host is failure, return failure.
 					buf[bufp] = 0;
-					url->host = (mcrawler_parser_url_host *)malloc(sizeof (mcrawler_parser_url_host));
-					if (mcrawler_parser_parse_host(url->host, buf) == MCRAWLER_PARSER_FAILURE) {
+					url->host = (mcrawler_url_host *)malloc(sizeof (mcrawler_url_host));
+					if (mcrawler_url_parse_host(url->host, buf) == MCRAWLER_URL_FAILURE) {
 						free(url->host);
 						url->host = NULL;
-						return MCRAWLER_PARSER_FAILURE;
+						return MCRAWLER_URL_FAILURE;
 					}
 					// Set url’s host to host, buffer to the empty string, and state to port state.
 					bufp = 0;
@@ -988,16 +893,16 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 					p--;
 					// If url is special and buffer is the empty string, return failure.
 					if (bufp == 0 && is_special(url)) {
-						return MCRAWLER_PARSER_FAILURE;
+						return MCRAWLER_URL_FAILURE;
 					}
 					// Let host be the result of host parsing buffer.
 					// If host is failure, return failure.
 					buf[bufp] = 0;
-					url->host = (mcrawler_parser_url_host *)malloc(sizeof (mcrawler_parser_url_host));
-					if (mcrawler_parser_parse_host(url->host, buf) == MCRAWLER_PARSER_FAILURE) {
+					url->host = (mcrawler_url_host *)malloc(sizeof (mcrawler_url_host));
+					if (mcrawler_url_parse_host(url->host, buf) == MCRAWLER_URL_FAILURE) {
 						free(url->host);
 						url->host = NULL;
-						return MCRAWLER_PARSER_FAILURE;
+						return MCRAWLER_URL_FAILURE;
 					}
 					// Set url’s host to host, buffer to the empty string, and state to path start state.
 					bufp = 0;
@@ -1035,7 +940,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 						// If port is greater than 2^16 − 1, syntax violation, return failure.
 						if (port > (1L<<16) - 1) {
 							debugf("Syntax violation (port 2.1.2) at %s\n", p);
-							return MCRAWLER_PARSER_FAILURE;
+							return MCRAWLER_URL_FAILURE;
 						}
 						// Set url’s port to null, if port is url’s scheme’s default port, and to port otherwise.
 						if (is_special(url) == port) {
@@ -1053,7 +958,7 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 				// Otherwise, syntax violation, return failure.
 				} else {
 					debugf("Syntax violation (port 3) at %s\n", p);
-					return MCRAWLER_PARSER_FAILURE;
+					return MCRAWLER_URL_FAILURE;
 				}
 				break;
 			case FILE_STATE:
@@ -1156,9 +1061,9 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 					} else {
 						// Let host be the result of host parsing buffer.
 						// If host is failure, return failure.
-						url->host = (mcrawler_parser_url_host *)malloc(sizeof (mcrawler_parser_url_host));
-						if (mcrawler_parser_parse_host(url->host, buf) == MCRAWLER_PARSER_FAILURE) {
-							return MCRAWLER_PARSER_FAILURE;
+						url->host = (mcrawler_url_host *)malloc(sizeof (mcrawler_url_host));
+						if (mcrawler_url_parse_host(url->host, buf) == MCRAWLER_URL_FAILURE) {
+							return MCRAWLER_URL_FAILURE;
 						}
 						// If host is not "localhost", set url’s host to host.
 						if (!strcmp(url->host->domain, "localhost")) {
@@ -1343,10 +1248,10 @@ int mcrawler_parser_parse(mcrawler_parser_url *url, const char *input_par, const
 
 	} while ((p < input || *p) && p++);
 
-	return MCRAWLER_PARSER_SUCCESS;
+	return MCRAWLER_URL_SUCCESS;
 }
 
-void mcrawler_parser_free_url(mcrawler_parser_url *url) {
+void mcrawler_url_free_url(mcrawler_url_url *url) {
 	free(url->scheme);
 	free(url->username);
 	free(url->password);

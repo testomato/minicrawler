@@ -10,10 +10,10 @@ stamp-h*
 test-suite.log
 /minicrawler
 /libminicrawler.pc
-/libminicrawler-urlparser.pc
+/libminicrawler-url.pc
 
 # make check files
-/test/urlparser
+/test/url
 /test/run.log
 /test/run.trs
 

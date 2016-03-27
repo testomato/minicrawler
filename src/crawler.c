@@ -37,7 +37,7 @@
 # include <openssl/err.h>
 #endif
 
-#include "url/minicrawler-urlparser.h"
+#include "url/minicrawler-url.h"
 #include "h/string.h"
 #include "h/proto.h"
 #include "h/digcalc.h"
@@ -364,14 +364,14 @@ static int check_proto(mcrawler_url *u);
  * Nastaví proto, host, port a path
  * rawurl musí obsahovat scheme a authority!
  */
-static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base) {
-	mcrawler_parser_url *url = (mcrawler_parser_url *)malloc(sizeof(mcrawler_parser_url));
+static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_url_url *base) {
+	mcrawler_url_url *url = (mcrawler_url_url *)malloc(sizeof(mcrawler_url_url));
 
-	if (mcrawler_parser_parse(url, rawurl, base) != MCRAWLER_PARSER_SUCCESS) {
+	if (mcrawler_url_parse(url, rawurl, base) != MCRAWLER_URL_SUCCESS) {
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, rawurl);
 		sprintf(u->error_msg, "Failed to parse URL");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
-		mcrawler_parser_free_url(url);
+		mcrawler_url_free_url(url);
 		free(url);
 		return 0;
 	}
@@ -380,14 +380,14 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base)
 		debugf("[%d] error: url='%s' has no scheme\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no scheme");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
-		mcrawler_parser_free_url(url);
+		mcrawler_url_free_url(url);
 		free(url);
 		return 0;
 	}
 	SAFE_STRCPY(u->proto, url->scheme);
 
 	if (check_proto(u) == -1) {
-		mcrawler_parser_free_url(url);
+		mcrawler_url_free_url(url);
 		free(url);
 		return 0;
 	}
@@ -396,7 +396,7 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base)
 		debugf("[%d] error: url='%s' has no host\n", u->index, rawurl);
 		sprintf(u->error_msg, "URL has no host");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
-		mcrawler_parser_free_url(url);
+		mcrawler_url_free_url(url);
 		free(url);
 		return 0;
 	}
@@ -412,11 +412,11 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base)
 
 	// recompose path + query
 	if (u->path != NULL) free(u->path);
-	u->path = mcrawler_parser_serialize_path_and_query(url);
+	u->path = mcrawler_url_serialize_path_and_query(url);
 
 	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
 
-	if (url->host->type == MCRAWLER_PARSER_HOST_IPV4) {
+	if (url->host->type == MCRAWLER_URL_HOST_IPV4) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
 		u->addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
@@ -427,7 +427,7 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base)
 		u->addr->next = NULL;
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		debugf("[%d] go directly to ipv4\n", u->index);
-	} else if (url->host->type == MCRAWLER_PARSER_HOST_IPV6) {
+	} else if (url->host->type == MCRAWLER_URL_HOST_IPV6) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
 		u->addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
@@ -443,7 +443,7 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_parser_url *base)
 	}
 
 	if (u->uri != NULL) {
-		mcrawler_parser_free_url(u->uri);
+		mcrawler_url_free_url(u->uri);
 		free(u->uri);
 	}
 	u->uri = url;
@@ -1627,7 +1627,7 @@ static void resolvelocation(mcrawler_url *u) {
 	}
 
 	free(u->redirectedto);
-	u->redirectedto = mcrawler_parser_serialize(u->uri, 0);
+	u->redirectedto = mcrawler_url_serialize_url(u->uri, 0);
 
 	if (strcmp(u->host, ohost) == 0) {
 		// muzes se pripojit na tu puvodni IP

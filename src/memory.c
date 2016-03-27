@@ -1,6 +1,6 @@
 #include "h/minicrawler.h"
 #include "h/config.h"
-#include "url/minicrawler-urlparser.h"
+#include "url/minicrawler-url.h"
 
 
 void mcrawler_free_cookie(mcrawler_cookie *cookie) {
@@ -12,7 +12,7 @@ void mcrawler_free_cookie(mcrawler_cookie *cookie) {
 
 void mcrawler_free_url(mcrawler_url *url) {
 	if (url->uri) {
-		mcrawler_parser_free_url(url->uri);
+		mcrawler_url_free_url(url->uri);
 		free(url->uri);
 	}
 	if (url->path) free(url->path);

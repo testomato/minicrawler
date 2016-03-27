@@ -3,23 +3,21 @@ Minicrawler
 
 Minicrawler parses URLs, executes HTTP requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread* by opening a socket for each connection. The whole Minicrawler suite is licensed under the [AGPL license](license.txt).
 
-## URL Parser Library (libminicrawler-urlparser)
+## URL Library (libminicrawler-url)
 
-[WHATWG URL Standard](https://url.spec.whatwg.org/) compliant parsing library written in C. It is fast and has only one external dependency – libicu.
+[WHATWG URL Standard](https://url.spec.whatwg.org/) compliant parsing and serializing library written in C. It is fast and has only one external dependency – libicu.
 The library is licensed under the [AGPL license](license.txt).
 
 ### Usage
 
 ```c
-#include <minicrawler/minicrawler-urlparser.h>
+#include <minicrawler/minicrawler-url.h>
 
 /**
  * First argument input URL, second (optional) base URL
  */
 int main(int argc, char *argv[]) {
-	if (argc < 2) {
-		return 2;
-	}
+	if (argc < 2) return 2;
 
 	char *input = argv[1];
 	char *base = NULL;
@@ -27,27 +25,27 @@ int main(int argc, char *argv[]) {
 		base = argv[2];
 	}
 	
-	mcrawler_parser_url url, *base_url = NULL;
+	mcrawler_url_url url, *base_url = NULL;
 
 	if (base) {
-		base_url = (mcrawler_parser_url *)malloc(sizeof(mcrawler_parser_url));
-		if (mcrawler_parser_parse(base_url, base, NULL) == MCRAWLER_PARSER_FAILURE) {
+		base_url = (mcrawler_url_url *)malloc(sizeof(mcrawler_url_url));
+		if (mcrawler_url_parse(base_url, base, NULL) == MCRAWLER_URL_FAILURE) {
 			printf("Invalid base URL\n");
 			return 1;
 		}
 	}
 
-	if (mcrawler_parser_parse(&url, input, base_url) == MCRAWLER_PARSER_FAILURE) {
+	if (mcrawler_url_parse(&url, input, base_url) == MCRAWLER_URL_FAILURE) {
 		printf("Invalid URL\n");
 		return 1;
 	}
 
-	printf("Result: %s\n", mcrawler_parser_serialize(&url, 0));
+	printf("Result: %s\n", mcrawler_url_serialize_url(&url, 0));
 	return 0;
 }
 ```
 
-More in [test/urlparser.c](test/urlparser.c).
+More in [test/url.c](test/url.c).
 
 
 ## Minicrawler Library (libminicrawler) Usage

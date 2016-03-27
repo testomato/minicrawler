@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "json/json.h"
-#include "../src/url/minicrawler-urlparser.h"
+#include "../src/url/minicrawler-url.h"
 
 const char *encode(char *input) {
 	struct JSON_Value *val = JSON_Value_New_String(input);
@@ -24,11 +24,11 @@ int main(int argc, char *argv[]) {
 		base = argv[2];
 	}
 	
-	mcrawler_parser_url url, *base_url = NULL;
+	mcrawler_url_url url, *base_url = NULL;
 
 	if (base) {
-		base_url = (mcrawler_parser_url *)malloc(sizeof(mcrawler_parser_url));
-		if (mcrawler_parser_parse(base_url, base, NULL) == MCRAWLER_PARSER_FAILURE) {
+		base_url = (mcrawler_url_url *)malloc(sizeof(mcrawler_url_url));
+		if (mcrawler_url_parse(base_url, base, NULL) == MCRAWLER_URL_FAILURE) {
 			printf("{\"input\": %s, \"base\": %s, \"failure\": true}", encode(input), encode(base));
 			exit(0);
 		}
@@ -36,13 +36,13 @@ int main(int argc, char *argv[]) {
 		base = strdup("");
 	}
 
-	if (mcrawler_parser_parse(&url, input, base_url) == MCRAWLER_PARSER_FAILURE) {
+	if (mcrawler_url_parse(&url, input, base_url) == MCRAWLER_URL_FAILURE) {
 		printf("{\"input\": %s, \"base\": %s, \"failure\": true}", encode(input), encode(base));
 		exit(0);
 	}
 
 	// see https://url.spec.whatwg.org/#api
-	char *href = mcrawler_parser_serialize(&url, 0);
+	char *href = mcrawler_url_serialize_url(&url, 0);
 	char protocol[strlen(url.scheme) + 2];
 	strcpy(protocol, url.scheme); strcat(protocol, ":");
 	char *password = url.password ? url.password : strdup("");
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
 	if (url.port_not_null) {
 		sprintf(port, "%d", url.port);
 	}
-	char *path = mcrawler_parser_serialize_path_and_query(&url);
+	char *path = mcrawler_url_serialize_path_and_query(&url);
 	*(strchrnul(path, '?')) = 0;
 	char query[url.query ? strlen(url.query) + 2 : 1];
 	if (url.query && url.query[0]) {

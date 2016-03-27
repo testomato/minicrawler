@@ -5,7 +5,7 @@ $data = json_decode($data, true);
 $data = array_values(array_filter($data, function ($a) {return is_array($a);}));
 echo '1..' . count($data) . "\n";
 foreach ($data as $i => $case) {
-	$result = shell_exec( __DIR__ . '/urlparser ' . escapeshellarg($case['input']) . ($case['base'] ? ' ' .escapeshellarg($case['base']) : '') . ' 2> /dev/null');
+	$result = shell_exec( __DIR__ . '/url ' . escapeshellarg($case['input']) . ($case['base'] ? ' ' .escapeshellarg($case['base']) : '') . ' 2> /dev/null');
 	$result = json_decode($result, true);
 	unset($case['origin']);
 	if ($result == $case) {

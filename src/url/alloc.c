@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include "minicrawler-urlparser.h"
+#include "minicrawler-url.h"
 
 static inline char *empty(size_t size) {
 	char *e = (char *)malloc(size);
@@ -48,7 +48,7 @@ static size_t sizeof_path0 = 16;
 static size_t sizeof_query = 64;
 static size_t sizeof_fragment = 2;
 
-void init_url(mcrawler_parser_url *url) {
+void init_url(mcrawler_url_url *url) {
 	memset(url, 0, sizeof(*url));
 	url->scheme = empty(sizeof_scheme);
 	url->username = empty(sizeof_username);
@@ -57,7 +57,7 @@ void init_url(mcrawler_parser_url *url) {
 	url->path_len = 0;
 }
 
-void replace_scheme(mcrawler_parser_url *url, const char *scheme) {
+void replace_scheme(mcrawler_url_url *url, const char *scheme) {
 	size_t scheme_len = strlen(scheme);
 	if (scheme_len + 1 > sizeof_scheme) {
 		sizeof_scheme = scheme_len + 1;
@@ -66,7 +66,7 @@ void replace_scheme(mcrawler_parser_url *url, const char *scheme) {
 	strcpy(url->scheme, scheme);
 }
 
-void replace_username(mcrawler_parser_url *url, const char *username) {
+void replace_username(mcrawler_url_url *url, const char *username) {
 	size_t username_len = strlen(username);
 	if (username_len + 1 > sizeof_username) {
 		sizeof_username = username_len + 1;
@@ -75,19 +75,19 @@ void replace_username(mcrawler_parser_url *url, const char *username) {
 	strcpy(url->username, username);
 }
 
-void append_username(mcrawler_parser_url *url, int *pos, const char *s) {
+void append_username(mcrawler_url_url *url, int *pos, const char *s) {
 	append_s(&url->username, &sizeof_username, pos, s);
 }
 
-void init_password(mcrawler_parser_url *url) {
+void init_password(mcrawler_url_url *url) {
 	url->password = empty(sizeof_password);
 }
 
-void append_password(mcrawler_parser_url *url, int *pos, const char *s) {
+void append_password(mcrawler_url_url *url, int *pos, const char *s) {
 	append_s(&url->password, &sizeof_password, pos, s);
 }
 
-void append_path(mcrawler_parser_url *url, const char *s) {
+void append_path(mcrawler_url_url *url, const char *s) {
 	if (url->path_len + 2 > sizeof_path) {
 		sizeof_path = next_power2(url->path_len + 2);
 		url->path = realloc(url->path, sizeof_path * sizeof(char *));
@@ -105,14 +105,14 @@ void append_path(mcrawler_parser_url *url, const char *s) {
 	url->path[++url->path_len] = NULL;
 }
 
-void do_pop_path(mcrawler_parser_url *url) {
+void do_pop_path(mcrawler_url_url *url) {
 	if (url->path_len > 0) {
 		free(url->path[--url->path_len]);
 		url->path[url->path_len] = NULL;
 	}
 }
 
-void replace_path(mcrawler_parser_url *url, const char **path) {
+void replace_path(mcrawler_url_url *url, const char **path) {
 	int len = 0;
 	const char **p = path;
 	while (*p++) len++;
@@ -130,33 +130,33 @@ void replace_path(mcrawler_parser_url *url, const char **path) {
 	url->path_len = len;
 }
 
-void append_path0_c(mcrawler_parser_url *url, const char c) {
+void append_path0_c(mcrawler_url_url *url, const char c) {
 	int pos = strlen(url->path[0]);
 	append_c(&url->path[0], &sizeof_path0, &pos, c);
 }
 
-void append_path0_s(mcrawler_parser_url *url, const char *s) {
+void append_path0_s(mcrawler_url_url *url, const char *s) {
 	int pos = strlen(url->path[0]);
 	append_s(&url->path[0], &sizeof_path0, &pos, s);
 }
 
-void init_query(mcrawler_parser_url *url) {
+void init_query(mcrawler_url_url *url) {
 	url->query = empty(sizeof_query);
 }
 
-void append_query_c(mcrawler_parser_url *url, int *pos, const char c) {
+void append_query_c(mcrawler_url_url *url, int *pos, const char c) {
 	append_c(&url->query, &sizeof_query, pos, c);
 }
 
-void append_query_s(mcrawler_parser_url *url, int *pos, const char *s) {
+void append_query_s(mcrawler_url_url *url, int *pos, const char *s) {
 	append_s(&url->query, &sizeof_query, pos, s);
 }
 
-void init_fragment(mcrawler_parser_url *url) {
+void init_fragment(mcrawler_url_url *url) {
 	url->fragment = empty(sizeof_fragment);
 }
 
-void append_fragment(mcrawler_parser_url *url, const char c) {
+void append_fragment(mcrawler_url_url *url, const char c) {
 	int pos = strlen(url->fragment);
 	append_c(&url->fragment, &sizeof_fragment, &pos, c);
 }
