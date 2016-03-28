@@ -199,6 +199,10 @@ struct mcrawler_url {
 	void *ssl;
 	long ssl_options;
 
+	// HTTP2
+	int http2;
+	void *http2_session;
+
 	long options;
 
 	void *f;

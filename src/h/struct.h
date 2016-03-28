@@ -1,4 +1,7 @@
 #include "minicrawler.h"
+#ifdef HAVE_LIBNGHTTP2
+#include <nghttp2/nghttp2.h>
+#endif
 
 enum {
 	DEFAULT_TIMEOUT = 5,
@@ -14,6 +17,13 @@ struct challenge {
 	char *scheme, *realm;
 	struct nv params[10];
 };
+
+#ifdef HAVE_LIBNGHTTP2
+typedef struct {
+	nghttp2_session *session;
+	int32_t stream_id;
+} http2_session_data;
+#endif
 
 enum {
 	MCURL_STATES_IO = 1<<MCURL_S_CONNECT | 1<<MCURL_S_HANDSHAKE | 1<<MCURL_S_SENDREQUEST | 1<<MCURL_S_RECVREPLY,

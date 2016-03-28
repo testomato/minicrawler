@@ -4,6 +4,9 @@
 #ifdef HAVE_LIBCRYPTO
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#ifdef HAVE_LIBNGHTTP2
+#include <nghttp2/nghttp2.h>
+#endif
 #include <assert.h>
 
 #include "h/proto.h"
@@ -76,6 +79,23 @@ static int berr_exit(const char *string) {
 	exit(1);
 }
 
+#ifdef HAVE_LIBNGHTTP2
+/**
+ * The NPN callback is used by the client to select the next application protocol over TLS
+ */
+static int select_next_proto_cb(SSL *ssl, unsigned char **out,
+                                unsigned char *outlen, const unsigned char *in,
+                                unsigned int inlen, void *arg) {
+	int rv;
+	rv = nghttp2_select_next_protocol(out, outlen, in, inlen);
+	if (rv == -1) {
+		return SSL_TLSEXT_ERR_NOACK;
+		//berr_exit("Server did not advertise " NGHTTP2_PROTO_VERSION_ID);
+	}
+	return SSL_TLSEXT_ERR_OK;
+}
+#endif
+
 /**
 Returns valid SSL context.
 When call for the first time, then initialize SSL and the context itself.
@@ -117,6 +137,10 @@ SSL_CTX *mossad(void) {
 	}
 	SSL_CTX_use_RSAPrivateKey(ctx, rsa);
 	SSL_CTX_set_cipher_list(ctx, "HIGH:MEDIUM:!COMPLEMENTOFDEFAULT:@STRENGTH");
+
+#ifdef HAVE_LIBNGHTTP2
+	SSL_CTX_set_next_proto_select_cb(ctx, select_next_proto_cb, NULL);
+#endif
 	return ctx;
 }
 

@@ -8,6 +8,8 @@
 extern int debug;
 #define debugf(...)   {if(debug) fprintf(stderr, __VA_ARGS__);}
 
+#define ARRLEN(x) (sizeof(x) / sizeof(x[0]))
+
 #ifdef HAVE_LIBSSL
 # include <openssl/ssl.h>
 

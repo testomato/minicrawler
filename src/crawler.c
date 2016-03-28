@@ -28,6 +28,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <assert.h>
+#include <netinet/tcp.h>
 #ifdef HAVE_LIBSSL
 # include <openssl/ssl.h>
 # ifndef SSL_OP_NO_TLSv1_2
@@ -36,11 +37,15 @@
 # include <openssl/md5.h>
 # include <openssl/err.h>
 #endif
+#ifdef HAVE_LIBNGHTTP2
+#include <nghttp2/nghttp2.h>
+#endif
 
 #include "url/minicrawler-url.h"
 #include "h/string.h"
 #include "h/proto.h"
 #include "h/digcalc.h"
+#include "h/http2.h"
 
 int debug = 0;
 
@@ -102,6 +107,10 @@ static int lower_ssl_protocol(mcrawler_url *u) {
 	return 0;
 }
 
+static void genrequest_http2(mcrawler_url *u);
+static void readreply_http2(mcrawler_url *u);
+
+
 /** Impement handshake over SSL non-blocking socket.
 We may switch between need read/need write for several times.
 SSL is blackbox this time for us.
@@ -112,7 +121,16 @@ static void sec_handshake(mcrawler_url *u) {
 	if (!u->timing.sslstart) u->timing.sslstart = get_time_int();
 
 	const int t = SSL_connect(u->ssl);
-    if (t == 1) {
+	if (t == 1) {
+		// zjistíme aplikační protokol
+		const unsigned char *data;
+		unsigned int len;
+		SSL_get0_next_proto_negotiated(u->ssl, &data, &len);
+		debugf("[%d] Selected protocol: %.*s\n", u->index, len, data);
+		if (!strncmp((const char *)data, NGHTTP2_PROTO_VERSION_ID, len)) {
+			((mcrawler_url_func *)u->f)->gen_request = genrequest_http2;
+			((mcrawler_url_func *)u->f)->recv_reply = readreply_http2;
+		}
 		u->timing.sslend = get_time_int();
         set_atomic_int(&u->state, MCURL_S_GENREQUEST);
         return;
@@ -774,6 +792,152 @@ static void genrequest(mcrawler_url *u) {
 	set_atomic_int(&u->state, MCURL_S_SENDREQUEST);
 	set_atomic_int(&u->rw, 1<<MCURL_RW_READY_WRITE);
 }
+
+#ifdef HAVE_LIBNGHTTP2
+#define MAKE_NGHTTP2_NV(NAME, VALUE) {\
+	(uint8_t *) NAME, (uint8_t *)VALUE, sizeof(NAME) - 1, strlen(VALUE), NGHTTP2_NV_FLAG_NONE \
+}
+
+static ssize_t http2_send_callback(nghttp2_session *session, const uint8_t *data, size_t length, int flags, void *user_data) {
+	mcrawler_url *u = (mcrawler_url *)user_data;
+
+	const ssize_t ret = ((mcrawler_url_func *)u->f)->write(u, data, length, (char *)&u->error_msg);
+	if (ret == MCURL_IO_ERROR || ret == MCURL_IO_EOF) {
+		set_atomic_int(&u->state, MCURL_S_ERROR);
+		return NGHTTP2_ERR_CALLBACK_FAILURE;
+	}
+	else if (ret == MCURL_IO_WRITE) {
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
+		return NGHTTP2_ERR_WOULDBLOCK;
+	} else if (ret == MCURL_IO_READ) {
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
+		return NGHTTP2_ERR_WOULDBLOCK;
+	} else {
+		assert(ret > 0);
+		//set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
+		return ret;
+	}
+}
+
+static int http2_on_header_callback(nghttp2_session *session, const nghttp2_frame *frame, const uint8_t *name, size_t namelen, const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data) {
+	mcrawler_url *u = (mcrawler_url *)user_data;
+	http2_session_data *session_data = (http2_session_data *)u->http2_session;
+	switch (frame->hd.type) {
+		case NGHTTP2_HEADERS:
+			if (frame->headers.cat == NGHTTP2_HCAT_RESPONSE &&
+					session_data->stream_id == frame->hd.stream_id) {
+				debugf("header: %s: %s\n", name, value);
+				break;
+			}
+	}
+	return 0;
+}
+
+static int http2_on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags, int32_t stream_id, const uint8_t *data, size_t len, void *user_data) {
+	mcrawler_url *u = (mcrawler_url *)user_data;
+	http2_session_data *session_data = (http2_session_data *)u->http2_session;
+	if (session_data->stream_id == stream_id) {
+		if (u->bufp + len <= BUFSIZE) {
+			memcpy(u->buf + u->bufp, data, len);
+			u->bufp += len;
+		} else {
+			memcpy(u->buf + u->bufp, data, BUFSIZE - u->bufp);
+			u->bufp = BUFSIZE;
+		}
+	}
+
+	return 0;
+}
+
+static int http2_on_stream_close_callback(nghttp2_session *session, int32_t stream_id, nghttp2_error_code error_code, void *user_data) {
+	mcrawler_url *u = (mcrawler_url *)user_data;
+	http2_session_data *session_data = (http2_session_data *)u->http2_session;
+	int rv;
+	if (session_data->stream_id == stream_id) {
+		debugf("[%d] HTTP2 stream %d closes with error code %d\n", u->index, stream_id, error_code);
+		set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
+		rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
+		if (rv) {
+			return NGHTTP2_ERR_CALLBACK_FAILURE;
+		}
+	}
+	return 0;
+}
+
+static void genrequest_http2(mcrawler_url *u) {
+	if (!u->method[0]) {
+		strcpy(u->method, "GET");
+	}
+
+	char *host = mcrawler_url_get_host(u->uri);
+	nghttp2_nv hdrs[] = {
+		MAKE_NGHTTP2_NV(":method", u->method),
+		MAKE_NGHTTP2_NV(":scheme", u->proto),
+		MAKE_NGHTTP2_NV(":authority", host),
+		MAKE_NGHTTP2_NV(":path", u->path)
+	};
+	// TODO memory leak - free(host);
+	size_t hdrs_len = sizeof(hdrs)/sizeof(nghttp2_nv);
+
+	if (debug) {
+		debugf("[%d] Request headers:\n", u->index);
+		for (size_t i = 0; i < hdrs_len; i++) {
+			debugf("\t%s: %s\n", hdrs[i].name, hdrs[i].value);
+		}
+	}
+
+	nghttp2_session_callbacks *callbacks;
+	nghttp2_session_callbacks_new(&callbacks);
+	nghttp2_session_callbacks_set_send_callback(callbacks, http2_send_callback);
+	//nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, http2_on_frame_recv_callback);
+	nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks, http2_on_data_chunk_recv_callback);
+	nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, http2_on_stream_close_callback);
+	nghttp2_session_callbacks_set_on_header_callback(callbacks, http2_on_header_callback);
+	//nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, http2_on_begin_headers_callback);
+
+	// init session data
+	http2_session_data *session_data = malloc(sizeof(http2_session_data));
+	memset(session_data, 0, sizeof(http2_session_data));
+	u->http2_session = session_data;
+
+	nghttp2_session_client_new(&session_data->session, callbacks, u);
+	nghttp2_session_callbacks_del(callbacks);
+
+	// submit SETTINGS
+	nghttp2_settings_entry iv[1] = {{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100}};
+
+	int val = 1;
+	setsockopt(u->sockfd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+	int rv;
+	/* client 24 bytes magic string will be sent by nghttp2 library */
+	rv = nghttp2_submit_settings(session_data->session, NGHTTP2_FLAG_NONE, iv, ARRLEN(iv));
+	if (rv != 0) {
+		set_atomic_int(&u->state, MCURL_S_ERROR);
+		debugf("[%d] Could not submit SETTINGS: %s", u->index, nghttp2_strerror(rv));
+		sprintf(u->error_msg, "HTTP2 error (%.200s)", nghttp2_strerror(rv));
+		return;
+	}
+
+	// submit headers
+	int32_t stream_id = nghttp2_submit_request(session_data->session, NULL,
+			hdrs, hdrs_len, NULL, u);
+	if (stream_id < 0) {
+		set_atomic_int(&u->state, MCURL_S_ERROR);
+		debugf("[%d] Could not submit HTTP request: %s", u->index, nghttp2_strerror(stream_id));
+		sprintf(u->error_msg, "Could not submit HTTP request (%.200s)", nghttp2_strerror(stream_id));
+		return;
+	}
+	session_data->stream_id = stream_id;
+
+	if (http2_session_send(u)) {
+		set_atomic_int(&u->state, MCURL_S_ERROR);
+		return;
+	}
+
+	set_atomic_int(&u->state, MCURL_S_RECVREPLY);
+	set_atomic_int(&u->rw, 1<< MCURL_RW_READY_READ | 1<<MCURL_RW_READY_WRITE);
+}
+#endif
 
 /** Sends the request string. This string was generated in previous state:
 GEN_REQUEST.
@@ -1520,6 +1684,15 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 		u->aresch = NULL;
 	}
 
+#ifdef HAVE_LIBNGHTTP2
+	if (u->http2_session) {
+		http2_session_data *session_data = (http2_session_data *)u->http2_session;
+		nghttp2_session_del(session_data->session);
+		free(u->http2_session);
+		u->http2_session = NULL;
+	}
+#endif
+
 	u->timing.done = get_time_int();
 
 	callback(u, callback_arg);
@@ -1748,13 +1921,85 @@ static void readreply(mcrawler_url *u) {
 			}
 		}
 
-		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
 		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
+		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
+		u->sockfd = 0;
 	} else {
 		set_atomic_int(&u->state, MCURL_S_RECVREPLY);
 		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
 	}
 }
+
+#ifdef HAVE_LIBNGHTTP2
+static void readreply_http2(mcrawler_url *u) {
+	unsigned char buf[100 * 1024];
+	const ssize_t t = ((mcrawler_url_func *)u->f)->read(u, buf, 100 * 1024, (char *)&u->error_msg);
+	assert(t >= MCURL_IO_WRITE);
+	if (t == MCURL_IO_READ) {
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
+		return;
+	}
+	if (t == MCURL_IO_WRITE) {
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
+		return;
+	}
+	http2_session_data *session_data = (http2_session_data *)u->http2_session;
+
+	if (t >= 0) {
+		ssize_t readlen = nghttp2_session_mem_recv(session_data->session, buf, t);
+		debugf("[%d] Read %zd bytes\n", u->index, readlen);
+		if (readlen < 0) {
+			debugf("[%d] HTTP2 read error: %s\n", u->index, nghttp2_strerror((int)readlen));
+			sprintf(u->error_msg, "HTTP2 read error (%.250s)", nghttp2_strerror((int)readlen));
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+			return;
+		}
+
+		u->timing.lastread = get_time_int();
+	}
+	if (t > 0 && !u->timing.firstbyte) {
+		u->timing.firstbyte = u->timing.lastread;
+	}
+
+	if((t == MCURL_IO_EOF && nghttp2_session_want_read(session_data->session) == 0 && nghttp2_session_want_write(session_data->session) == 0) || t == MCURL_IO_ERROR) {
+#ifdef HAVE_LIBSSL
+		if (u->ssl != NULL) {
+			SSL_free(u->ssl);
+			u->ssl = NULL;
+		}
+#endif
+
+		if (t == MCURL_IO_ERROR) {
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+		} else if (get_atomic_int(&u->state) != MCURL_S_ERROR) {
+			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
+			debugf("[%d] Downloaded.\n",u->index);
+			if (u->location[0] && strcmp(u->method, "HEAD")) {
+				resolvelocation(u);
+			} else if (u->authorization && u->status == 401) {
+				if (!u->auth_attempt) {
+					// try to authorize
+					u->auth_attempt = 1;
+					reset_url(u);
+					set_atomic_int(&u->state, MCURL_S_GOTIP);
+				}
+			}
+		}
+
+		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
+		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
+		u->sockfd = 0;
+	} else {
+		if (http2_session_send(u)) {
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+			return;
+		} else {
+			set_atomic_int(&u->state, MCURL_S_RECVREPLY);
+			set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ | 1<<MCURL_RW_WANT_WRITE);
+		}
+	}
+}
+#endif
 
 //---------------------------------------------------------------------------------------------------------------------------------------------
 

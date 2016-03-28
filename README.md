@@ -133,6 +133,7 @@ Minicrawler prepends its own header into the output with the following meaning
  * Asynchronous hostname resolving – [c-ares](http://c-ares.haxx.se/)
  * Gzip decoding – [zlib](http://zlib.net/)
  * TLS/SSL – [OpenSSL](https://www.openssl.org/)
+ * HTTP2 – [Nghttp2](https://nghttp2.org/)
  * Unicode processing – [ICU](http://site.icu-project.org/)
 
 ## Build
@@ -144,15 +145,16 @@ Install following dependencies (including header files, i.e. dev packages):
  * zlib1g
  * icu
  * OpenSSL (optional)
+ * nghttp2 (optional)
 
-On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev`
+On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev`
 
-On OS X with homebrew run `brew install c-ares zlib icu openssl`
+On OS X with homebrew run `brew install c-ares zlib icu openssl nghttp2`
 
 Then run
 ```bash
 ./autogen.sh
-./configure [--without-ssl]
+./configure [--without-ssl] [--without-http2]
 make
 [make check]
 sudo make install

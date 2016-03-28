@@ -17,17 +17,23 @@ AC_PROG_LIBTOOL
 AC_PROG_AWK
 
 # Checks for libraries.
-AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares]))
-AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([please install zlib]))
-AC_CHECK_LIB([icuuc], [uidna_nameToASCII_55], [], AC_MSG_ERROR([please install libicu]))
-AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv]))
+AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares dev files]))
+AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([please install zlib dev files]))
+AC_CHECK_LIB([icuuc], [uidna_nameToASCII_55], [], AC_MSG_ERROR([please install libicu dev files]))
+AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv dev files]))
 AC_ARG_WITH([ssl],
 			[AS_HELP_STRING([--without-ssl], [disable support for https])],
 			[],
 			[with_ssl=check])
 AS_IF([test "${with_ssl}" != "no"],
-			[AC_CHECK_LIB([crypto], [ERR_get_error], [], AC_MSG_ERROR([please install OpenSSL or use option --without-ssl]))
-			AC_CHECK_LIB([ssl], [SSL_new], [], AC_MSG_ERROR([please install OpenSSL or use option --without-ssl]))])
+			[AC_CHECK_LIB([crypto], [ERR_get_error], [], AC_MSG_ERROR([please install OpenSSL dev files or use option --without-ssl]))
+			AC_CHECK_LIB([ssl], [SSL_new], [], AC_MSG_ERROR([please install OpenSSL dev files or use option --without-ssl]))])
+AC_ARG_WITH([http2],
+			[AS_HELP_STRING([--without-http2], [disable support for http2])],
+			[],
+			[with_http2=check])
+AS_IF([test "${with_ssl} ${with_http2}" == "check check"],
+			[AC_CHECK_LIB([nghttp2], [nghttp2_session_client_new], [], AC_MSG_ERROR([please install nghttp2 dev files or use option --without-http2]))])
 
 # Checks for header files.
 AC_CHECK_HEADERS([limits.h sys/types.h sys/select.h])
