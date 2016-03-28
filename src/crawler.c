@@ -700,13 +700,10 @@ static void genrequest(mcrawler_url *u) {
 
 	// Host
 	r = stpcpy(r, hostheader);
-	r = stpcpy(r, u->host);
-	const int port = parse_proto(u->proto);
-	if (port != u->port) {
-		s = sprintf(r, ":%d", u->port);
-		if (s > 0) r += s;
-	}
+	char *host = mcrawler_url_get_host(u->uri);
+	r = stpcpy(r, host);
 	r = stpcpy(r, "\r\n");
+	free(host);
 
 	// Accept
 	char *p = strstr(u->customheader, "Accept:");
