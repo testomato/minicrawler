@@ -35,6 +35,5 @@ void mcrawler_free_url(mcrawler_url *url) {
 
 	if (url->addr) free_addr(url->addr);
 	if (url->prev_addr) free_addr(url->prev_addr);
-	if (url->ssl) free(url->ssl);
 	if (url->f) free(url->f);
 }

@@ -555,6 +555,7 @@ static void connectsocket(mcrawler_url *u) {
 		sprintf(u->error_msg, "Failed to connect to host (%.200m)");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		close(u->sockfd);
+		u->sockfd = 0;
 		return;
 	}
 
@@ -571,6 +572,7 @@ static void connectsocket(mcrawler_url *u) {
 		sprintf(u->error_msg, "Failed to connect to host (%.200s)", strerror(result));
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		close(u->sockfd);
+		u->sockfd = 0;
 		return;
 	}
 
@@ -1683,6 +1685,17 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 		ares_destroy(u->aresch);
 		u->aresch = NULL;
 	}
+
+	if (u->sockfd) {
+		close(u->sockfd);
+		u->sockfd = 0;
+	}
+#ifdef HAVE_LIBSSL
+	if (u->ssl) {
+		SSL_shutdown(u->ssl);
+		u->ssl = NULL;
+	}
+#endif
 
 #ifdef HAVE_LIBNGHTTP2
 	if (u->http2_session) {
