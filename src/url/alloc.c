@@ -160,3 +160,23 @@ void append_fragment(mcrawler_url_url *url, const char c) {
 	int pos = strlen(url->fragment);
 	append_c(&url->fragment, &sizeof_fragment, &pos, c);
 }
+
+void mcrawler_url_free_url(mcrawler_url_url *url) {
+	free(url->scheme);
+	free(url->username);
+	free(url->password);
+	free(url->query);
+	free(url->fragment);
+	free(url->object);
+	if (url->path) {
+		char *part, **p = url->path;
+		while ((part = *p++)) {
+			free(part);
+		}
+	}
+	free(url->path);
+	if (url->host) {
+		free(url->host->domain);
+	}
+	free(url->host);
+}

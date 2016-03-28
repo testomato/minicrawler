@@ -1250,24 +1250,3 @@ int mcrawler_url_parse(mcrawler_url_url *url, const char *input_par, const mcraw
 
 	return MCRAWLER_URL_SUCCESS;
 }
-
-void mcrawler_url_free_url(mcrawler_url_url *url) {
-	free(url->scheme);
-	free(url->username);
-	free(url->password);
-	free(url->query);
-	free(url->fragment);
-	free(url->object);
-	if (url->path) {
-		char *part, **p = url->path;
-		while ((part = *p++)) {
-			free(part);
-		}
-	}
-	free(url->path);
-	if (url->host) {
-		free(url->host->domain);
-	}
-	free(url->host);
-}
-
