@@ -650,7 +650,13 @@ static void opensocket(mcrawler_url *u)
 	}
 }
 
-static void remove_expired_cookies(mcrawler_url *u);
+static void prepare_for_request(mcrawler_url *u) {
+	remove_expired_cookies(u);
+
+	if (!u->method[0]) {
+		strcpy(u->method, "GET");
+	}
+}
 
 /** socket bezi, posli dotaz
  * cookie header see http://tools.ietf.org/html/rfc6265 section 5.4
@@ -667,13 +673,7 @@ static void genrequest(mcrawler_url *u) {
 	const char authorizationheader[] = "Authorization: ";
 	const char defaultagent[] = "minicrawler/%s";
 
-	remove_expired_cookies(u);
-	size_t cookies_size = 0;
-	for (int i = 0; i < u->cookiecnt; i++) cookies_size += 3 + strlen(u->cookies[i].name) + strlen(u->cookies[i].value);
-
-	if (!u->method[0]) {
-		strcpy(u->method, "GET");
-	}
+	size_t cookies_size = cookies_header_max_size(u);
 
 	free(u->request);
 	u->request = malloc(
@@ -732,27 +732,12 @@ static void genrequest(mcrawler_url *u) {
 	r = stpcpy(r, "\r\n");
 
 	// Cookie
-	for (int t = 0; t < u->cookiecnt; t++) {
-		char *p, c;
-		// see http://tools.ietf.org/html/rfc6265 section 5.4
-		if (
-				((u->cookies[t].host_only == 1 && strcasecmp(u->host, u->cookies[t].domain) == 0) || // The cookie's host-only-flag is true and the canonicalized request-host is identical to the cookie's domain.
-					(u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) && *(p+strlen(u->cookies[t].domain)) == 0)) && //  Or: The cookie's host-only-flag is false and the canonicalized request-host domain-matches the cookie's domain.
-				(!strncmp(u->path, u->cookies[t].path, strlen(u->cookies[t].path)) && (u->cookies[t].path[strlen(u->cookies[t].path)-1] == '/' || (c = u->path[strlen(u->cookies[t].path)]) == '/' || c == '?' || c == 0)) && // The request-uri's path path-matches the cookie's path.
-				(u->cookies[t].secure == 0 || strcmp(u->proto, "https") == 0) //  If the cookie's secure-only-flag is true, then the request- uri's scheme must denote a "secure" protocol
-		) {
-			if (!r[0]) {
-				strcpy(r, cookieheader);
-				sprintf(r + strlen(r), "%s=%s", u->cookies[t].name, u->cookies[t].value);
-			} else {
-				sprintf(r + strlen(r), "; %s=%s", u->cookies[t].name, u->cookies[t].value);
-			}
-		}
+	set_cookies_header(u, r + sizeof(cookieheader) - 1, &cookies_size);
+	if (cookies_size) {
+		strncpy(r, cookieheader, sizeof(cookieheader) - 1);
+		r += sizeof(cookieheader) - 1 + cookies_size;
+		r = stpcpy(r, "\r\n");
 	}
-	if (r[0]) {
-		strcpy(r + strlen(r), "\r\n");
-	}
-	r += strlen(r);
 
 	// Custom header
 	if (u->customheader[0]) {
@@ -793,8 +778,13 @@ static void genrequest(mcrawler_url *u) {
 }
 
 #ifdef HAVE_LIBNGHTTP2
+
 #define MAKE_NGHTTP2_NV(NAME, VALUE) {\
-	(uint8_t *) NAME, (uint8_t *)VALUE, sizeof(NAME) - 1, strlen(VALUE), NGHTTP2_NV_FLAG_NONE \
+	(uint8_t *) NAME, (uint8_t *)VALUE, sizeof(NAME) - 1, strlen(VALUE), NGHTTP2_NV_FLAG_NO_COPY_VALUE \
+}
+
+#define MAKE_NGHTTP2_NV2(NAME, VALUE, VALUE_LEN) {\
+	(uint8_t *) NAME, (uint8_t *)VALUE, sizeof(NAME) - 1, VALUE_LEN, NGHTTP2_NV_FLAG_NONE \
 }
 
 static ssize_t http2_send_callback(nghttp2_session *session, const uint8_t *data, size_t length, int flags, void *user_data) {
@@ -853,8 +843,14 @@ static int http2_on_stream_close_callback(nghttp2_session *session, int32_t stre
 	http2_session_data *session_data = (http2_session_data *)u->http2_session;
 	int rv;
 	if (session_data->stream_id == stream_id) {
-		debugf("[%d] HTTP2 stream %d closes with error code %d\n", u->index, stream_id, error_code);
-		set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
+		if (error_code > 0) {
+			debugf("[%d] HTTP2 stream %d closes with error %d\n", u->index, stream_id, /*nghttp2_http2_strerror(error_code), */error_code);
+			sprintf(u->error_msg, "HTTP2 stream closes with error %d", error_code);
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+		} else {
+			debugf("[%d] HTTP2 stream %d closes successfuly\n", u->index, stream_id);
+			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
+		}
 		rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
 		if (rv) {
 			return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -869,14 +865,24 @@ static void genrequest_http2(mcrawler_url *u) {
 	}
 
 	char *host = mcrawler_url_get_host(u->uri);
-	nghttp2_nv hdrs[] = {
+
+	size_t hdrs_len = 4;
+	nghttp2_nv hdrs[5] = {
 		MAKE_NGHTTP2_NV(":method", u->method),
 		MAKE_NGHTTP2_NV(":scheme", u->proto),
 		MAKE_NGHTTP2_NV(":authority", host),
+		// TODO memory leak - free(host);
 		MAKE_NGHTTP2_NV(":path", u->path)
 	};
-	// TODO memory leak - free(host);
-	size_t hdrs_len = sizeof(hdrs)/sizeof(nghttp2_nv);
+
+	// Cookie
+	char cookie[cookies_header_max_size(u) + 1];
+	size_t len;
+	set_cookies_header(u, cookie, &len);
+	if (len) {
+		nghttp2_nv cookie_nv = MAKE_NGHTTP2_NV2("cookie", cookie, len);
+		memcpy(hdrs + hdrs_len++, &cookie_nv, sizeof(nghttp2_nv));
+	}
 
 	if (debug) {
 		debugf("[%d] Request headers:\n", u->index);
@@ -1210,24 +1216,6 @@ static void setcookie(mcrawler_url *u, char *str) {
 
 fail:
 	mcrawler_free_cookie(&cookie);
-}
-
-// The user agent MUST evict all expired cookies from the cookie store
-// if, at any time, an expired cookie exists in the cookie store.
-static void remove_expired_cookies(mcrawler_url *u) {
-	time_t tim = time(NULL);
-	for (int t = 0; t < u->cookiecnt;) {
-		if (tim > u->cookies[t].expires) {
-			debugf("[%d] Cookie %s expired. Deleting\n", u->index, u->cookies[t].name);
-			mcrawler_free_cookie(&u->cookies[t]);
-			u->cookiecnt--;
-			if (t < u->cookiecnt) {
-				memmove(&u->cookies[t], &u->cookies[t+1], (u->cookiecnt-t)*sizeof(*u->cookies));
-			}
-		} else {
-			t++;
-		}
-	}
 }
 
 
@@ -2150,6 +2138,7 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 		break;
 
 	case MCURL_S_GENREQUEST:
+		prepare_for_request(u);
 		f->gen_request(u);
 		break;
 

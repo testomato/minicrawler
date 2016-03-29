@@ -36,3 +36,6 @@ int base64_len(int);
 void base64(char *, const void *, int);
 char *store_cookie_domain(const struct nv *attr, mcrawler_cookie *cookie);
 time_t parse_cookie_date(char *date);
+size_t cookies_header_max_size(mcrawler_url *u);
+void set_cookies_header(mcrawler_url *u, char *buf, size_t *p_len);
+void remove_expired_cookies(mcrawler_url *u);

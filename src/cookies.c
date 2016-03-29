@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
@@ -115,4 +116,52 @@ next:
 	tm.tm_isdst = 0;
 
 	return timegm(&tm);
+}
+
+size_t cookies_header_max_size(mcrawler_url *u) {
+	size_t cookies_size = 0;
+	for (int i = 0; i < u->cookiecnt; i++) cookies_size += 3 + strlen(u->cookies[i].name) + strlen(u->cookies[i].value);
+	return cookies_size;
+}
+
+void set_cookies_header(mcrawler_url *u, char *buf, size_t *p_len) {
+	size_t len = 0;
+	int s;
+
+	for (int t = 0; t < u->cookiecnt; t++) {
+		char *p, c;
+		// see http://tools.ietf.org/html/rfc6265 section 5.4
+		if (
+				((u->cookies[t].host_only == 1 && strcasecmp(u->host, u->cookies[t].domain) == 0) || // The cookie's host-only-flag is true and the canonicalized request-host is identical to the cookie's domain.
+					(u->cookies[t].host_only == 0 && (p = strcasestr(u->host, u->cookies[t].domain)) && *(p+strlen(u->cookies[t].domain)) == 0)) && //  Or: The cookie's host-only-flag is false and the canonicalized request-host domain-matches the cookie's domain.
+				(!strncmp(u->path, u->cookies[t].path, strlen(u->cookies[t].path)) && (u->cookies[t].path[strlen(u->cookies[t].path)-1] == '/' || (c = u->path[strlen(u->cookies[t].path)]) == '/' || c == '?' || c == 0)) && // The request-uri's path path-matches the cookie's path.
+				(u->cookies[t].secure == 0 || strcmp(u->proto, "https") == 0) //  If the cookie's secure-only-flag is true, then the request- uri's scheme must denote a "secure" protocol
+		) {
+			if (len) {
+				strcpy(buf + len, "; ");
+				len += 2;
+			}
+			s = sprintf(buf + len, "%s=%s", u->cookies[t].name, u->cookies[t].value);
+			if (s > 0) len += s;
+		}
+	}
+	*p_len = len;
+}
+
+// The user agent MUST evict all expired cookies from the cookie store
+// if, at any time, an expired cookie exists in the cookie store.
+void remove_expired_cookies(mcrawler_url *u) {
+	time_t tim = time(NULL);
+	for (int t = 0; t < u->cookiecnt;) {
+		if (tim > u->cookies[t].expires) {
+			debugf("[%d] Cookie %s expired. Deleting\n", u->index, u->cookies[t].name);
+			mcrawler_free_cookie(&u->cookies[t]);
+			u->cookiecnt--;
+			if (t < u->cookiecnt) {
+				memmove(&u->cookies[t], &u->cookies[t+1], (u->cookiecnt-t)*sizeof(*u->cookies));
+			}
+		} else {
+			t++;
+		}
+	}
 }
