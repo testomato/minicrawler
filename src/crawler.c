@@ -677,15 +677,15 @@ static void genrequest(mcrawler_url *u) {
 
 	free(u->request);
 	u->request = malloc(
-			strlen(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
-			strlen(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
-			strlen(acceptheader) + 2 + // Accept: */*\n
+			sizeof(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
+			sizeof(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
+			sizeof(acceptheader) + 2 + // Accept: */*\n
 			(u->authorization != NULL ? strlen(authorizationheader) + strlen(u->authorization) + 2 : 0) + // Authorization: ...\n
-			strlen(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : strlen(defaultagent) + 8) + 2 + // User-Agent: %s\n
-			strlen(cookieheader) + cookies_size + 2 + // Cookie: %s; %s...\n
+			sizeof(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : sizeof(defaultagent) + 8) + 2 + // User-Agent: %s\n
+			sizeof(cookieheader) + cookies_size + 2 + // Cookie: %s; %s...\n
 			strlen(u->customheader) + 2 +
-			(u->options & 1<<MCURL_OPT_GZIP ? strlen(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
-			(u->post != NULL ? strlen(contentlengthheader) + 6 + 2 + strlen(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
+			(u->options & 1<<MCURL_OPT_GZIP ? sizeof(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
+			(u->post != NULL ? sizeof(contentlengthheader) + 6 + 2 + sizeof(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
 			2 + // end of header
 			u->postlen + // body
 			1 // \0
@@ -721,7 +721,7 @@ static void genrequest(mcrawler_url *u) {
 		r = stpcpy(r, "\r\n");
 	}
 
-	// Uset-Agent
+	// User-Agent
 	r = stpcpy(r, useragentheader);
 	if (u->customagent[0]) {
 		r = stpcpy(r + strlen(r), u->customagent);
