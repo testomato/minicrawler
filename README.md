@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
 	if (argc > 2) {
 		base = argv[2];
 	}
-	
+
 	mcrawler_url_url url, *base_url = NULL;
 
 	if (base) {
@@ -149,10 +149,16 @@ Install following dependencies (including header files, i.e. dev packages):
 
 On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev`
 
-On OS X with homebrew run `brew install c-ares zlib icu openssl nghttp2`
+On OS X with homebrew run `brew install c-ares zlib icu4c openssl nghttp2` then add follow lines to your `~/.bash_profile` file:
 
-Then run
-```bash
+```
+export CFLAGS="-I/usr/local/include"
+export LDFLAGS="-L/usr/local/Cellar -L/usr/local/lib -L/usr/local/opt/icu4c/lib"
+```
+
+And run follow
+
+```
 ./autogen.sh
 ./configure [--without-ssl] [--without-http2]
 make
@@ -160,9 +166,9 @@ make
 sudo make install
 ```
 
+
 ## Users
 
  * [Testomato](https://testomato.com) – A simple website monitoring tool
  * [Flowreader](https://flowreader.com/) – A modern reader with a social twist
  * [add me here](mailto:jan.prachar@wikidi.com)
-
