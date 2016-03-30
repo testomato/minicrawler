@@ -336,7 +336,7 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 		return;
 	}
 
-	debugf("[%d] Resolving %s ended => %s", u->index, u->host, hostent->h_name);
+	debugf("[%d] Resolving %s ended => %s", u->index, u->hostname, hostent->h_name);
 
 	// uvolníme staré struktury
 	if (u->addr != NULL) {
@@ -420,7 +420,8 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_url_url *base) {
 	}
 
 	// serialized host in url->host->domain
-	SAFE_STRCPY(u->host, url->host->domain);
+	mcrawler_url_get_host(url, u->host);
+	mcrawler_url_get_hostname(url, u->hostname);
 
 	if (url->port_not_null) {
 		u->port = url->port;
@@ -432,7 +433,7 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_url_url *base) {
 	if (u->path != NULL) free(u->path);
 	u->path = mcrawler_url_serialize_path_and_query(url);
 
-	debugf("[%d] proto='%s' host='%s' port=%d path='%s'\n", u->index, u->proto, u->host, u->port, u->path);
+	debugf("[%d] proto='%s' hostname='%s' port=%d path='%s'\n", u->index, u->proto, u->hostname, u->port, u->path);
 
 	if (url->host->type == MCRAWLER_URL_HOST_IPV4) {
 		free_addr(u->prev_addr);
@@ -483,7 +484,7 @@ static void parseurl(mcrawler_url *u) {
 static void launchdns(mcrawler_url *u) {
 	int t;
 
-	debugf("[%d] Resolving %s starts\n", u->index, u->host);
+	debugf("[%d] Resolving %s starts\n", u->index, u->hostname);
 
 	struct ares_options opts;
 	opts.timeout = 5000;
@@ -508,7 +509,7 @@ static void launchdns(mcrawler_url *u) {
 	}
 
 	set_atomic_int(&u->state, MCURL_S_INDNS);
-	ares_gethostbyname(u->aresch, u->host, u->addrtype, (ares_host_callback)&dnscallback, u);
+	ares_gethostbyname(u->aresch, u->hostname, u->addrtype, (ares_host_callback)&dnscallback, u);
 }
 
 /** uz je ares hotovy?
@@ -592,7 +593,7 @@ static int maybe_create_ssl(mcrawler_url *u) {
 	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
 	SSL_set_bio(ssl, sbio, sbio);
 	SSL_set_options(ssl, u->ssl_options);
-	SSL_set_tlsext_host_name(ssl, u->host);
+	SSL_set_tlsext_host_name(ssl, u->hostname);
 
 	u->ssl = ssl;
 #endif
@@ -678,7 +679,7 @@ static void genrequest(mcrawler_url *u) {
 	free(u->request);
 	u->request = malloc(
 			sizeof(reqfmt) + strlen(u->method) + strlen(u->path) + 2 + // method URL HTTP/1.1\n
-			sizeof(hostheader) + strlen(u->host) + 6 + 2 + // Host: %s(:port)\n
+			sizeof(hostheader) + strlen(u->host) + 2 + // Host: %s(:port)\n
 			sizeof(acceptheader) + 2 + // Accept: */*\n
 			(u->authorization != NULL ? strlen(authorizationheader) + strlen(u->authorization) + 2 : 0) + // Authorization: ...\n
 			sizeof(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : sizeof(defaultagent) + 8) + 2 + // User-Agent: %s\n
@@ -700,10 +701,8 @@ static void genrequest(mcrawler_url *u) {
 
 	// Host
 	r = stpcpy(r, hostheader);
-	char *host = mcrawler_url_get_host(u->uri);
-	r = stpcpy(r, host);
+	r = stpcpy(r, u->host);
 	r = stpcpy(r, "\r\n");
-	free(host);
 
 	// Accept
 	char *p = strstr(u->customheader, "Accept:");
@@ -864,14 +863,11 @@ static void genrequest_http2(mcrawler_url *u) {
 		strcpy(u->method, "GET");
 	}
 
-	char *host = mcrawler_url_get_host(u->uri);
-
 	size_t hdrs_len = 4;
 	nghttp2_nv hdrs[5] = {
 		MAKE_NGHTTP2_NV(":method", u->method),
 		MAKE_NGHTTP2_NV(":scheme", u->proto),
-		MAKE_NGHTTP2_NV(":authority", host),
-		// TODO memory leak - free(host);
+		MAKE_NGHTTP2_NV(":authority", u->host),
 		MAKE_NGHTTP2_NV(":path", u->path)
 	};
 
@@ -1161,13 +1157,13 @@ static void setcookie(mcrawler_url *u, char *str) {
 	}
 
 	if (!cookie.domain) {
-		cookie.domain = malloc(strlen(u->host) +1);
-		strcpy(cookie.domain, u->host);
+		cookie.domain = malloc(strlen(u->hostname) +1);
+		strcpy(cookie.domain, u->hostname);
 		cookie.host_only = 1;
 	} else {
 		// match request host
-		if ((p = strcasestr(u->host, cookie.domain)) == NULL || *(p+strlen(cookie.domain)) != 0) {
-			debugf("[%d] Domain '%s' in cookie string does not match request host '%s'... ignoring\n", u->index, cookie.domain, u->host);
+		if ((p = strcasestr(u->hostname, cookie.domain)) == NULL || *(p+strlen(cookie.domain)) != 0) {
+			debugf("[%d] Domain '%s' in cookie string does not match request host '%s'... ignoring\n", u->index, cookie.domain, u->hostname);
 			goto fail;
 		}
 	}
@@ -1788,8 +1784,8 @@ static void resolvelocation(mcrawler_url *u) {
 		return;
 	}
 
-	char ohost[ strlen(u->host) ];
-	strcpy(ohost, u->host);
+	char ohost[ strlen(u->hostname) + 1 ];
+	strcpy(ohost, u->hostname);
 
 	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
 
@@ -1800,7 +1796,7 @@ static void resolvelocation(mcrawler_url *u) {
 	free(u->redirectedto);
 	u->redirectedto = mcrawler_url_serialize_url(u->uri, 0);
 
-	if (strcmp(u->host, ohost) == 0) {
+	if (strcmp(u->hostname, ohost) == 0) {
 		// muzes se pripojit na tu puvodni IP
 		free_addr(u->prev_addr);
 		u->prev_addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
