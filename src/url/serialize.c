@@ -83,7 +83,7 @@ char *mcrawler_url_serialize_url(mcrawler_url_url *url, int exclude_fragment) {
 		append_s(&output, &outsz, &outp, url->host->domain);
 		// If url’s port is non-null, append ":" followed by url’s port, serialized, to output.
 		if (url->port_not_null) {
-			char pstr[6]; // port is < 2^16
+			char pstr[7]; // port is < 2^16
 			sprintf(pstr, ":%d", url->port);
 			append_s(&output, &outsz, &outp, pstr);
 		}
