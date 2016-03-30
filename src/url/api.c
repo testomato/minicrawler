@@ -87,7 +87,7 @@ char * mcrawler_url_get_search(mcrawler_url_url *url) {
 		return strdup("");
 	// Return "?", followed by context object’s url’s query.
 	} else {
-		char *search = malloc(strlen(url->query + 2));
+		char *search = malloc(strlen(url->query) + 2);
 		search[0] = '?';
 		strcpy(search + 1, url->query);
 		return search;
