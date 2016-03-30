@@ -2,6 +2,7 @@
 #include <string.h>
 #include <time.h>
 
+#define DEFAULTAGENT "minicrawler/%s"
 
 struct mcrawler_settings {
 	int debug;
