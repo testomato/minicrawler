@@ -9,16 +9,16 @@
 #include "alloc.h"
 
 
-char *mcrawler_url_serialize_ipv6(mcrawler_url_host *host) {
+char *mcrawler_url_serialize_ipv6(mcrawler_url_host *host, char *dest) {
 	char straddr[INET6_ADDRSTRLEN];
 	inet_ntop(AF_INET6, host->ipv6, straddr, sizeof(straddr));
-	return strdup(straddr);
+	return strcpy(dest, straddr);
 }
 
-char *mcrawler_url_serialize_ipv4(mcrawler_url_host *host) {
+char *mcrawler_url_serialize_ipv4(mcrawler_url_host *host, char *dest) {
 	char straddr[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, host->ipv4, straddr, sizeof(straddr));
-	return strdup(straddr);
+	return strcpy(dest, straddr);
 }
 
 char *mcrawler_url_serialize_path_and_query(mcrawler_url_url *url) {

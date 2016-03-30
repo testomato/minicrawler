@@ -175,8 +175,5 @@ void mcrawler_url_free_url(mcrawler_url_url *url) {
 		}
 	}
 	free(url->path);
-	if (url->host) {
-		free(url->host->domain);
-	}
 	free(url->host);
 }

@@ -46,7 +46,6 @@ static inline mcrawler_url_host *dup_host(mcrawler_url_host *host) {
 
 	mcrawler_url_host *new = (mcrawler_url_host *)malloc(sizeof(mcrawler_url_host));
 	memcpy(new, host, sizeof(mcrawler_url_host));
-	new->domain = strdupnul(host->domain);
 	return new;
 }
 
@@ -367,12 +366,9 @@ Finale:
 		address[i] = htons(address[i]);
 	}
 	memcpy(host->ipv6, address, 16);
-	char *ipv6str = mcrawler_url_serialize_ipv6(host);
-	free(host->domain);
-	host->domain = malloc(strlen(ipv6str) + 3);
 	host->domain[0] = '[';
-	strcpy(host->domain + 1, ipv6str);
-	strcpy(host->domain + 1 + strlen(ipv6str), "]");
+	mcrawler_url_serialize_ipv6(host, host->domain + 1);
+	strcpy(host->domain + strlen(host->domain), "]");
 	return MCRAWLER_URL_SUCCESS;
 }
 
@@ -494,8 +490,7 @@ int mcrawler_url_parse_ipv4(mcrawler_url_host *host, const char *input) {
 	host->type = MCRAWLER_URL_HOST_IPV4;
 	ipv4 = htonl(ipv4);
 	memcpy(host->ipv4, &ipv4, 4);
-	free(host->domain);
-	host->domain = mcrawler_url_serialize_ipv4(host);
+	mcrawler_url_serialize_ipv4(host, host->domain);
 	free(parts[0]);
 	return MCRAWLER_URL_SUCCESS;
 }
@@ -554,8 +549,7 @@ int mcrawler_url_parse_host(mcrawler_url_host *host, const char *input) {
 
 	// Return asciiDomain if the Unicode flag is unset, and the result of running domain to Unicode on asciiDomain otherwise.
 	host->type = MCRAWLER_URL_HOST_DOMAIN;
-	free(host->domain);
-	host->domain = strdup(asciiDomain);
+	strcpy(host->domain, asciiDomain);
 	return MCRAWLER_URL_SUCCESS;
 }
 

@@ -35,29 +35,43 @@ char * mcrawler_url_get_password(mcrawler_url_url *url) {
 }
 
 // The host attribute’s getter must run these steps:
-char * mcrawler_url_get_host(mcrawler_url_url *url) {
+char * mcrawler_url_get_host(mcrawler_url_url *url, char *dest) {
 	// Let url be context object’s url.
 	// If url’s host is null, return the empty string.
 	if (!url->host) {
-		return strdup("");
+		if (dest) {
+			return strcpy(dest, "");
+		} else {
+			return strdup("");
+		}
 	// If url’s port is null, return url’s host, serialized.
 	} else if (!url->port_not_null) {
-		return strdup(url->host->domain);
+		if (dest) {
+			return strcpy(dest, url->host->domain);
+		} else {
+			return strdup(url->host->domain);
+		}
 	// Return url’s host, serialized, followed by ":" and url’s port, serialized.
 	} else {
 		size_t len = strlen(url->host->domain);
-		char *host = malloc(len + 7);
-		strcpy(host, url->host->domain);
-		sprintf(host + len, ":%d", url->port);
-		return host;
+		if (!dest) {
+			dest = malloc(len + 7);
+		}
+		strcpy(dest, url->host->domain);
+		sprintf(dest + len, ":%d", url->port);
+		return dest;
 	}
 }
 
 // The hostname attribute’s getter must run these steps:
-char * mcrawler_url_get_hostname(mcrawler_url_url *url) {
+char * mcrawler_url_get_hostname(mcrawler_url_url *url, char *dest) {
 	// If context object’s url’s host is null, return the empty string.
 	// Return context object’s url’s host, serialized.
-	return strdup(url->host ? url->host->domain : "");
+	if (dest) {
+		return strcpy(dest, url->host ? url->host->domain : "");
+	} else {
+		return strdup(url->host ? url->host->domain : "");
+	}
 }
 
 // The port attribute’s getter must run these steps:

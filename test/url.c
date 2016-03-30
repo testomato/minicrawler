@@ -44,8 +44,8 @@ int main(int argc, char *argv[]) {
 	char *protocol = mcrawler_url_get_protocol(&url);
 	char *username = mcrawler_url_get_username(&url);
 	char *password = mcrawler_url_get_password(&url);
-	char *hostname = mcrawler_url_get_hostname(&url);
-	char *host = mcrawler_url_get_host(&url);
+	char *hostname = mcrawler_url_get_hostname(&url, NULL);
+	char *host = mcrawler_url_get_host(&url, NULL);
 	char *port = mcrawler_url_get_port(&url);
 	char *pathname = mcrawler_url_get_pathname(&url);
 	char *search = mcrawler_url_get_search(&url);
