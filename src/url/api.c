@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include "minicrawler-url.h"
+#include "../h/string.h"
 
 // The href attribute’s getter must return the serialization of context object’s url.
 char * mcrawler_url_get_href(mcrawler_url_url *url) {
