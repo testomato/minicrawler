@@ -823,10 +823,10 @@ static ssize_t http2_read_callback(nghttp2_session *session, int32_t stream_id, 
 		size_t ret = u->postlen - u->request_it > length ? length : u->postlen - u->request_it;
 
 		if (ret == 0) {
-			*data_flags = NGHTTP2_DATA_FLAG_EOF;
+			*data_flags = *data_flags | NGHTTP2_DATA_FLAG_EOF;
 		} else {
 			memcpy(buf, u->post + u->request_it, ret);
-			debugf("[%d] Sent %zd bytes [%.*s]\n", u->index, ret, (int)ret, buf);
+			debugf("[%d] Copied %zd bytes to read buffer [%.*s]\n", u->index, ret, (int)ret, buf);
 			u->request_it += ret;
 		}
 		return ret;
@@ -988,7 +988,7 @@ static void genrequest_http2(mcrawler_url *u) {
 	if (u->post != NULL) {
 		char len[6];
 		sprintf(len, "%d", u->postlen);
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("content-length", len);
+		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("content-length", len, strlen(len));
 		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("content-type", "application/x-www-form-urlencoded");
 
 		p_data_provider = &data_provider;
