@@ -812,6 +812,9 @@ static ssize_t http2_send_callback(nghttp2_session *session, const uint8_t *data
 	}
 }
 
+/**
+ * Copy request to buffer
+ */
 static ssize_t http2_read_callback(nghttp2_session *session, int32_t stream_id, uint8_t *buf, size_t length, uint32_t *data_flags, nghttp2_data_source *source, void *user_data) {
 	mcrawler_url *u = (mcrawler_url *)user_data;
 	http2_session_data *session_data = (http2_session_data *)u->http2_session;
@@ -831,6 +834,9 @@ static ssize_t http2_read_callback(nghttp2_session *session, int32_t stream_id, 
 	return 0;
 }
 
+/**
+ * Received header from server
+ */
 static int http2_on_header_callback(nghttp2_session *session, const nghttp2_frame *frame, const uint8_t *name, size_t namelen, const uint8_t *value, size_t valuelen, uint8_t flags, void *user_data) {
 	mcrawler_url *u = (mcrawler_url *)user_data;
 	http2_session_data *session_data = (http2_session_data *)u->http2_session;
@@ -845,6 +851,9 @@ static int http2_on_header_callback(nghttp2_session *session, const nghttp2_fram
 	return 0;
 }
 
+/**
+ * Received data from server
+ */
 static int http2_on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags, int32_t stream_id, const uint8_t *data, size_t len, void *user_data) {
 	mcrawler_url *u = (mcrawler_url *)user_data;
 	http2_session_data *session_data = (http2_session_data *)u->http2_session;
@@ -1016,12 +1025,13 @@ static void genrequest_http2(mcrawler_url *u) {
 	nghttp2_session_client_new(&session_data->session, callbacks, u);
 	nghttp2_session_callbacks_del(callbacks);
 
-	// submit SETTINGS
-	nghttp2_settings_entry iv[1] = {{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100}};
-
+	// TCP NODELAY
 	int val = 1;
 	setsockopt(u->sockfd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+
+	// submit SETTINGS
 	int rv;
+	nghttp2_settings_entry iv[1] = {{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100}};
 	/* client 24 bytes magic string will be sent by nghttp2 library */
 	rv = nghttp2_submit_settings(session_data->session, NGHTTP2_FLAG_NONE, iv, ARRLEN(iv));
 	if (rv != 0) {
@@ -1032,8 +1042,7 @@ static void genrequest_http2(mcrawler_url *u) {
 	}
 
 	// submit headers
-	int32_t stream_id = nghttp2_submit_request(session_data->session, NULL,
-			hdrs, hdrs_len, p_data_provider, u);
+	int32_t stream_id = nghttp2_submit_request(session_data->session, NULL, hdrs, hdrs_len, p_data_provider, u);
 	if (stream_id < 0) {
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		debugf("[%d] Could not submit HTTP request: %s", u->index, nghttp2_strerror(stream_id));
@@ -2062,6 +2071,7 @@ static void readreply_http2(mcrawler_url *u) {
 
 		u->timing.lastread = get_time_int();
 	}
+
 	if (t > 0 && !u->timing.firstbyte) {
 		u->timing.firstbyte = u->timing.lastread;
 	}
