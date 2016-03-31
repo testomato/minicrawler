@@ -149,9 +149,15 @@ Install following dependencies (including header files, i.e. dev packages):
 
 On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev`.
 
-On OS X with homebrew run `brew install c-ares zlib icu4c openssl nghttp2`.
+On OS X with homebrew run:
+
+```
+brew install c-ares zlib icu4c openssl nghttp2
+brew link c-ares zlib icu4c openssl nghttp2 --force
+```
 
 Then run:
+
 ```
 ./autogen.sh
 ./configure [--without-ssl] [--without-http2]
@@ -159,11 +165,12 @@ make
 [make check]
 sudo make install
 ```
-On OS X with homebrew `CFLAGS` and `LDFLAGS` need to contain proper paths. You can assign them directly as the configure script options.
-```
-./configure CFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/Cellar -L/usr/local/lib -L/usr/local/opt/icu4c/lib"
-```
 
+On OS X with homebrew `CFLAGS` and `LDFLAGS` need to contain proper paths. You can assign them directly as the configure script options.
+
+```
+ ./configure CFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/opt -L/usr/local/lib"
+```
 
 ## Users
 
