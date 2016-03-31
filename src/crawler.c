@@ -1982,7 +1982,6 @@ static void readreply(mcrawler_url *u) {
 		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
 		u->sockfd = 0;
 	} else {
-		set_atomic_int(&u->state, MCURL_S_RECVREPLY);
 		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
 	}
 }
@@ -2051,7 +2050,6 @@ static void readreply_http2(mcrawler_url *u) {
 			set_atomic_int(&u->state, MCURL_S_ERROR);
 			return;
 		} else {
-			//set_atomic_int(&u->state, MCURL_S_RECVREPLY);
 			set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ | 1<<MCURL_RW_WANT_WRITE);
 		}
 	}
