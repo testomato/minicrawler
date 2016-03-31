@@ -147,9 +147,13 @@ Install following dependencies (including header files, i.e. dev packages):
  * OpenSSL (optional)
  * nghttp2 (optional)
 
-On Linux with apt-get run `apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev`.
+On Linux with apt-get run:
 
-On OS X with homebrew run:
+```
+apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev
+```
+
+On OS X with [homebrew](http://brew.sh/) run:
 
 ```
 brew install c-ares zlib icu4c openssl nghttp2
