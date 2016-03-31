@@ -793,6 +793,8 @@ static ssize_t http2_send_callback(nghttp2_session *session, const uint8_t *data
 	mcrawler_url *u = (mcrawler_url *)user_data;
 
 	const ssize_t ret = ((mcrawler_url_func *)u->f)->write(u, data, length, (char *)&u->error_msg);
+	debugf("[%d] Written %zd bytes to socket\n", u->index, ret);
+
 	if (ret == MCURL_IO_ERROR || ret == MCURL_IO_EOF) {
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return NGHTTP2_ERR_CALLBACK_FAILURE;
@@ -880,6 +882,49 @@ static int http2_on_stream_close_callback(nghttp2_session *session, int32_t stre
 	return 0;
 }
 
+static inline const char *strframetype(uint8_t type) {
+	switch (type) {
+		case NGHTTP2_DATA:
+			return "DATA";
+		case NGHTTP2_HEADERS:
+			return "HEADERS";
+		case NGHTTP2_PRIORITY:
+			return "PRIORITY";
+		case NGHTTP2_RST_STREAM:
+			return "RST_STREAM";
+		case NGHTTP2_SETTINGS:
+			return "SETTINGS";
+		case NGHTTP2_PUSH_PROMISE:
+			return "PUSH_PROMISE";
+		case NGHTTP2_PING:
+			return "PING";
+		case NGHTTP2_GOAWAY:
+			return "GOAWAY";
+		case NGHTTP2_WINDOW_UPDATE:
+			return "WINDOW_UPDATE";
+		case NGHTTP2_CONTINUATION:
+			return "CONTINUATION";
+		default:
+			return "UKNOWN";
+	}
+}
+
+static int http2_on_frame_send_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data) {
+	mcrawler_url *u = (mcrawler_url *)user_data;
+	debugf("[%d] Sent %s frame of length %zu in stream %d\n", u->index, strframetype(frame->hd.type), frame->hd.length, frame->hd.stream_id);
+	return 0;
+}
+
+static int http2_on_frame_recv_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data) {
+	mcrawler_url *u = (mcrawler_url *)user_data;
+	debugf("[%d] Received %s frame of length %zu in stream %d\n", u->index, strframetype(frame->hd.type), frame->hd.length, frame->hd.stream_id);
+	return 0;
+}
+
+static int http2_on_begin_headers_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data) {
+	return 0;
+}
+
 static void genrequest_http2(mcrawler_url *u) {
 	size_t hdrs_len = 4;
 	nghttp2_nv hdrs[12] = {
@@ -953,11 +998,15 @@ static void genrequest_http2(mcrawler_url *u) {
 	nghttp2_session_callbacks *callbacks;
 	nghttp2_session_callbacks_new(&callbacks);
 	nghttp2_session_callbacks_set_send_callback(callbacks, http2_send_callback);
-	//nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, http2_on_frame_recv_callback);
 	nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks, http2_on_data_chunk_recv_callback);
 	nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, http2_on_stream_close_callback);
 	nghttp2_session_callbacks_set_on_header_callback(callbacks, http2_on_header_callback);
-	//nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, http2_on_begin_headers_callback);
+
+	if (debug) {
+		nghttp2_session_callbacks_set_on_frame_send_callback(callbacks, http2_on_frame_send_callback);
+		nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, http2_on_frame_recv_callback);
+		nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, http2_on_begin_headers_callback);
+	}
 
 	// init session data
 	http2_session_data *session_data = malloc(sizeof(http2_session_data));
@@ -2003,7 +2052,7 @@ static void readreply_http2(mcrawler_url *u) {
 
 	if (t >= 0) {
 		ssize_t readlen = nghttp2_session_mem_recv(session_data->session, buf, t);
-		debugf("[%d] Read %zd bytes\n", u->index, readlen);
+		debugf("[%d] Read %zd bytes from socket\n", u->index, readlen);
 		if (readlen < 0) {
 			debugf("[%d] HTTP2 read error: %s\n", u->index, nghttp2_strerror((int)readlen));
 			sprintf(u->error_msg, "HTTP2 read error (%.250s)", nghttp2_strerror((int)readlen));
