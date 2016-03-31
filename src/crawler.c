@@ -821,7 +821,7 @@ static ssize_t http2_read_callback(nghttp2_session *session, int32_t stream_id, 
 			*data_flags = NGHTTP2_DATA_FLAG_EOF;
 		} else {
 			memcpy(buf, u->post + u->request_it, ret);
-			debugf("[%d] Sent %ld bytes [%.*s]\n", u->index, ret, (int)ret, buf);
+			debugf("[%d] Sent %zd bytes [%.*s]\n", u->index, ret, (int)ret, buf);
 			u->request_it += ret;
 		}
 		return ret;
@@ -907,8 +907,8 @@ static void genrequest_http2(mcrawler_url *u) {
 		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV("user-agent", u->customagent);
 	} else {
 		char tmp[sizeof(DEFAULTAGENT) + sizeof(VERSION)];
-		sprintf(tmp, DEFAULTAGENT, VERSION);
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("user-agent", tmp);
+		int len = sprintf(tmp, DEFAULTAGENT, VERSION);
+		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("user-agent", tmp, len);
 	}
 
 	// Cookie
