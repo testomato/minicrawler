@@ -931,6 +931,10 @@ static int http2_on_frame_recv_callback(nghttp2_session *session, const nghttp2_
 }
 
 static int http2_on_begin_headers_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data) {
+	mcrawler_url *u = (mcrawler_url *)user_data;
+	if (!u->timing.firstbyte) {
+		u->timing.lastread = u->timing.firstbyte = get_time_int();
+	}
 	return 0;
 }
 
@@ -1010,11 +1014,11 @@ static void genrequest_http2(mcrawler_url *u) {
 	nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks, http2_on_data_chunk_recv_callback);
 	nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, http2_on_stream_close_callback);
 	nghttp2_session_callbacks_set_on_header_callback(callbacks, http2_on_header_callback);
+	nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, http2_on_begin_headers_callback);
 
 	if (debug) {
 		nghttp2_session_callbacks_set_on_frame_send_callback(callbacks, http2_on_frame_send_callback);
 		nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, http2_on_frame_recv_callback);
-		nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, http2_on_begin_headers_callback);
 	}
 
 	// init session data
@@ -2060,6 +2064,10 @@ static void readreply_http2(mcrawler_url *u) {
 	http2_session_data *session_data = (http2_session_data *)u->http2_session;
 
 	if (t >= 0) {
+		if (u->timing.firstbyte) {
+			u->timing.lastread = get_time_int();
+		}
+
 		ssize_t readlen = nghttp2_session_mem_recv(session_data->session, buf, t);
 		debugf("[%d] Read %zd bytes from socket\n", u->index, readlen);
 		if (readlen < 0) {
@@ -2068,12 +2076,6 @@ static void readreply_http2(mcrawler_url *u) {
 			set_atomic_int(&u->state, MCURL_S_ERROR);
 			return;
 		}
-
-		u->timing.lastread = get_time_int();
-	}
-
-	if (t > 0 && !u->timing.firstbyte) {
-		u->timing.firstbyte = u->timing.lastread;
 	}
 
 	if((t == MCURL_IO_EOF && nghttp2_session_want_read(session_data->session) == 0 && nghttp2_session_want_write(session_data->session) == 0) || t == MCURL_IO_ERROR) {
