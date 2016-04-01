@@ -80,6 +80,13 @@ static void check_io(const int state, const int rw) {
 	}
 }
 
+static inline void copy_addr_prev_addr(mcrawler_url *u) {
+	free_addr(u->prev_addr);
+	u->prev_addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
+	memcpy(u->prev_addr, u->addr, sizeof(mcrawler_addr));
+	u->prev_addr->next = NULL;
+}
+
 #ifdef HAVE_LIBSSL
 /**
  * Sets lower TSL/SSL protocol
@@ -190,6 +197,7 @@ static void sec_handshake(mcrawler_url *u) {
 		SSL_free(u->ssl);
 		u->ssl = NULL;
 		close(u->sockfd);
+		copy_addr_prev_addr(u);
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		return;
 	}
@@ -1429,10 +1437,7 @@ static int resolvelocation(mcrawler_url *u) {
 
 	if (strcmp(u->hostname, ohost) == 0) {
 		// muzes se pripojit na tu puvodni IP
-		free_addr(u->prev_addr);
-		u->prev_addr = (mcrawler_addr*)malloc(sizeof(mcrawler_addr));
-		memcpy(u->prev_addr, u->addr, sizeof(mcrawler_addr));
-		u->prev_addr->next = NULL;
+		copy_addr_prev_addr(u);
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
 	} else {
 		// zmena host
@@ -1481,6 +1486,7 @@ static int cont(mcrawler_url *u) {
 			// try to authorize
 			u->auth_attempt = 1;
 			reset_url(u);
+			copy_addr_prev_addr(u);
 			set_atomic_int(&u->state, MCURL_S_GOTIP);
 			return 0;
 		}
@@ -1700,6 +1706,7 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 						u->ssl = NULL;
 					}
 					close(u->sockfd);
+					copy_addr_prev_addr(u);
 					set_atomic_int(&u->state, MCURL_S_GOTIP);
 				}
 			}
