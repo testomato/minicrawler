@@ -831,6 +831,8 @@ static ssize_t http2_read_callback(nghttp2_session *session, int32_t stream_id, 
 	return 0;
 }
 
+static void header_cb(const char *name, char *value, void *data);
+
 /**
  * Received header from server
  */
@@ -841,7 +843,10 @@ static int http2_on_header_callback(nghttp2_session *session, const nghttp2_fram
 		case NGHTTP2_HEADERS:
 			if (frame->headers.cat == NGHTTP2_HCAT_RESPONSE &&
 					session_data->stream_id == frame->hd.stream_id) {
-				debugf("header: %s: %s\n", name, value);
+				debugf("[%d] header: %s: %s\n", u->index, name, value);
+				char *val = strdup((const char *)value);
+				header_cb((const char *)name, val, user_data);
+				free(val);
 				break;
 			}
 	}
@@ -879,6 +884,16 @@ static int http2_on_stream_close_callback(nghttp2_session *session, int32_t stre
 		} else {
 			debugf("[%d] HTTP2 stream %d closes successfuly\n", u->index, stream_id);
 			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
+/*
+#ifdef HAVE_LIBSSL
+			if (u->ssl != NULL) {
+				SSL_free(u->ssl);
+				u->ssl = NULL;
+			}
+#endif
+			close(u->sockfd);
+			u->sockfd = 0;
+			*/
 		}
 		rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
 		if (rv) {
@@ -1096,8 +1111,13 @@ static void empty_handshake(mcrawler_url *u) {
 	set_atomic_int(&u->state, MCURL_S_GENREQUEST);
 }
 
-static void header_cb(char *name, char *value, void *data) {
+static void header_cb(const char *name, char *value, void *data) {
 	mcrawler_url *u = (mcrawler_url *)data;
+	if (!strcasecmp(name, ":status")) {
+		u->status = atoi(value);
+		return;
+	}
+
 	if (!strcasecmp(name, "Content-Length")) {
 		u->contentlen = atoi(value);
 		debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
@@ -1175,6 +1195,7 @@ static void header_cb(char *name, char *value, void *data) {
 			// TODO: header can exists multiple times
 			parse_authchallenge(u, value);
 		}
+		return;
 	}
 }
 
@@ -1386,12 +1407,12 @@ static int check_proto(mcrawler_url *u) {
 
 /** vyres presmerovani
  */
-static void resolvelocation(mcrawler_url *u) {
+static int resolvelocation(mcrawler_url *u) {
 	if (--u->redirect_limit <= 0) {
 		debugf("[%d] Exceeded redirects limit", u->index);
 		sprintf(u->error_msg, "Too many redirects, possibly a redirect loop");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
-		return;
+		return 1;
 	}
 
 	char ohost[ strlen(u->hostname) + 1 ];
@@ -1400,7 +1421,7 @@ static void resolvelocation(mcrawler_url *u) {
 	debugf("[%d] Resolve location='%s'\n", u->index, u->location);
 
 	if (set_new_url(u, u->location, u->uri) == 0) {
-		return;
+		return 1;
 	}
 
 	free(u->redirectedto);
@@ -1446,6 +1467,25 @@ static void resolvelocation(mcrawler_url *u) {
 	}
 
 	reset_url(u);
+	return 0;
+}
+
+/**
+ * Continue with crawling?
+ */
+static int cont(mcrawler_url *u) {
+	if (u->location[0] && strcmp(u->method, "HEAD")) {
+		return resolvelocation(u);
+	} else if (u->authorization && u->status == 401) {
+		if (!u->auth_attempt) {
+			// try to authorize
+			u->auth_attempt = 1;
+			reset_url(u);
+			set_atomic_int(&u->state, MCURL_S_GOTIP);
+			return 0;
+		}
+	}
+	return 1;
 }
 
 /**
@@ -1501,6 +1541,15 @@ static void readreply(mcrawler_url *u) {
 	}
 	
 	if(t == MCURL_IO_EOF || t == MCURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
+		if (t == MCURL_IO_ERROR) {
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+		} else if (get_atomic_int(&u->state) != MCURL_S_ERROR) {
+			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
+			debugf("[%d] Downloaded.\n",u->index);
+		}
+
+		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
+
 #ifdef HAVE_LIBSSL
 		if (u->ssl != NULL) {
 			SSL_free(u->ssl);
@@ -1508,24 +1557,6 @@ static void readreply(mcrawler_url *u) {
 		}
 #endif
 
-		if (t == MCURL_IO_ERROR) {
-			set_atomic_int(&u->state, MCURL_S_ERROR);
-		} else if (get_atomic_int(&u->state) != MCURL_S_ERROR) {
-			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
-			debugf("[%d] Downloaded.\n",u->index);
-			if (u->location[0] && strcmp(u->method, "HEAD")) {
-				resolvelocation(u);
-			} else if (u->authorization && u->status == 401) {
-				if (!u->auth_attempt) {
-					// try to authorize
-					u->auth_attempt = 1;
-					reset_url(u);
-					set_atomic_int(&u->state, MCURL_S_GOTIP);
-				}
-			}
-		}
-
-		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
 		u->sockfd = 0;
 	} else {
@@ -1563,34 +1594,8 @@ static void readreply_http2(mcrawler_url *u) {
 		}
 	}
 
-	if((t == MCURL_IO_EOF && nghttp2_session_want_read(session_data->session) == 0 && nghttp2_session_want_write(session_data->session) == 0) || t == MCURL_IO_ERROR) {
-#ifdef HAVE_LIBSSL
-		if (u->ssl != NULL) {
-			SSL_free(u->ssl);
-			u->ssl = NULL;
-		}
-#endif
-
-		if (t == MCURL_IO_ERROR) {
-			set_atomic_int(&u->state, MCURL_S_ERROR);
-		} else if (get_atomic_int(&u->state) != MCURL_S_ERROR) {
-			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
-			debugf("[%d] Downloaded.\n",u->index);
-			if (u->location[0] && strcmp(u->method, "HEAD")) {
-				resolvelocation(u);
-			} else if (u->authorization && u->status == 401) {
-				if (!u->auth_attempt) {
-					// try to authorize
-					u->auth_attempt = 1;
-					reset_url(u);
-					set_atomic_int(&u->state, MCURL_S_GOTIP);
-				}
-			}
-		}
-
-		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
-		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
-		u->sockfd = 0;
+	if (t == MCURL_IO_ERROR) {
+		set_atomic_int(&u->state, MCURL_S_ERROR);
 	} else {
 		if (http2_session_send(u)) {
 			set_atomic_int(&u->state, MCURL_S_ERROR);
@@ -1756,7 +1761,9 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 		break;
 
 	case MCURL_S_DOWNLOADED:
-		finish(u, callback, callback_arg);
+		if (cont(u) != 0) {
+			finish(u, callback, callback_arg);
+		}
 		break;
   
 	case MCURL_S_ERROR:

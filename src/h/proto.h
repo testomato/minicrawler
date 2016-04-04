@@ -60,7 +60,7 @@ void parse_single_challenge(mcrawler_url *u, char **pp, struct challenge *ch);
 void parse_authchallenge(mcrawler_url *u, char *challenge);
 
 // http1.c
-typedef void (*header_callback)(char *name, char *value, void *);
+typedef void (*header_callback)(const char *name, char *value, void *);
 unsigned char *find_head_end(unsigned char *s, const size_t len);
 int parsehead(const unsigned char *s, const size_t len, int *status, header_callback header_callback, void *data);
 int eatchunked(mcrawler_url *u);
