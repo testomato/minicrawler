@@ -591,18 +591,20 @@ static void connectsocket(mcrawler_url *u) {
 static int maybe_create_ssl(mcrawler_url *u) {
 #ifdef HAVE_LIBSSL
 	if (0 != strcmp(u->proto, "https")) {
-		return 1;
+		return 0;
 	}
 
 	SSL *ssl = SSL_new(mossad());
+	if (!ssl) return -1;
 	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
+	if (!sbio) return -2;
 	SSL_set_bio(ssl, sbio, sbio);
 	SSL_set_options(ssl, u->ssl_options);
 	SSL_set_tlsext_host_name(ssl, u->hostname);
 
 	u->ssl = ssl;
 #endif
-	return 1;
+	return 0;
 }
 
 /** uz znam IP, otevri socket
@@ -635,24 +637,34 @@ static void opensocket(mcrawler_url *u)
 		addrlen = sizeof(struct sockaddr_in);
 	}
 	const int t = connect(u->sockfd, (struct sockaddr *)&addr, addrlen);
-	if (!maybe_create_ssl(u)) {
-		debugf("%d: cannot create ssl session :-(\n", u->index);
-		sprintf(u->error_msg, "Cannot create SSL session");
-		set_atomic_int(&u->state, MCURL_S_ERROR);
-	}
-	if(t) {
-		if(errno == EINPROGRESS) {
+	if (t) {
+		if (errno == EINPROGRESS) {
 			set_atomic_int(&u->state, MCURL_S_CONNECT);
 			set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
-		}
-		else {
-			debugf("%d: connect failed (%d, %s)\n", u->index, errno, strerror(errno));
+		} else {
+			debugf("[%d] connect failed (%d, %s)\n", u->index, errno, strerror(errno));
 			sprintf(u->error_msg, "Failed to connect to host (%.200m)");
 			set_atomic_int(&u->state, MCURL_S_ERROR);
+			close(u->sockfd);
+			u->sockfd = 0;
+			return;
 		}
 	} else {
 		set_atomic_int(&u->state, MCURL_S_HANDSHAKE);
 		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE | 1<<MCURL_RW_WANT_WRITE);
+	}
+
+	if (maybe_create_ssl(u) < 0) {
+		debugf("[%d] cannot create ssl session :-(\n", u->index);
+		sprintf(u->error_msg, "Cannot create SSL session");
+		unsigned long e;
+		while ((e = ERR_get_error())) {
+			debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
+		}
+		set_atomic_int(&u->state, MCURL_S_ERROR);
+		close(u->sockfd);
+		u->sockfd = 0;
+		return;
 	}
 }
 
