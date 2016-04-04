@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <time.h>
 
+#include "h/string.h"
 #include "h/proto.h"
 
 /**
@@ -164,4 +165,195 @@ void remove_expired_cookies(mcrawler_url *u) {
 			t++;
 		}
 	}
+}
+
+/** 
+ * zapíše si do pole novou cookie (pokud ji tam ještě nemá; pokud má, tak ji nahradí)
+ * see http://tools.ietf.org/html/rfc6265 section 5.2 and 5.3
+ */
+void setcookie(mcrawler_url *u, char *str) {
+	mcrawler_cookie cookie;
+	struct nv attributes[10];
+	int att_len = 0;
+	char *namevalue, *attributestr;
+	char *p, *q;
+	int i;
+
+	memset(&cookie, 0, sizeof(mcrawler_cookie));
+	cookie.expires = -1;
+	memset(attributes, 0, sizeof(attributes));
+
+	namevalue = str;
+	p = strchrnul(str, ';');
+	if (*p == ';') {
+		*p = 0;
+		attributestr = p + 1;
+	} else {
+		attributestr = p; // attribute string is empty
+	}
+
+	// parse name and value
+	if ((p = strchr(namevalue, '=')) == NULL) {
+		debugf("[%d] Cookie string '%s' lacks a '=' character\n", u->index, namevalue);
+		goto fail;
+	}
+	*p = 0; p++;
+
+	cookie.name = malloc(strlen(namevalue) + 1);
+	cookie.value = malloc(strlen(p) + 1);
+	strcpy(cookie.name, namevalue);
+	strcpy(cookie.value, p);
+
+	trim(cookie.name);
+	trim(cookie.value);
+
+	if (strlen(cookie.name) == 0) {
+		debugf("[%d] Cookie string '%s' has empty name\n", u->index, namevalue);
+		goto fail;
+	}
+	
+	// parse cookie attributes
+	struct nv *attr;
+	p = attributestr;
+	while (*p) {
+		if (att_len > 9) {
+			debugf("[%d] Cookie string '%s%s' has more 10 attributes (not enough memory)... skipping the rest\n", u->index, namevalue, attributestr);
+			break;
+		}
+
+		attr = attributes + att_len++;
+
+		attr->name = p;
+		p = strchrnul(p, ';');
+		if (*p) {
+			*p = 0; p++;
+		}
+		if ((q = strchr(attr->name, '='))) {
+			*q = 0;
+			attr->value = q + 1;
+		} else { // value is empty
+			attr->value = attr->name + strlen(attr->name);
+		}
+		trim(attr->name);
+		trim(attr->value);
+	}
+
+	// process attributes
+	for (i = 0; i < att_len; i++) {
+		attr = attributes + i;
+
+		// The Expires Attribute
+		if (!strcasecmp(attr->name, "Expires")) {
+			time_t expires = parse_cookie_date(attr->value);
+			if (expires < 0) {
+				debugf("[%d] Failed to parse cookie date from '%s'\n", u->index, attr->value);
+			} else {
+				cookie.expires = expires;
+			}
+
+			continue;
+		}
+
+		// The Max-Age Attribute
+		if (!strcasecmp(attr->name, "Max-Age")) {
+			char *p;
+			int max_age = strtol(attr->value, &p, 10);
+			if (*p != 0) {
+				debugf("[%d] Invalid Max-Age attribute '%s'\n", u->index, attr->value);
+				continue;
+			}
+			if (max_age <= 0) {
+				cookie.expires = (time_t)(0);
+			} else {
+				cookie.expires = time(NULL) + (time_t)max_age;
+			}
+
+			continue;
+		}
+
+		// The Domain Attribute
+		if (!strcasecmp(attr->name, "Domain")) {
+			store_cookie_domain(attr, &cookie);
+
+			continue;
+		}
+
+		// The Path Attribute
+		if (!strcasecmp(attr->name, "Path")) {
+			if (cookie.path) {
+				free(cookie.path);
+				cookie.path = NULL;
+			}
+			if (attr->value[0] == '/') {
+				cookie.path = malloc(strlen(attr->value) + 1);
+				strcpy(cookie.path, attr->value);
+			}
+
+			continue;
+		}
+
+		// The Secure Attribute
+		if (!strcasecmp(attr->name, "Secure")) {
+			cookie.secure = 1;
+
+			continue;
+		}
+	}
+
+	if (!cookie.domain) {
+		cookie.domain = malloc(strlen(u->hostname) +1);
+		strcpy(cookie.domain, u->hostname);
+		cookie.host_only = 1;
+	} else {
+		// match request host
+		if ((p = strcasestr(u->hostname, cookie.domain)) == NULL || *(p+strlen(cookie.domain)) != 0) {
+			debugf("[%d] Domain '%s' in cookie string does not match request host '%s'... ignoring\n", u->index, cookie.domain, u->hostname);
+			goto fail;
+		}
+	}
+
+	if (cookie.expires < 0) {
+		cookie.expires = LONG_MAX;
+	}
+
+	if (!cookie.path) {
+		// default-path, see http://tools.ietf.org/html/rfc6265#section-5.1.4
+		char *p = strchrnul(u->path, '?');
+		assert(p > u->path);
+		cookie.path = malloc(p - u->path + 1);
+		*(char *)mempcpy(cookie.path, u->path, p - u->path) = 0;
+		p = strrchr(cookie.path, '/');
+		if (p > cookie.path) {
+			*p = 0;
+		} else {
+			*(p + 1) = 0;
+		}
+	}
+
+
+	int t;
+	for (t = 0; t<u->cookiecnt; ++t) {
+		if(!strcasecmp(cookie.name,u->cookies[t].name) && !strcasecmp(cookie.domain,u->cookies[t].domain) && !strcmp(cookie.path,u->cookies[t].path)) {
+			break;
+		}
+	}
+
+	if (t<u->cookiecnt) { // už tam byla
+		mcrawler_free_cookie(&u->cookies[t]);
+		debugf("[%d] Changed cookie\n",u->index);
+	} else {
+		u->cookiecnt++;
+	}
+
+	if (t < sizeof(u->cookies)/sizeof(*u->cookies)) {
+		u->cookies[t] = cookie;
+		debugf("[%d] Storing cookie #%d: name='%s', value='%s', domain='%s', path='%s', host_only=%d, secure=%d\n",u->index,t,cookie.name,cookie.value,cookie.domain,cookie.path,cookie.host_only,cookie.secure);
+		return;
+	} else {
+		u->cookiecnt--;
+		debugf("[%d] Not enough memory for storing cookies\n",u->index);
+	}
+
+fail:
+	mcrawler_free_cookie(&cookie);
 }
