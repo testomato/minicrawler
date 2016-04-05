@@ -184,18 +184,24 @@ static void sec_handshake(mcrawler_url *u) {
 	}
 
 	if (lower_ssl_protocol(u) < 0) {
+		// nižší protokol už nejde
 		sprintf(u->error_msg, "SSL protocol error during handshake");
 		if (last_e) {
-			sprintf(u->error_msg + strlen(u->error_msg), " (%.200s)", ERR_reason_error_string(last_e));
+			// nepodporovaný protocol, necháme si hlášku z předchozího handshaku, pokud ji máme
+			if (ERR_GET_REASON(last_e) == SSL_R_UNSUPPORTED_PROTOCOL && u->ssl_error) {
+				sprintf(u->error_msg + strlen(u->error_msg), " (%.200s)", ERR_reason_error_string(u->ssl_error));
+			} else {
+				sprintf(u->error_msg + strlen(u->error_msg), " (%.200s)", ERR_reason_error_string(last_e));
+			}
 		}
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
-	}
-	else {
+	} else {
 		// zkusíme ještě jednou
 		SSL_shutdown(u->ssl);
 		SSL_free(u->ssl);
 		u->ssl = NULL;
+		u->ssl_error = last_e;
 		close(u->sockfd);
 		copy_addr_prev_addr(u);
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
