@@ -887,6 +887,22 @@ static int http2_on_header_callback(nghttp2_session *session, const nghttp2_fram
 				char *val = strdup((const char *)value);
 				header_cb((const char *)name, val, user_data);
 				free(val);
+
+				if (u->bufp + namelen + 2 + valuelen + 4 < BUFSIZE) {
+					if (u->bufp > 0) {
+						// delete the last empty line
+						u->bufp -= 2;
+					}
+					memcpy(u->buf + u->bufp, name, namelen);
+					strcpy((char *)u->buf + u->bufp + namelen, ": ");
+					memcpy(u->buf + u->bufp + namelen + 2, value, valuelen);
+					strcpy((char *)u->buf + u->bufp + namelen + 2 + valuelen, "\r\n\r\n");
+					u->bufp += namelen + 2 + valuelen + 4;
+					u->headlen = u->bufp;
+				} else {
+					debugf("[%d] Buffer is full\n", u->index);
+				}
+
 				break;
 			}
 	}
