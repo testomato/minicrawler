@@ -119,6 +119,28 @@ static int lower_ssl_protocol(mcrawler_url *u) {
 static void close_conn(mcrawler_url *u) {
 	debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
 
+#ifdef HAVE_LIBNGHTTP2
+	if (u->http2_session) {
+		int rv;
+		http2_session_data *session_data = (http2_session_data *)u->http2_session;
+		rv = nghttp2_session_terminate_session(session_data->session, NGHTTP2_NO_ERROR);
+		if (rv == 0) {
+			http2_session_send(u);
+		}
+		nghttp2_session_del(session_data->session);
+		free(u->http2_session);
+		u->http2_session = NULL;
+	}
+#endif
+
+#ifdef HAVE_LIBSSL
+	if (u->ssl) {
+		SSL_shutdown(u->ssl);
+		SSL_free(u->ssl);
+		u->ssl = NULL;
+	}
+#endif
+
 	if (u->aresch) {
 		ares_destroy(u->aresch);
 		u->aresch = NULL;
@@ -128,22 +150,6 @@ static void close_conn(mcrawler_url *u) {
 		close(u->sockfd);
 		u->sockfd = 0;
 	}
-#ifdef HAVE_LIBSSL
-	if (u->ssl) {
-		SSL_shutdown(u->ssl);
-		SSL_free(u->ssl);
-		u->ssl = NULL;
-	}
-#endif
-
-#ifdef HAVE_LIBNGHTTP2
-	if (u->http2_session) {
-		http2_session_data *session_data = (http2_session_data *)u->http2_session;
-		nghttp2_session_del(session_data->session);
-		free(u->http2_session);
-		u->http2_session = NULL;
-	}
-#endif
 }
 
 static void genrequest_http2(mcrawler_url *u);
@@ -239,7 +245,6 @@ static void sec_handshake(mcrawler_url *u) {
 	} else {
 		// zkusíme ještě jednou
 		u->ssl_error = last_e;
-		copy_addr_prev_addr(u);
 		close_conn(u);
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		return;
@@ -661,6 +666,15 @@ static void opensocket(mcrawler_url *u)
 	struct sockaddr_storage addr;
 	socklen_t addrlen;
 
+	if (u->sockfd && !memcmp(u->addr->ip, u->prev_addr->ip, sizeof(u->addr->ip)) && u->port == u->prev_port) {
+		// use existing connection
+		debugf("[%d] Using existing connection at socket %d!\n", u->index, u->sockfd);
+		set_atomic_int(&u->state, MCURL_S_GENREQUEST);
+		return;
+	} else {
+		close_conn(u);
+	}
+
 	u->sockfd = socket(u->addr->type, SOCK_STREAM, 0);
 	flags = fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
@@ -683,6 +697,9 @@ static void opensocket(mcrawler_url *u)
 		addrlen = sizeof(struct sockaddr_in);
 	}
 	const int t = connect(u->sockfd, (struct sockaddr *)&addr, addrlen);
+	copy_addr_prev_addr(u);
+	u->prev_port = u->port;
+
 	if (t) {
 		if (errno == EINPROGRESS) {
 			set_atomic_int(&u->state, MCURL_S_CONNECT);
@@ -956,16 +973,16 @@ static int http2_on_stream_close_callback(nghttp2_session *session, int32_t stre
 	int rv;
 	if (session_data->stream_id == stream_id) {
 		if (error_code > 0) {
-			debugf("[%d] HTTP2 stream %d closes with error %d\n", u->index, stream_id, /*nghttp2_http2_strerror(error_code), */error_code);
+			debugf("[%d] HTTP2 stream %d closes with error %s (%d)\n", u->index, stream_id, nghttp2_http2_strerror(error_code), error_code);
 			sprintf(u->error_msg, "HTTP2 stream closes with error %d", error_code);
 			set_atomic_int(&u->state, MCURL_S_ERROR);
+			rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
+			if (rv) {
+				return NGHTTP2_ERR_CALLBACK_FAILURE;
+			}
 		} else {
 			debugf("[%d] HTTP2 stream %d closes successfuly\n", u->index, stream_id);
 			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
-		}
-		rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
-		if (rv) {
-			return NGHTTP2_ERR_CALLBACK_FAILURE;
 		}
 	}
 	return 0;
@@ -1016,6 +1033,44 @@ static int http2_on_begin_headers_callback(nghttp2_session *session, const nghtt
 		u->timing.lastread = u->timing.firstbyte = get_time_int();
 	}
 	return 0;
+}
+
+static int http2_create_session(mcrawler_url *u) {
+	nghttp2_session_callbacks *callbacks;
+	nghttp2_session_callbacks_new(&callbacks);
+	nghttp2_session_callbacks_set_send_callback(callbacks, http2_send_callback);
+	nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks, http2_on_data_chunk_recv_callback);
+	nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, http2_on_stream_close_callback);
+	nghttp2_session_callbacks_set_on_header_callback(callbacks, http2_on_header_callback);
+	nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, http2_on_begin_headers_callback);
+
+	if (debug) {
+		nghttp2_session_callbacks_set_on_frame_send_callback(callbacks, http2_on_frame_send_callback);
+		nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, http2_on_frame_recv_callback);
+	}
+
+	// init session data
+	http2_session_data *session_data = malloc(sizeof(http2_session_data));
+	memset(session_data, 0, sizeof(http2_session_data));
+	u->http2_session = session_data;
+
+	nghttp2_session_client_new(&session_data->session, callbacks, u);
+	nghttp2_session_callbacks_del(callbacks);
+
+	// TCP NODELAY
+	int val = 1;
+	setsockopt(u->sockfd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
+
+	// submit SETTINGS
+	int rv;
+	nghttp2_settings_entry iv[1] = {{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100}};
+	/* client 24 bytes magic string will be sent by nghttp2 library */
+	rv = nghttp2_submit_settings(session_data->session, NGHTTP2_FLAG_NONE, iv, ARRLEN(iv));
+	if (rv != 0) {
+		debugf("[%d] Could not submit SETTINGS: %s", u->index, nghttp2_strerror(rv));
+		sprintf(u->error_msg, "HTTP2 error (%.200s)", nghttp2_strerror(rv));
+	}
+	return rv;
 }
 
 static void genrequest_http2(mcrawler_url *u) {
@@ -1088,42 +1143,15 @@ static void genrequest_http2(mcrawler_url *u) {
 		}
 	}
 
-	nghttp2_session_callbacks *callbacks;
-	nghttp2_session_callbacks_new(&callbacks);
-	nghttp2_session_callbacks_set_send_callback(callbacks, http2_send_callback);
-	nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks, http2_on_data_chunk_recv_callback);
-	nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, http2_on_stream_close_callback);
-	nghttp2_session_callbacks_set_on_header_callback(callbacks, http2_on_header_callback);
-	nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, http2_on_begin_headers_callback);
-
-	if (debug) {
-		nghttp2_session_callbacks_set_on_frame_send_callback(callbacks, http2_on_frame_send_callback);
-		nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, http2_on_frame_recv_callback);
+	if (!u->http2_session) {
+		int rv;
+		rv = http2_create_session(u);
+		if (rv != 0) {
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+			return;
+		}
 	}
-
-	// init session data
-	http2_session_data *session_data = malloc(sizeof(http2_session_data));
-	memset(session_data, 0, sizeof(http2_session_data));
-	u->http2_session = session_data;
-
-	nghttp2_session_client_new(&session_data->session, callbacks, u);
-	nghttp2_session_callbacks_del(callbacks);
-
-	// TCP NODELAY
-	int val = 1;
-	setsockopt(u->sockfd, IPPROTO_TCP, TCP_NODELAY, (char *)&val, sizeof(val));
-
-	// submit SETTINGS
-	int rv;
-	nghttp2_settings_entry iv[1] = {{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100}};
-	/* client 24 bytes magic string will be sent by nghttp2 library */
-	rv = nghttp2_submit_settings(session_data->session, NGHTTP2_FLAG_NONE, iv, ARRLEN(iv));
-	if (rv != 0) {
-		set_atomic_int(&u->state, MCURL_S_ERROR);
-		debugf("[%d] Could not submit SETTINGS: %s", u->index, nghttp2_strerror(rv));
-		sprintf(u->error_msg, "HTTP2 error (%.200s)", nghttp2_strerror(rv));
-		return;
-	}
+	http2_session_data *session_data = (http2_session_data *)u->http2_session;
 
 	// submit headers
 	int32_t stream_id = nghttp2_submit_request(session_data->session, NULL, hdrs, hdrs_len, p_data_provider, u);
@@ -1472,7 +1500,6 @@ static int resolvelocation(mcrawler_url *u) {
 
 	if (strcmp(u->hostname, ohost) == 0) {
 		// muzes se pripojit na tu puvodni IP
-		copy_addr_prev_addr(u);
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
 	} else {
 		// zmena host
@@ -1522,7 +1549,6 @@ static int cont(mcrawler_url *u) {
 			// try to authorize
 			u->auth_attempt = 1;
 			reset_url(u);
-			copy_addr_prev_addr(u);
 			set_atomic_int(&u->state, MCURL_S_GOTIP);
 			return 0;
 		}
@@ -1716,6 +1742,7 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 				u->addr = next;
 				debugf("[%d] Connection timeout (%d ms), trying another ip\n", u->index, timeout);
 				close(u->sockfd);
+				u->sockfd = 0;
 				set_atomic_int(&u->state, MCURL_S_GOTIP);
 			}
 			break;
@@ -1787,8 +1814,8 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 		break;
 
 	case MCURL_S_DOWNLOADED:
-		close_conn(u);
 		if (cont(u) != 0) {
+			close_conn(u);
 			finish(u, callback, callback_arg);
 		}
 		break;

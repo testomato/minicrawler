@@ -142,6 +142,7 @@ struct mcrawler_url {
 	char host[256 + 6];
 	char hostname[256];
 	int port;
+	int prev_port;
 	char *path;
 
 	char method[16];
