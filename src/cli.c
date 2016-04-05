@@ -24,6 +24,7 @@ void printusage()
 	         "         -g         accept gzip encoding\n"
 	         "         -h         enable output of HTTP headers\n"
 	         "         -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)\n"
+	         "         -k         disable SSL certificate verification (allow insecure connections)\n"
 #ifdef HAVE_LIBSSL
 	         "         -S         disable SSL/TLS support\n"
 #endif
@@ -68,6 +69,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-c")) {options |= 1<<MCURL_OPT_CONVERT_TO_TEXT | 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-8")) {options |= 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-g")) {options |= 1<<MCURL_OPT_GZIP; continue;}
+		if(!strcmp(argv[t], "-k")) {options |= 1<<MCURL_OPT_INSECURE; continue;}
 		if(!strncmp(argv[t], "-t", 2)) {settings->timeout = atoi(argv[t]+2); continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings->delay = atoi(argv[t]+2); continue;}
 		if(!strcmp(argv[t], "-w")) {SAFE_STRCPY(customheader, argv[t+1]); t++; continue;}

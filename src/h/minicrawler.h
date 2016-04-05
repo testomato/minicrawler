@@ -123,6 +123,7 @@ enum mcrawler_url_options {
 	MCURL_OPT_CONVERT_TO_UTF8,
 	MCURL_OPT_GZIP,
 	MCURL_OPT_IPV6,
+	MCURL_OPT_INSECURE,
 };
 
 enum {

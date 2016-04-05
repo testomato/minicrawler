@@ -35,6 +35,7 @@
 #  error "please install OpenSSL 1.0.1"
 # endif
 # include <openssl/err.h>
+# include <openssl/x509_vfy.h>
 #endif
 #ifdef HAVE_LIBNGHTTP2
 #include <nghttp2/nghttp2.h>
@@ -98,6 +99,7 @@ static int lower_ssl_protocol(mcrawler_url *u) {
 		return -1;
 	}
 
+	// SSL_CTX_set_min_proto_version since OpenSSL 1.1.0
 	if (opts & SSL_OP_NO_TLSv1_1) {
 		u->ssl_options |= SSL_OP_NO_TLSv1;
 		debugf("[%d] Switch to SSLv3\n", u->index);
@@ -175,15 +177,20 @@ static void sec_handshake(mcrawler_url *u) {
 			}
 	}
 
-	// else SSL_ERROR_SSL = protocol error
+	// else err = SSL_ERROR_SSL = protocol error
 	debugf("[%d] SSL protocol error (in handshake): \n", u->index);
 	unsigned long e, last_e = 0;
 	while ((e = ERR_get_error())) {
-		debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
+		debugf("[%d]\t\t%d\t%s\n", u->index, ERR_GET_REASON(e), ERR_error_string(e, NULL));
 		last_e = e;
 	}
 
-	if (lower_ssl_protocol(u) < 0) {
+	if (ERR_GET_REASON(last_e) == SSL_R_CERTIFICATE_VERIFY_FAILED) {
+		long vr = SSL_get_verify_result(u->ssl);
+		sprintf(u->error_msg, "SSL certificate verification failed (%.200s)", X509_verify_cert_error_string(vr));
+		set_atomic_int(&u->state, MCURL_S_ERROR);
+		return;
+	} else if (lower_ssl_protocol(u) < 0) {
 		// nižší protokol už nejde
 		sprintf(u->error_msg, "SSL protocol error during handshake");
 		if (last_e) {
@@ -607,6 +614,13 @@ static int maybe_create_ssl(mcrawler_url *u) {
 	SSL_set_bio(ssl, sbio, sbio);
 	SSL_set_options(ssl, u->ssl_options);
 	SSL_set_tlsext_host_name(ssl, u->hostname);
+
+	X509_VERIFY_PARAM *vpm = SSL_get0_param(ssl);;
+	X509_VERIFY_PARAM_set1_host(vpm, u->hostname, 0);
+
+	if (u->options & 1<<MCURL_OPT_INSECURE) {
+		SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
+	}
 
 	u->ssl = ssl;
 #endif
