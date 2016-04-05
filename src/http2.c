@@ -10,7 +10,7 @@ int http2_session_send(mcrawler_url *u) {
 	http2_session_data *session_data = (http2_session_data *)u->http2_session;
 	rv = nghttp2_session_send(session_data->session);
 	if (rv != 0) {
-		debugf("[%d] HTTP2 fatal error: %s", u->index, nghttp2_strerror(rv));
+		debugf("[%d] HTTP2 fatal error: %s\n", u->index, nghttp2_strerror(rv));
 		sprintf(u->error_msg, "HTTP2 error (%.200s)", nghttp2_strerror(rv));
 		return -1;
 	}

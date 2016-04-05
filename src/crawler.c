@@ -113,6 +113,39 @@ static int lower_ssl_protocol(mcrawler_url *u) {
 	return 0;
 }
 
+/**
+ * Closes connection and frees all related structures
+ */
+static void close_conn(mcrawler_url *u) {
+	debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
+
+	if (u->aresch) {
+		ares_destroy(u->aresch);
+		u->aresch = NULL;
+	}
+
+	if (u->sockfd) {
+		close(u->sockfd);
+		u->sockfd = 0;
+	}
+#ifdef HAVE_LIBSSL
+	if (u->ssl) {
+		SSL_shutdown(u->ssl);
+		SSL_free(u->ssl);
+		u->ssl = NULL;
+	}
+#endif
+
+#ifdef HAVE_LIBNGHTTP2
+	if (u->http2_session) {
+		http2_session_data *session_data = (http2_session_data *)u->http2_session;
+		nghttp2_session_del(session_data->session);
+		free(u->http2_session);
+		u->http2_session = NULL;
+	}
+#endif
+}
+
 static void genrequest_http2(mcrawler_url *u);
 static void readreply_http2(mcrawler_url *u);
 
@@ -205,12 +238,9 @@ static void sec_handshake(mcrawler_url *u) {
 		return;
 	} else {
 		// zkusíme ještě jednou
-		SSL_shutdown(u->ssl);
-		SSL_free(u->ssl);
-		u->ssl = NULL;
 		u->ssl_error = last_e;
-		close(u->sockfd);
 		copy_addr_prev_addr(u);
+		close_conn(u);
 		set_atomic_int(&u->state, MCURL_S_GOTIP);
 		return;
 	}
@@ -573,8 +603,6 @@ static void connectsocket(mcrawler_url *u) {
 		}
 		sprintf(u->error_msg, "Failed to connect to host (%.200m)");
 		set_atomic_int(&u->state, MCURL_S_ERROR);
-		close(u->sockfd);
-		u->sockfd = 0;
 		return;
 	}
 
@@ -590,8 +618,6 @@ static void connectsocket(mcrawler_url *u) {
 		}
 		sprintf(u->error_msg, "Failed to connect to host (%.200s)", strerror(result));
 		set_atomic_int(&u->state, MCURL_S_ERROR);
-		close(u->sockfd);
-		u->sockfd = 0;
 		return;
 	}
 
@@ -665,8 +691,6 @@ static void opensocket(mcrawler_url *u)
 			debugf("[%d] connect failed (%d, %s)\n", u->index, errno, strerror(errno));
 			sprintf(u->error_msg, "Failed to connect to host (%.200m)");
 			set_atomic_int(&u->state, MCURL_S_ERROR);
-			close(u->sockfd);
-			u->sockfd = 0;
 			return;
 		}
 	} else {
@@ -682,8 +706,6 @@ static void opensocket(mcrawler_url *u)
 			debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
 		}
 		set_atomic_int(&u->state, MCURL_S_ERROR);
-		close(u->sockfd);
-		u->sockfd = 0;
 		return;
 	}
 }
@@ -830,7 +852,6 @@ static ssize_t http2_send_callback(nghttp2_session *session, const uint8_t *data
 	mcrawler_url *u = (mcrawler_url *)user_data;
 
 	const ssize_t ret = ((mcrawler_url_func *)u->f)->write(u, data, length, (char *)&u->error_msg);
-	debugf("[%d] Written %zd bytes to socket\n", u->index, ret);
 
 	if (ret == MCURL_IO_ERROR || ret == MCURL_IO_EOF) {
 		set_atomic_int(&u->state, MCURL_S_ERROR);
@@ -844,6 +865,7 @@ static ssize_t http2_send_callback(nghttp2_session *session, const uint8_t *data
 		return NGHTTP2_ERR_WOULDBLOCK;
 	} else {
 		assert(ret > 0);
+		debugf("[%d] Written %zd bytes to socket %d\n", u->index, ret, u->sockfd);
 		//set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE);
 		return ret;
 	}
@@ -940,16 +962,6 @@ static int http2_on_stream_close_callback(nghttp2_session *session, int32_t stre
 		} else {
 			debugf("[%d] HTTP2 stream %d closes successfuly\n", u->index, stream_id);
 			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
-/*
-#ifdef HAVE_LIBSSL
-			if (u->ssl != NULL) {
-				SSL_free(u->ssl);
-				u->ssl = NULL;
-			}
-#endif
-			close(u->sockfd);
-			u->sockfd = 0;
-			*/
 		}
 		rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
 		if (rv) {
@@ -1349,31 +1361,6 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 
 	remove_expired_cookies(u);
 
-	if (u->aresch) {
-		ares_destroy(u->aresch);
-		u->aresch = NULL;
-	}
-
-	if (u->sockfd) {
-		close(u->sockfd);
-		u->sockfd = 0;
-	}
-#ifdef HAVE_LIBSSL
-	if (u->ssl) {
-		SSL_shutdown(u->ssl);
-		u->ssl = NULL;
-	}
-#endif
-
-#ifdef HAVE_LIBNGHTTP2
-	if (u->http2_session) {
-		http2_session_data *session_data = (http2_session_data *)u->http2_session;
-		nghttp2_session_del(session_data->session);
-		free(u->http2_session);
-		u->http2_session = NULL;
-	}
-#endif
-
 	u->timing.done = get_time_int();
 
 	callback(u, callback_arg);
@@ -1523,6 +1510,7 @@ static int resolvelocation(mcrawler_url *u) {
 	return 0;
 }
 
+
 /**
  * Continue with crawling?
  */
@@ -1601,18 +1589,7 @@ static void readreply(mcrawler_url *u) {
 			set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
 			debugf("[%d] Downloaded.\n",u->index);
 		}
-
-		debugf("[%d] Closing connection (socket %d)\n", u->index, u->sockfd);
-
-#ifdef HAVE_LIBSSL
-		if (u->ssl != NULL) {
-			SSL_free(u->ssl);
-			u->ssl = NULL;
-		}
-#endif
-
-		close(u->sockfd); // FIXME: Is it correct to close the connection before we read the whole reply from the server?
-		u->sockfd = 0;
+		// FIXME: Is it correct to close the connection before we read the whole reply from the server?
 	} else {
 		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ);
 	}
@@ -1639,7 +1616,7 @@ static void readreply_http2(mcrawler_url *u) {
 		}
 
 		ssize_t readlen = nghttp2_session_mem_recv(session_data->session, buf, t);
-		debugf("[%d] Read %zd bytes from socket\n", u->index, readlen);
+		debugf("[%d] Read %zd bytes from socket %d\n", u->index, readlen, u->sockfd);
 		if (readlen < 0) {
 			debugf("[%d] HTTP2 read error: %s\n", u->index, nghttp2_strerror((int)readlen));
 			sprintf(u->error_msg, "HTTP2 read error (%.250s)", nghttp2_strerror((int)readlen));
@@ -1748,13 +1725,7 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 				// we retry handshake with another protocol
 				if (lower_ssl_protocol(u) == 0) {
 					debugf("[%d] SSL handshake timeout (%d ms), closing connection\n", u->index, timeout);
-
-					if (u->ssl) {
-						SSL_free(u->ssl);
-						u->ssl = NULL;
-					}
-					close(u->sockfd);
-					copy_addr_prev_addr(u);
+					close_conn(u);
 					set_atomic_int(&u->state, MCURL_S_GOTIP);
 				}
 			}
@@ -1816,6 +1787,7 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 		break;
 
 	case MCURL_S_DOWNLOADED:
+		close_conn(u);
 		if (cont(u) != 0) {
 			finish(u, callback, callback_arg);
 		}
@@ -1823,6 +1795,7 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
   
 	case MCURL_S_ERROR:
 		assert(u->status < 0);
+		close_conn(u);
 		finish(u, callback, callback_arg);
 		break;
 	}
@@ -1880,6 +1853,7 @@ static void outputpartial(mcrawler_url **urls, mcrawler_url_callback callback, v
 		url = urls[i];
 		const int url_state = get_atomic_int(&url->state);
 		if(url_state < MCURL_S_DONE) {
+			close_conn(url);
 			finish(url, callback, callback_arg);
 		}
 	}
