@@ -177,6 +177,13 @@ On OS X with homebrew `CFLAGS` and `LDFLAGS` need to contain proper paths. You c
  ./configure CFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/opt -L/usr/local/lib"
 ```
 
+After installation you can link `libminicrawler` by adding this to your Makefile:
+
+```make
+CFLAGS += $(shell pkg-config --cflags libminicrawler-4)
+LDFLAGS += $(shell pkg-config --libs libminicrawler-4)
+```
+
 ## Users
 
  * [Testomato](https://testomato.com) – A simple website monitoring tool

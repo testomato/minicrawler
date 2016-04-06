@@ -1,5 +1,12 @@
 AC_PREREQ([2.69])
 AC_INIT([minicrawler], [4.0.0~beta], [admins@wikidi.com])
+AC_SUBST([MINICRAWLER_API_VERSION], [4])
+# 1. Update the version information only immediately before a public release of your software. More frequent updates are unnecessary, and only guarantee that the current interface number gets larger faster.
+# 2. If the library source code has changed at all since the last update, then increment revision (‘c:r:a’ becomes ‘c:r+1:a’).
+# 3. If any interfaces have been added, removed, or changed since the last update, increment current, and set revision to 0.
+# 4. If any interfaces have been added since the last public release, then increment age.
+# 5. If any interfaces have been removed or changed since the last public release, then set age to 0.
+AC_SUBST([MINICRAWLER_LT_VERSION], [3:0:0])
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 
@@ -15,6 +22,7 @@ if test "${ac_cv_prog_cc_c99}" = "no"; then
 fi
 AC_PROG_LIBTOOL
 AC_PROG_AWK
+AC_PROG_LN_S
 
 # Checks for libraries.
 AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares dev files]))
@@ -51,6 +59,6 @@ AC_CHECK_FUNC([clock_gettime], [], AC_CHECK_FUNC([gettimeofday], [], AC_MSG_ERRO
 AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday timegm nghttp2_http2_strerror])
 ##AC_CHECK_FUNCS([memmove memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
 
-AC_CONFIG_FILES([Makefile libminicrawler.pc libminicrawler-url.pc])
+AC_CONFIG_FILES([Makefile libminicrawler/libminicrawler-$MINICRAWLER_API_VERSION.pc:libminicrawler.pc.in libminicrawler/libminicrawler-url-$MINICRAWLER_API_VERSION.pc:libminicrawler-url.pc.in])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AC_OUTPUT

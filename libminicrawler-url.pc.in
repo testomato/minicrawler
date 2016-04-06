@@ -1,4 +1,5 @@
-prefix=@exec_prefix@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
 
@@ -7,5 +8,5 @@ Description: WHATWG URL compliant parsing and serializing
 
 Version: @VERSION@
 URL: https://github.com/testomato/minicrawler
-Libs: -L${libdir} -lminicrawler-url
-Cflags: -I${includedir}
+Libs: -L${libdir} -lminicrawler-url-@MINICRAWLER_API_VERSION@
+Cflags: -I${includedir}/minicrawler-@MINICRAWLER_API_VERSION@

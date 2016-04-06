@@ -8,9 +8,8 @@
 config.h*
 stamp-h*
 test-suite.log
-/minicrawler
-/libminicrawler.pc
-/libminicrawler-url.pc
+/minicrawler[0-9]
+/libminicrawler
 
 # make check files
 /test/url
