@@ -973,7 +973,12 @@ static int http2_on_stream_close_callback(nghttp2_session *session, int32_t stre
 	int rv;
 	if (session_data->stream_id == stream_id) {
 		if (error_code > 0) {
+#ifdef HAVE_NGHTTP2_HTTP2_STRERROR
+			// since nghttp2 1.9.0
 			debugf("[%d] HTTP2 stream %d closes with error %s (%d)\n", u->index, stream_id, nghttp2_http2_strerror(error_code), error_code);
+#else
+			debugf("[%d] HTTP2 stream %d closes with error %d\n", u->index, stream_id, error_code);
+#endif
 			sprintf(u->error_msg, "HTTP2 stream closes with error %d", error_code);
 			set_atomic_int(&u->state, MCURL_S_ERROR);
 			rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
