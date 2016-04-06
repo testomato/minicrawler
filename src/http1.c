@@ -25,27 +25,27 @@ unsigned char *find_head_end(unsigned char *s, const size_t len) {
 /**
  * @see https://www.ietf.org/rfc/rfc2616.txt
  */
-int parsehead(const unsigned char *s, const size_t len, int *status, header_callback header_callback, void *data) {
+int parsehead(const unsigned char *s, const size_t len, int *status, header_callback header_callback, void *data, int index) {
 	char buf[len + 1];
 	char *p = buf, *q;
 	char *name, *value;
 
-	int index = ((mcrawler_url *)data)->index;
-
 	memcpy(buf, s, len);
 	buf[len] = 0;
 
-    if (strncmp("HTTP/1.0", p, 8) && strncmp("HTTP/1.1", p, 8)) {
-		debugf("[%d] Unsupported protocol\n", index);
-		return 1;
+	if (status != NULL) {
+		if (strncmp("HTTP/1.0", p, 8) && strncmp("HTTP/1.1", p, 8)) {
+			debugf("[%d] Unsupported protocol\n", index);
+			return 1;
+		}
+
+		p += 9;
+		*status = atoi(p);
+		assert(*status > 0);
+
+		p = strchr(p, '\n');
+		assert(p != 0); // we know, there are two newlines somewhere
 	}
-
-	p += 9;
-	*status = atoi(p);
-	assert(*status > 0);
-
-	p = strchr(p, '\n');
-	assert(p != 0); // we know, there are two newlines somewhere
 
 	while (1) {
 		while (*p == '\r' || *p == '\n') p++;

@@ -759,7 +759,7 @@ static void genrequest(mcrawler_url *u) {
 			(u->authorization != NULL ? strlen(authorizationheader) + strlen(u->authorization) + 2 : 0) + // Authorization: ...\n
 			sizeof(useragentheader) + (u->customagent[0] ? strlen(u->customagent) : sizeof(DEFAULTAGENT) + 8) + 2 + // User-Agent: %s\n
 			sizeof(cookieheader) + cookies_size + 2 + // Cookie: %s; %s...\n
-			strlen(u->customheader) + 2 +
+			strlen(u->customheader) +
 			(u->options & 1<<MCURL_OPT_GZIP ? sizeof(gzipheader) + 2 : 0) + // Accept-Encoding: gzip\n
 			(u->post != NULL ? sizeof(contentlengthheader) + 6 + 2 + sizeof(contenttypeheader) + 2 : 0) + // Content-Length: %d\nContent-Type: ...\n
 			2 + // end of header
@@ -816,7 +816,6 @@ static void genrequest(mcrawler_url *u) {
 	// Custom header
 	if (u->customheader[0]) {
 		r = stpcpy(r, u->customheader);
-		r = stpcpy(r, "\r\n");
 	}
 
 	// gzip
@@ -863,6 +862,10 @@ static void genrequest(mcrawler_url *u) {
 
 #define MAKE_NGHTTP2_NV_COPY_L(NAME, VALUE, VALUE_LEN) {\
 	(uint8_t *) NAME, (uint8_t *)VALUE, sizeof(NAME) - 1, VALUE_LEN, NGHTTP2_NV_FLAG_NONE \
+}
+
+#define MAKE_NGHTTP2_NV_COPY_LL(NAME, NAMELEN, VALUE, VALUE_LEN) {\
+	(uint8_t *) NAME, (uint8_t *)VALUE, NAMELEN, VALUE_LEN, NGHTTP2_NV_FLAG_NONE \
 }
 
 static ssize_t http2_send_callback(nghttp2_session *session, const uint8_t *data, size_t length, int flags, void *user_data) {
@@ -1078,35 +1081,49 @@ static int http2_create_session(mcrawler_url *u) {
 	return rv;
 }
 
+struct http2_headers {
+	size_t len;
+	nghttp2_nv nv[32];
+	uint32_t alloc;
+};
+
+static void http2_custom_header_cb(const char *name, char *value, void *data) {
+	struct http2_headers *hdrs = (struct http2_headers *)data;
+	if (hdrs->len < ARRLEN(hdrs->nv)) {
+		hdrs->alloc |= 1<<hdrs->len;
+		hdrs->nv[hdrs->len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_LL(strdup(name), strlen(name), strdup(value), strlen(value));
+	}
+}
+
 static void genrequest_http2(mcrawler_url *u) {
-	size_t hdrs_len = 4;
-	nghttp2_nv hdrs[12] = {
-		MAKE_NGHTTP2_NV(":method", u->method),
-		MAKE_NGHTTP2_NV(":scheme", u->proto),
-		MAKE_NGHTTP2_NV(":authority", u->host),
-		MAKE_NGHTTP2_NV(":path", u->path)
-	};
+	struct http2_headers hdrs;
+	hdrs.len = 0;
+	hdrs.alloc = 0;
+	hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV(":method", u->method);
+	hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV(":scheme", u->proto);
+	hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV(":authority", u->host);
+	hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV(":path", u->path);
 
 	// Accept
 	char *p = strstr(u->customheader, "Accept:");
 	if (p && (p == u->customheader || *(p-1) == '\n')) {
 		// Accept header is located in custom header -> skip
 	} else {
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("accept", "*/*");
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("accept", "*/*");
 	}
 
 	// Authorization
 	if (u->authorization != NULL) {
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV("authorization", u->authorization);
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV("authorization", u->authorization);
 	}
 
 	// User-Agent
 	if (u->customagent[0]) {
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV("user-agent", u->customagent);
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV("user-agent", u->customagent);
 	} else {
 		char tmp[sizeof(DEFAULTAGENT) + sizeof(VERSION)];
 		int len = sprintf(tmp, DEFAULTAGENT, VERSION);
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("user-agent", tmp, len);
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("user-agent", tmp, len);
 	}
 
 	// Cookie
@@ -1114,26 +1131,20 @@ static void genrequest_http2(mcrawler_url *u) {
 	size_t len;
 	set_cookies_header(u, cookie, &len);
 	if (len) {
-		nghttp2_nv cookie_nv = MAKE_NGHTTP2_NV_COPY_L("cookie", cookie, len);
-		memcpy(hdrs + hdrs_len++, &cookie_nv, sizeof(nghttp2_nv));
-	}
-
-	// Custom header
-	if (u->customheader[0]) {
-		// TODO
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("cookie", cookie, len);
 	}
 
 	// gzip
 	if (u->options & 1<<MCURL_OPT_GZIP) {
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("accept-encoding", "gzip");
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("accept-encoding", "gzip");
 	}
 
 	nghttp2_data_provider data_provider, *p_data_provider = NULL;
 	if (u->post != NULL) {
 		char len[6];
 		sprintf(len, "%d", u->postlen);
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("content-length", len, strlen(len));
-		hdrs[hdrs_len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("content-type", "application/x-www-form-urlencoded");
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("content-length", len, strlen(len));
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("content-type", "application/x-www-form-urlencoded");
 
 		p_data_provider = &data_provider;
 		data_provider.source.ptr = u;
@@ -1141,10 +1152,15 @@ static void genrequest_http2(mcrawler_url *u) {
 		u->request_it = 0;
 	}
 
+	// Custom header
+	if (u->customheader[0]) {
+		parsehead((const unsigned char *)u->customheader, strlen(u->customheader), NULL, http2_custom_header_cb, &hdrs, u->index);
+	}
+
 	if (debug) {
 		debugf("[%d] Request headers:\n", u->index);
-		for (size_t i = 0; i < hdrs_len; i++) {
-			debugf("\t%s: %s\n", hdrs[i].name, hdrs[i].value);
+		for (size_t i = 0; i < hdrs.len; i++) {
+			debugf("\t%s: %s %zd %zd %ud\n", hdrs.nv[i].name, hdrs.nv[i].value, hdrs.nv[i].namelen, hdrs.nv[i].valuelen, hdrs.nv[i].flags);
 		}
 	}
 
@@ -1159,7 +1175,16 @@ static void genrequest_http2(mcrawler_url *u) {
 	http2_session_data *session_data = (http2_session_data *)u->http2_session;
 
 	// submit headers
-	int32_t stream_id = nghttp2_submit_request(session_data->session, NULL, hdrs, hdrs_len, p_data_provider, u);
+	int32_t stream_id = nghttp2_submit_request(session_data->session, NULL, hdrs.nv, hdrs.len, p_data_provider, u);
+
+	// free allocated memory for headers
+	for (size_t i = 0; i < hdrs.len; i++) {
+		if (hdrs.alloc & (1<<i)) {
+			free(hdrs.nv[i].name);
+			free(hdrs.nv[i].value);
+		}
+	}
+
 	if (stream_id < 0) {
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		debugf("[%d] Could not submit HTTP request: %s", u->index, nghttp2_strerror(stream_id));
@@ -1599,7 +1624,7 @@ static void readreply(mcrawler_url *u) {
 	unsigned char *head_end;
 	if (u->headlen == 0 && (head_end = find_head_end(u->buf, (size_t)u->bufp))) {
 		u->headlen = head_end - u->buf;
-		parsehead(u->buf, u->headlen, &u->status, header_cb, (void *)u);
+		parsehead(u->buf, u->headlen, &u->status, header_cb, (void *)u, u->index);
 	}
 	
 	// u->chunked is set in parsehead()

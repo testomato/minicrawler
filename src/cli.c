@@ -48,7 +48,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 {
 	mcrawler_url *url;
 	long options = 0;
-	char customheader[4096] = "";
+	char customheader[4096 - 2] = ""; // space for \r\n
 	char customagent[256] = "";
 	char username[32] = "";
 	char password[32] = "";
@@ -123,6 +123,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		strcpy(url->customagent, customagent);
 		if (!url->customheader[0]) {
 			strcpy(url->customheader, customheader);
+			strcpy(url->customheader + strlen(url->customheader), "\r\n");
 		}
 		strcpy(url->username, username);
 		strcpy(url->password, password);
