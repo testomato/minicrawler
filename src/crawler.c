@@ -167,6 +167,7 @@ static void sec_handshake(mcrawler_url *u) {
 
 	const int t = SSL_connect(u->ssl);
 	if (t == 1) {
+#ifdef HAVE_LIBNGHTTP2
 		// zjistíme aplikační protokol
 		const unsigned char *data;
 		unsigned int len;
@@ -176,6 +177,7 @@ static void sec_handshake(mcrawler_url *u) {
 			((mcrawler_url_func *)u->f)->gen_request = genrequest_http2;
 			((mcrawler_url_func *)u->f)->recv_reply = readreply_http2;
 		}
+#endif
 		u->timing.sslend = get_time_int();
         set_atomic_int(&u->state, MCURL_S_GENREQUEST);
         return;
