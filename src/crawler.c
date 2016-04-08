@@ -646,8 +646,10 @@ static int maybe_create_ssl(mcrawler_url *u) {
 	SSL_set_options(ssl, u->ssl_options);
 	SSL_set_tlsext_host_name(ssl, u->hostname);
 
+#ifdef HAVE_SSL_GET0_PARAM
 	X509_VERIFY_PARAM *vpm = SSL_get0_param(ssl);;
 	X509_VERIFY_PARAM_set1_host(vpm, u->hostname, 0);
+#endif
 
 	if (u->options & 1<<MCURL_OPT_INSECURE) {
 		SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
