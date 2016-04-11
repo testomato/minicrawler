@@ -37,7 +37,8 @@ pkgconfig_DATA = libminicrawler/libminicrawler-$(MINICRAWLER_API_VERSION).pc lib
 DISTCLEANFILES = $(pkgconfig_DATA)
 EXTRA_DIST = libminicrawler.pc.in libminicrawler-url.pc.in
 
-dist_doc_DATA = README.md
+minicrawler_docdir = $(docdir)-@MINICRAWLER_API_VERSION@
+dist_minicrawler_doc_DATA = README.md
 
 install-exec-hook:
 	cd $(DESTDIR)$(bindir) && $(LN_S) -f minicrawler@MINICRAWLER_API_VERSION@$(EXEEXT) minicrawler$(EXEEXT)
