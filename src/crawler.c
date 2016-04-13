@@ -173,7 +173,7 @@ static void sec_handshake(mcrawler_url *u) {
 		unsigned int len;
 		SSL_get0_next_proto_negotiated(u->ssl, &data, &len);
 		debugf("[%d] Selected protocol: %.*s\n", u->index, len, data);
-		if (!strncmp((const char *)data, NGHTTP2_PROTO_VERSION_ID, len)) {
+		if (len && !strncmp((const char *)data, NGHTTP2_PROTO_VERSION_ID, len)) {
 			((mcrawler_url_func *)u->f)->gen_request = genrequest_http2;
 			((mcrawler_url_func *)u->f)->recv_reply = readreply_http2;
 		}
