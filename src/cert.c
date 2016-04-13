@@ -137,7 +137,10 @@ static int verify_callback(int ok, X509_STORE_CTX *ctx)
 		}
 		switch (err) {
 		case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
-			BIO_puts(bio_err, "issuer= ");
+		case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+		case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:
+		case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
+			BIO_puts(bio_err, "issuer: ");
 			X509_NAME_print_ex(bio_err, X509_get_issuer_name(err_cert),
 							   0, XN_FLAG_ONELINE);
 			BIO_puts(bio_err, "\n");
