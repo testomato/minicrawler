@@ -9,4 +9,4 @@ Description: WHATWG URL compliant parsing and serializing
 Version: @VERSION@
 URL: https://github.com/testomato/minicrawler
 Libs: -L${libdir} -lminicrawler-url-@MINICRAWLER_API_VERSION@
-Cflags: -I${includedir}/minicrawler-@MINICRAWLER_API_VERSION@
+Cflags: -I${includedir}/libminicrawler-@MINICRAWLER_API_VERSION@
