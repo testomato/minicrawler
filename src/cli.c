@@ -263,8 +263,7 @@ void output(mcrawler_url *u, void *arg) {
 	// downtime
 	int downtime;
 	if (url_state == MCURL_S_DOWNLOADED) {
-		assert(u->timing.lastread >= u->timing.connectionstart);
-		downtime = u->timing.lastread - u->downstart;
+		downtime = u->timing.lastread ? u->timing.lastread : u->timing.done - u->downstart;
 	} else if (u->downstart) {
 		downtime = u->timing.done - u->downstart;
 	} else {
