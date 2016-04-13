@@ -297,6 +297,7 @@ static ssize_t sec_read(const mcrawler_url *u, unsigned char *buf, const size_t 
 			}
 			if (last_e == 0) {
 				// error queue is empty and t == 0 => EOF that violates the protocol
+				debugf("[%d] Unexpected EOF\n", u->index);
 				return MCURL_IO_EOF;
 			}
 			const int n = sprintf(errbuf, "Downloading content failed");
@@ -1692,7 +1693,13 @@ static void readreply_http2(mcrawler_url *u) {
 			set_atomic_int(&u->state, MCURL_S_ERROR);
 			return;
 		} else {
-			set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ | 1<<MCURL_RW_WANT_WRITE);
+			if (t == MCURL_IO_EOF && nghttp2_session_want_read(session_data->session) == 0 &&
+					nghttp2_session_want_write(session_data->session) == 0) {
+
+				set_atomic_int(&u->state, MCURL_S_DOWNLOADED);
+			} else {
+				set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ | 1<<MCURL_RW_WANT_WRITE);
+			}
 		}
 	}
 }
