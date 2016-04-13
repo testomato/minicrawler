@@ -671,13 +671,17 @@ static void opensocket(mcrawler_url *u)
 	struct sockaddr_storage addr;
 	socklen_t addrlen;
 
-	if (u->sockfd && !memcmp(u->addr->ip, u->prev_addr->ip, sizeof(u->addr->ip)) && u->port == u->prev_port) {
+	if (u->sockfd && !u->close_connection &&
+			!memcmp(u->addr->ip, u->prev_addr->ip, sizeof(u->addr->ip)) &&
+			u->port == u->prev_port
+	) {
 		// use existing connection
 		debugf("[%d] Using existing connection at socket %d!\n", u->index, u->sockfd);
 		set_atomic_int(&u->state, MCURL_S_GENREQUEST);
 		return;
 	} else {
 		close_conn(u);
+		u->close_connection = 0;
 	}
 
 	u->sockfd = socket(u->addr->type, SOCK_STREAM, 0);
@@ -1325,6 +1329,13 @@ static void header_cb(const char *name, char *value, void *data) {
 		if (u->status == 401 && u->username[0]) {
 			// TODO: header can exists multiple times
 			parse_authchallenge(u, value);
+		}
+		return;
+	}
+
+	if (!strcasecmp(name, "Connection")) {
+		if (!strcasecmp(value, "close")) {
+			u->close_connection = 1;
 		}
 		return;
 	}

@@ -161,6 +161,7 @@ struct mcrawler_url {
 	char *contenttype;
 	char charset[32];
 	int gzipped;
+	int close_connection;
 
 	// http auth
 	char username[32];
