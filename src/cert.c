@@ -231,10 +231,32 @@ SSL_CTX *mossad(void) {
 
 	// test here https://badssl.com/
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
+
+#ifdef CA_BUNDLE
+# ifdef CA_PATH
+	debugf("CA bundle: %s\n", CA_BUNDLE);
+	debugf("CA path: %s\n", CA_PATH);
+	if (!SSL_CTX_load_verify_locations(ctx, CA_BUNDLE, CA_PATH)) {
+		ERR_print_errors(bio_err);
+	}
+# else
+	debugf("CA bundle: %s\n", CA_BUNDLE);
+	if (!SSL_CTX_load_verify_locations(ctx, CA_BUNDLE, NULL)) {
+		ERR_print_errors(bio_err);
+	}
+# endif
+#else
+# ifdef CA_PATH
+	debugf("CA path: %s\n", CA_PATH);
+	if (!SSL_CTX_load_verify_locations(ctx, NULL, CA_PATH)) {
+		ERR_print_errors(bio_err);
+	}
+# else
 	if (!SSL_CTX_set_default_verify_paths(ctx)) {
 		ERR_print_errors(bio_err);
 	}
-	// SSL_CTX_load_verify_locations(ctx, "/etc/ssl/certs/firefox.crt", NULL);
+# endif
+#endif
 
 #ifdef HAVE_LIBNGHTTP2
 	SSL_CTX_set_next_proto_select_cb(ctx, select_next_proto_cb, NULL);

@@ -52,6 +52,20 @@ AC_ARG_WITH([http2],
 AS_IF([test "${with_ssl} ${with_http2}" == "check check"],
 			[AC_CHECK_LIB([nghttp2], [nghttp2_session_client_new], [], AC_MSG_ERROR([please install nghttp2 dev files or use option --without-http2]))])
 
+# CA bundle & CA path
+AC_ARG_WITH([ca-bundle],
+			[AC_HELP_STRING([--with-ca-bundle=FILE], [path to a file containing CA certificates])],
+			[want_ca="$withval"],
+			[want_ca="no"])
+AS_IF([test "x$want_ca" != "xno"],
+			[AC_DEFINE_UNQUOTED([CA_BUNDLE], ["$want_ca"], [Location of default ca bundle])])
+AC_ARG_WITH([ca-path],
+			[AC_HELP_STRING([--with-ca-path=DIR], [path to a directory containing CA certificates])],
+			[want_capath="$withval"],
+			[want_capath="no"])
+AS_IF([test "x$want_capath" != "xno"],
+			[AC_DEFINE_UNQUOTED([CA_PATH], ["$want_capath"], [Location of default ca path])])
+
 # Checks for header files.
 AC_CHECK_HEADERS([limits.h sys/types.h sys/select.h])
 ##AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h stddef.h stdlib.h string.h sys/socket.h unistd.h])
