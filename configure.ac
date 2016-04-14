@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([minicrawler], [4.0.0~beta], [admins@wikidi.com])
+AC_INIT([minicrawler], [4.0.0~beta1], [admins@wikidi.com])
 AC_SUBST([MINICRAWLER_API_VERSION], [4])
 # 1. Update the version information only immediately before a public release of your software. More frequent updates are unnecessary, and only guarantee that the current interface number gets larger faster.
 # 2. If the library source code has changed at all since the last update, then increment revision (‘c:r:a’ becomes ‘c:r+1:a’).
