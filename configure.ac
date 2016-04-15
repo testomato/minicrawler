@@ -58,13 +58,15 @@ AC_ARG_WITH([ca-bundle],
 			[want_ca="$withval"],
 			[want_ca="no"])
 AS_IF([test "x$want_ca" != "xno"],
-			[AC_DEFINE_UNQUOTED([CA_BUNDLE], ["$want_ca"], [Location of default ca bundle])])
+			[AC_DEFINE_UNQUOTED([CA_BUNDLE], ["$want_ca"], [Location of default ca bundle])
+			AC_MSG_RESULT([CA bundle: $want_ca])])
 AC_ARG_WITH([ca-path],
 			[AC_HELP_STRING([--with-ca-path=DIR], [path to a directory containing CA certificates])],
 			[want_capath="$withval"],
 			[want_capath="no"])
 AS_IF([test "x$want_capath" != "xno"],
-			[AC_DEFINE_UNQUOTED([CA_PATH], ["$want_capath"], [Location of default ca path])])
+			[AC_DEFINE_UNQUOTED([CA_PATH], ["$want_capath"], [Location of default ca path])
+			AC_MSG_RESULT([CA path: $want_capath])])
 
 # Checks for header files.
 AC_CHECK_HEADERS([limits.h sys/types.h sys/select.h])
