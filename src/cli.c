@@ -121,7 +121,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		}
 		url->cookiecnt = ccnt;
 		strcpy(url->customagent, customagent);
-		if (!url->customheader[0]) {
+		if (!url->customheader[0] && customheader[0]) {
 			strcpy(url->customheader, customheader);
 			strcpy(url->customheader + strlen(url->customheader), "\r\n");
 		}
