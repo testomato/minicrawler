@@ -852,7 +852,7 @@ static void genrequest(mcrawler_url *u) {
 	*r = 0;
 
 	debugf("[%d] Request: [%s]", u->index, u->request);
-	u->request_len = strlen((char *)u->request);
+	u->request_len = r - (char *)u->request;
 	u->request_it = 0;
 
 	set_atomic_int(&u->state, MCURL_S_SENDREQUEST);
