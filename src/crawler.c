@@ -838,8 +838,14 @@ static void genrequest(mcrawler_url *u) {
 		s = sprintf(r, "%d", u->postlen);
 		if (s > 0) r += s;
 		r = stpcpy(r, "\r\n");
-		r = stpcpy(r, contenttypeheader);
-		r = stpcpy(r, "\r\n");
+
+		char *p = strstr(u->customheader, "Content-Type:");
+		if (p && (p == u->customheader || *(p-1) == '\n')) {
+		// Content-Type header is located in custom header -> skip
+		} else {
+			r = stpcpy(r, contenttypeheader);
+			r = stpcpy(r, "\r\n");
+		}
 	}
 
 	// end of header
@@ -1153,7 +1159,13 @@ static void genrequest_http2(mcrawler_url *u) {
 		char len[6];
 		sprintf(len, "%d", u->postlen);
 		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("content-length", len, strlen(len));
-		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("content-type", "application/x-www-form-urlencoded");
+
+		char *p = strstr(u->customheader, "Content-Type:");
+		if (p && (p == u->customheader || *(p-1) == '\n')) {
+		// Content-Type header is located in custom header -> skip
+		} else {
+			hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY("content-type", "application/x-www-form-urlencoded");
+		}
 
 		p_data_provider = &data_provider;
 		data_provider.source.ptr = u;
