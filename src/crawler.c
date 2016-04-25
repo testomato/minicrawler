@@ -365,10 +365,10 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	
 	u=(mcrawler_url *)arg;
 	if (status != ARES_SUCCESS) {
-		if (status == ARES_ENODATA && u->addrtype == AF_INET) {
+		if ((status == ARES_ENODATA || status == ARES_ENOTFOUND) && u->addrtype == AF_INET) {
 			// zkusíme ještě IPv6
 			u->addrtype = AF_INET6;
-			debugf("[%d] gethostbyname error: no data -> switch to ipv6\n", u->index);
+			debugf("[%d] gethostbyname error: %d -> switch to ipv6\n", u->index, status);
 			set_atomic_int(&u->state, MCURL_S_PARSEDURL);
 			return;
 		}
