@@ -1290,7 +1290,9 @@ static void header_cb(const char *name, char *value, void *data) {
 			return;
 		}
 		strcpy(u->location, value);
-		u->contentlen = 0; // do not need content - some servers returns no content-length and keeps conection open
+		if (u->contentlen == -1 && !u->chunked) {
+			u->contentlen = 0; // do not need content - some servers returns no content-length and keeps conection open
+		}
 		debugf("[%d] Location='%s'\n", u->index, u->location);
 		return;
 	}
@@ -1304,6 +1306,7 @@ static void header_cb(const char *name, char *value, void *data) {
 		if (!strcasecmp(value, "chunked")) {
 			u->chunked = 1;
 			u->nextchunkedpos = u->headlen;
+			u->contentlen = -1;
 			debugf("[%d] Chunked!\n", u->index);
 		}
 		return;
@@ -1651,6 +1654,7 @@ static void readreply(mcrawler_url *u) {
 
 	unsigned char *head_end;
 	if (u->headlen == 0 && (head_end = find_head_end(u->buf, (size_t)u->bufp))) {
+		debugf("[%d] Found head end\n", u->index);
 		u->headlen = head_end - u->buf;
 		parsehead(u->buf, u->headlen, &u->status, header_cb, (void *)u, u->index);
 	}

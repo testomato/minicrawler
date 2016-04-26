@@ -35,7 +35,7 @@ int parsehead(const unsigned char *s, const size_t len, int *status, header_call
 
 	if (status != NULL) {
 		if (strncmp("HTTP/1.0", p, 8) && strncmp("HTTP/1.1", p, 8)) {
-			debugf("[%d] Unsupported protocol\n", index);
+			debugf("[%d] Unsupported protocol '%.*s'\n", index, 8, p);
 			return 1;
 		}
 
