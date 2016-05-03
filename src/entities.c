@@ -14,14 +14,6 @@ static unsigned hash(const char *str, const size_t len)
 	return hashval;
 }
 
-/**
-Calculate hash of string s, that is zero terminated.
-*/
-static unsigned hash_str(const char *s)
-{
-	return hash(s, strlen(s));
-}
-
 struct entity_desc
 {
 	char *name;
