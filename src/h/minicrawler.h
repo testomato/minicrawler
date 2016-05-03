@@ -1,6 +1,27 @@
+/* Define WIN32 when build target is Win32 API (borrowed from libcurl) */
+#if (defined(_WIN32) || defined(__WIN32__)) && !defined(WIN32)
+# define WIN32
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#ifdef MCRAWLER_STATICLIB
+# define MCRAWLER_EXTERN
+#elif defined(WIN32)
+# ifdef BUILDING_MCRAWLER
+#  define MCRAWLER_EXTERN __declspec(dllexport)
+# else
+#  define MCRAWLER_EXTERN __declspec(dllimport)
+# endif
+#else
+# if defined(BUILDING_MCRAWLER) && __GNUC__ >= 4
+#  define MCRAWLER_EXTERN __attribute__((visibility("default")))
+# else
+#  define MCRAWLER_EXTERN
+# endif
+#endif
 
 #define DEFAULTAGENT "minicrawler/%s"
 
@@ -86,36 +107,6 @@ enum mcrawler_url_s {
 	MCURL_S_ERROR,
 	MCURL_S_DONE,
 };
-
-static inline const char *mcrawler_state_to_s(const enum mcrawler_url_s x) {
-	switch (x) {
-		case MCURL_S_JUSTBORN:
-			return "MCURL_S_JUSTBORN";
-		case MCURL_S_PARSEDURL:
-			return "MCURL_S_PARSEDURL";
-		case MCURL_S_INDNS:
-			return "MCURL_S_INDNS";
-		case MCURL_S_GOTIP:
-			return "MCURL_S_GOTIP";
-		case MCURL_S_CONNECT:
-			return "MCURL_S_CONNECT";
-		case MCURL_S_HANDSHAKE:
-			return "MCURL_S_HANDSHAKE";
-		case MCURL_S_GENREQUEST:
-			return "MCURL_S_GENREQUEST";
-		case MCURL_S_SENDREQUEST:
-			return "MCURL_S_SENDREQUEST";
-		case MCURL_S_RECVREPLY:
-			return "MCURL_S_RECVREPLY";
-		case MCURL_S_DOWNLOADED:
-			return "MCURL_S_DOWNLOADED";
-		case MCURL_S_ERROR:
-			return "MCURL_S_ERROR";
-		case MCURL_S_DONE:
-			return "MCURL_S_DONE";
-	}
-	return "";
-}
 
 enum mcrawler_url_options {
 	MCURL_OPT_NONSSL,
@@ -220,17 +211,19 @@ typedef struct mcrawler_settings mcrawler_settings;
 typedef struct mcrawler_url mcrawler_url;
 typedef void (*mcrawler_url_callback)(mcrawler_url*, void *);
 
-void  mcrawler_init_settings(mcrawler_settings *settings);
-void  mcrawler_init_url(mcrawler_url *u, const char *url);
+MCRAWLER_EXTERN void  mcrawler_init_settings(mcrawler_settings *settings);
+MCRAWLER_EXTERN void  mcrawler_init_url(mcrawler_url *u, const char *url);
 
-void  mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg);
+MCRAWLER_EXTERN void  mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg);
 
-char *mcrawler_version();
+MCRAWLER_EXTERN char *mcrawler_version();
 
-void *mcrawler_url_serialize(mcrawler_url *url, void **buffer, int *buffer_size);
-int   mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size);
-void *mcrawler_urls_serialize(mcrawler_url **urls, mcrawler_settings *settings, void **buffer, int *buffer_size);
-int   mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings, void *buffer, int buffer_size, void *(*alloc_func)(size_t size));
+MCRAWLER_EXTERN void *mcrawler_url_serialize(mcrawler_url *url, void **buffer, int *buffer_size);
+MCRAWLER_EXTERN int   mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size);
+MCRAWLER_EXTERN void *mcrawler_urls_serialize(mcrawler_url **urls, mcrawler_settings *settings, void **buffer, int *buffer_size);
+MCRAWLER_EXTERN int   mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings, void *buffer, int buffer_size, void *(*alloc_func)(size_t size));
 
-void  mcrawler_free_url(mcrawler_url *);
-void  mcrawler_free_cookie(mcrawler_cookie *);
+MCRAWLER_EXTERN void  mcrawler_free_url(mcrawler_url *);
+MCRAWLER_EXTERN void  mcrawler_free_cookie(mcrawler_cookie *);
+
+MCRAWLER_EXTERN const char *mcrawler_state_to_s(const enum mcrawler_url_s x);
