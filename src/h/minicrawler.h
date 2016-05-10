@@ -170,6 +170,7 @@ struct mcrawler_url {
 	int redirect_limit;
 
 	int state;
+	int last_state;
 	int rw;
 	mcrawler_timing timing;
 	int downstart;		// time downloading start

@@ -1451,6 +1451,7 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 	remove_expired_cookies(u);
 
 	u->timing.done = get_time_int();
+	u->last_state = get_atomic_int(&u->state);
 
 	callback(u, callback_arg);
 
