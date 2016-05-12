@@ -679,7 +679,7 @@ static void opensocket(mcrawler_url *u)
 		debugf("[%d] Using existing connection at socket %d!\n", u->index, u->sockfd);
 		set_atomic_int(&u->state, MCURL_S_GENREQUEST);
 		return;
-	} else {
+	} else if (u->sockfd) {
 		close_conn(u);
 		u->close_connection = 0;
 	}
