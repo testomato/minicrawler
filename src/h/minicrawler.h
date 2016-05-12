@@ -216,6 +216,7 @@ MCRAWLER_EXTERN void  mcrawler_init_settings(mcrawler_settings *settings);
 MCRAWLER_EXTERN void  mcrawler_init_url(mcrawler_url *u, const char *url);
 
 MCRAWLER_EXTERN void  mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg);
+MCRAWLER_EXTERN void  mcrawler_reset_url(mcrawler_url *u);
 
 MCRAWLER_EXTERN char *mcrawler_version();
 

@@ -2046,6 +2046,14 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 	}
 }
 
+/**
+ * Sets the url to initial state
+ */
+void mcrawler_reset_url(mcrawler_url *u) {
+	reset_url(u);
+	u->state = MCURL_S_PARSEDURL;
+}
+
 char *mcrawler_version() {
 	return VERSION;
 }
