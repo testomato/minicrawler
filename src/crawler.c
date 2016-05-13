@@ -1601,10 +1601,12 @@ static int resolvelocation(mcrawler_url *u) {
 
 
 /**
- * Continue with crawling?
+ * Continue with crawling? - return 0
  */
 static int cont(mcrawler_url *u) {
-	if (u->location[0] && strcmp(u->method, "HEAD")) {
+	if (u->options & 1<<MCURL_OPT_NOT_FOLLOW_REDIRECTS) {
+		return 1;
+	} else if (u->location[0] && strcmp(u->method, "HEAD")) {
 		return resolvelocation(u);
 	} else if (u->authorization && u->status == 401) {
 		if (!u->auth_attempt) {

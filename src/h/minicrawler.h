@@ -115,6 +115,7 @@ enum mcrawler_url_options {
 	MCURL_OPT_GZIP,
 	MCURL_OPT_IPV6,
 	MCURL_OPT_INSECURE,
+	MCURL_OPT_NOT_FOLLOW_REDIRECTS,
 };
 
 enum {
