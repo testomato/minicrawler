@@ -152,8 +152,10 @@ static void close_conn(mcrawler_url *u) {
 	}
 }
 
+#ifdef HAVE_LIBNGHTTP2
 static void genrequest_http2(mcrawler_url *u);
 static void readreply_http2(mcrawler_url *u);
+#endif
 
 
 /** Impement handshake over SSL non-blocking socket.
