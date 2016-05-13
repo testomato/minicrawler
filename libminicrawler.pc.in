@@ -7,7 +7,8 @@ Name: libminicrawler
 Description: Single-threaded multi-socket HTTP(S) client
 
 Version: @VERSION@
-Requires.private: libcares >= 1.7.0, libssl >= 1.0.1, libcrypto >= 1.0.1, libnghttp2 >= 1.5.0
+Requires:
+Requires.private:
 URL: https://github.com/testomato/minicrawler
 Libs: -L${libdir} -lminicrawler-@MINICRAWLER_API_VERSION@
 Cflags: -I${includedir}/libminicrawler-@MINICRAWLER_API_VERSION@
