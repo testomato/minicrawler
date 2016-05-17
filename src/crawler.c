@@ -163,9 +163,20 @@ We may switch between need read/need write for several times.
 SSL is blackbox this time for us.
 */
 static void sec_handshake(mcrawler_url *u) {
-	assert(u->ssl);
-
 	if (!u->timing.sslstart) u->timing.sslstart = get_time_int();
+
+	if (!u->ssl) {
+		if (create_ssl(u) < 0) {
+			debugf("[%d] cannot create ssl session :-(\n", u->index);
+			sprintf(u->error_msg, "Cannot create SSL session");
+			unsigned long e;
+			while ((e = ERR_get_error())) {
+				debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
+			}
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+			return;
+		}
+	}
 
 	const int t = SSL_connect(u->ssl);
 	if (t == 1) {
@@ -635,36 +646,6 @@ static void connectsocket(mcrawler_url *u) {
 	set_atomic_int(&u->rw, 1<< MCURL_RW_READY_READ | 1<<MCURL_RW_READY_WRITE);
 }
 
-/** Allocate ssl objects for ssl connection. Do nothing for plain connection.
-*/
-static int maybe_create_ssl(mcrawler_url *u) {
-#ifdef HAVE_LIBSSL
-	if (0 != strcmp(u->proto, "https")) {
-		return 0;
-	}
-
-	SSL *ssl = SSL_new(mossad());
-	if (!ssl) return -1;
-	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
-	if (!sbio) return -2;
-	SSL_set_bio(ssl, sbio, sbio);
-	SSL_set_options(ssl, u->ssl_options);
-	SSL_set_tlsext_host_name(ssl, u->hostname);
-
-#ifdef HAVE_SSL_GET0_PARAM
-	X509_VERIFY_PARAM *vpm = SSL_get0_param(ssl);;
-	X509_VERIFY_PARAM_set1_host(vpm, u->hostname, 0);
-#endif
-
-	if (u->options & 1<<MCURL_OPT_INSECURE) {
-		SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
-	}
-
-	u->ssl = ssl;
-#endif
-	return 0;
-}
-
 /** uz znam IP, otevri socket
  */
 static void opensocket(mcrawler_url *u)
@@ -724,17 +705,6 @@ static void opensocket(mcrawler_url *u)
 	} else {
 		set_atomic_int(&u->state, MCURL_S_HANDSHAKE);
 		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE | 1<<MCURL_RW_WANT_WRITE);
-	}
-
-	if (maybe_create_ssl(u) < 0) {
-		debugf("[%d] cannot create ssl session :-(\n", u->index);
-		sprintf(u->error_msg, "Cannot create SSL session");
-		unsigned long e;
-		while ((e = ERR_get_error())) {
-			debugf("[%d]\t\t%s\n", u->index, ERR_error_string(e, NULL));
-		}
-		set_atomic_int(&u->state, MCURL_S_ERROR);
-		return;
 	}
 }
 

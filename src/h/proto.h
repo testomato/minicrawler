@@ -13,7 +13,7 @@ extern int debug;
 #ifdef HAVE_LIBSSL
 # include <openssl/ssl.h>
 // cert.c
-SSL_CTX *mossad(void);
+int create_ssl(mcrawler_url *);
 void free_mossad(void);
 #endif
 

@@ -191,7 +191,7 @@ static int select_next_proto_cb(SSL *ssl, unsigned char **out,
 Returns valid SSL context.
 When call for the first time, then initialize SSL and the context itself.
 */
-SSL_CTX *mossad(void) {
+static SSL_CTX *mossad() {
 	if (ctx) {
 		return ctx;
 	}
@@ -273,5 +273,30 @@ void free_mossad(void) {
 		ctx = NULL;
 	}
 }
+
+/** Allocate ssl objects for ssl connection.
+*/
+int create_ssl(mcrawler_url *u) {
+	SSL *ssl = SSL_new(mossad());
+	if (!ssl) return -1;
+	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
+	if (!sbio) return -2;
+	SSL_set_bio(ssl, sbio, sbio);
+	SSL_set_options(ssl, u->ssl_options);
+	SSL_set_tlsext_host_name(ssl, u->hostname);
+
+#ifdef HAVE_SSL_GET0_PARAM
+	X509_VERIFY_PARAM *vpm = SSL_get0_param(ssl);;
+	X509_VERIFY_PARAM_set1_host(vpm, u->hostname, 0);
+#endif
+
+	if (u->options & 1<<MCURL_OPT_INSECURE) {
+		SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
+	}
+
+	u->ssl = ssl;
+	return 0;
+}
+
 #endif
 #endif
