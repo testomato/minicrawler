@@ -2014,7 +2014,6 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 		}
 	} while(!done);
 	
-	free_mossad();
 	if(done) {
 		debugf("All successful. Took %d ms.\n", get_time_int());
 	}
