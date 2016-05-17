@@ -57,6 +57,7 @@ static const char xxx[] =
 
 static BIO *bio_err = NULL;
 static SSL_CTX *ctx = NULL;
+static certs_loaded = 0;
 
 /**
 Helper function for "reading" of the password.
@@ -232,6 +233,18 @@ static SSL_CTX *mossad() {
 	// test here https://badssl.com/
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
 
+#ifdef HAVE_LIBNGHTTP2
+	SSL_CTX_set_next_proto_select_cb(ctx, select_next_proto_cb, NULL);
+#endif
+	return ctx;
+}
+
+static void load_verify_locations() {
+	if (certs_loaded) {
+		return;
+	}
+	certs_loaded = 1;
+
 #ifdef CA_BUNDLE
 # ifdef CA_PATH
 	debugf("CA bundle: %s\n", CA_BUNDLE);
@@ -257,11 +270,6 @@ static SSL_CTX *mossad() {
 	}
 # endif
 #endif
-
-#ifdef HAVE_LIBNGHTTP2
-	SSL_CTX_set_next_proto_select_cb(ctx, select_next_proto_cb, NULL);
-#endif
-	return ctx;
 }
 
 /**
@@ -292,6 +300,8 @@ int create_ssl(mcrawler_url *u) {
 
 	if (u->options & 1<<MCURL_OPT_INSECURE) {
 		SSL_set_verify(ssl, SSL_VERIFY_NONE, NULL);
+	} else {
+		load_verify_locations();
 	}
 
 	u->ssl = ssl;
