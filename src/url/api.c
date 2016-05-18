@@ -115,7 +115,7 @@ char * mcrawler_url_get_hash(mcrawler_url_url *url) {
 		return strdup("");
 	// Return "#", followed by context object’s url’s fragment.
 	} else {
-		char *hash = malloc(strlen(url->fragment + 2));
+		char *hash = malloc(strlen(url->fragment) + 2);
 		hash[0] = '#';
 		strcpy(hash + 1, url->fragment);
 		return hash;
