@@ -27,6 +27,30 @@ enum {
 };
 
 typedef enum {
+	MCRAWLER_URL_PARSE_STATE_SCHEME_START,
+	MCRAWLER_URL_PARSE_STATE_SCHEME,
+	MCRAWLER_URL_PARSE_STATE_NO_SCHEME,
+	MCRAWLER_URL_PARSE_STATE_SPECIAL_RELATIVE_OR_AUTHORITY,
+	MCRAWLER_URL_PARSE_STATE_PATH_OR_AUTHORITY,
+	MCRAWLER_URL_PARSE_STATE_RELATIVE,
+	MCRAWLER_URL_PARSE_STATE_RELATIVE_SLASH,
+	MCRAWLER_URL_PARSE_STATE_SPECIAL_AUTHORITY_SLASHES,
+	MCRAWLER_URL_PARSE_STATE_SPECIAL_AUTHORITY_IGNORE_SLASHES,
+	MCRAWLER_URL_PARSE_STATE_AUTHORITY,
+	MCRAWLER_URL_PARSE_STATE_HOST,
+	MCRAWLER_URL_PARSE_STATE_HOSTNAME,
+	MCRAWLER_URL_PARSE_STATE_PORT,
+	MCRAWLER_URL_PARSE_STATE_FILE,
+	MCRAWLER_URL_PARSE_STATE_FILE_SLASH,
+	MCRAWLER_URL_PARSE_STATE_FILE_HOST,
+	MCRAWLER_URL_PARSE_STATE_PATH_START,
+	MCRAWLER_URL_PARSE_STATE_PATH,
+	MCRAWLER_URL_PARSE_STATE_CANNOT_BE_A_BASE_URL_PATH,
+	MCRAWLER_URL_PARSE_STATE_QUERY,
+	MCRAWLER_URL_PARSE_STATE_FRAGMENT
+} mcrawler_url_parse_state;
+
+typedef enum {
 	MCRAWLER_URL_HOST_NONE = 0,
 	MCRAWLER_URL_HOST_DOMAIN = 1,
 	MCRAWLER_URL_HOST_IPV4 = 2,
@@ -56,6 +80,7 @@ typedef struct mcrawler_url_url {
 } mcrawler_url_url;
 
 MCRAWLER_EXTERN int mcrawler_url_parse(mcrawler_url_url *url, const char *input, const mcrawler_url_url *base);
+MCRAWLER_EXTERN int mcrawler_url_parse2(mcrawler_url_url *url, const char *input, const mcrawler_url_url *base, mcrawler_url_parse_state *state);
 MCRAWLER_EXTERN int mcrawler_url_parse_host(mcrawler_url_host *host, const char *input);
 MCRAWLER_EXTERN int mcrawler_url_parse_ipv6(mcrawler_url_host *host, const char *input);
 MCRAWLER_EXTERN int mcrawler_url_parse_ipv4(mcrawler_url_host *host, const char *input);
