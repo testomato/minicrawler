@@ -578,6 +578,8 @@ static void launchdns(mcrawler_url *u) {
 	}
 
 	set_atomic_int(&u->state, MCURL_S_INDNS);
+	if (!u->timing.dnsstart) u->timing.dnsstart = time;
+
 	ares_gethostbyname(u->aresch, u->hostname, u->addrtype, (ares_host_callback)&dnscallback, u);
 }
 
@@ -1816,7 +1818,6 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 		break;
 
 	case MCURL_S_PARSEDURL:
-		if (!u->timing.dnsstart) u->timing.dnsstart = time;
 		f->launch_dns(u);
 		break;
   
