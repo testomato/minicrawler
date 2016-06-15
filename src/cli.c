@@ -147,7 +147,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 /**
  * Formats timing data for output
  */
-static int format_timing(char *dest, mcrawler_timing *timing) {
+static int format_timing(char *dest, mcrawler_timing *timing, int state) {
 	int n, len = 0;
 	const int now = timing->done;
 	if (timing->dnsstart) {
@@ -171,11 +171,11 @@ static int format_timing(char *dest, mcrawler_timing *timing) {
 		if (n > 0) len += n;
 	}
 	if (timing->firstbyte) {
-		n = sprintf(dest+len, "Content download=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->firstbyte);
+		n = sprintf(dest+len, "Content download=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - timing->firstbyte);
 		if (n > 0) len += n;
 	}
 	if (timing->connectionstart) {
-		n = sprintf(dest+len, "Total=%d ms; ", (timing->lastread ? timing->lastread : now) - timing->connectionstart);
+		n = sprintf(dest+len, "Total=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - timing->connectionstart);
 		if (n > 0) len += n;
 	}
 	return len;
@@ -197,7 +197,7 @@ void output(mcrawler_url *u, void *arg) {
 	for (mcrawler_redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
 		n = sprintf(h+hlen, "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
 		if (n > 0) hlen += n;
-		hlen += format_timing(h+hlen, &rinfo->timing);
+		hlen += format_timing(h+hlen, &rinfo->timing, MCURL_S_DOWNLOADED);
 	}
 	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %d\n", u->status, u->bufp-u->headlen);
 	if (n > 0) hlen += n;
@@ -281,7 +281,7 @@ void output(mcrawler_url *u, void *arg) {
 	}
 	n = sprintf(h+hlen, "\nTiming: ");
 	if (n > 0) hlen += n;
-	hlen += format_timing(h+hlen, &u->timing);
+	hlen += format_timing(h+hlen, &u->timing, url_state);
 	n = sprintf(h+hlen, "\nIndex: %d\n\n", u->index);
 	if (n > 0) hlen += n;
 
