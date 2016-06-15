@@ -1249,7 +1249,7 @@ static void header_cb(const char *name, char *value, void *data) {
 		return;
 	}
 
-	if ((!strcasecmp(name, "Location") && (u->status >= 300 || u->status < 400)) ||
+	if ((!strcasecmp(name, "Location") && (u->status >= 300 && u->status < 400)) ||
 			!strcasecmp(name, "Refresh")) {
 		if (!strcasecmp(name, "Refresh")) {
 			if (strncmp(value, "0;url=", 6)) {
