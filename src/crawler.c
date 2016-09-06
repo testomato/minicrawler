@@ -1326,7 +1326,7 @@ static void header_cb(const char *name, char *value, void *data) {
 	}
 
 	if (!strcasecmp(name, "Connection")) {
-		if (!strcasecmp(value, "close")) {
+		if (strcasestr(value, "close")) {
 			u->close_connection = 1;
 		}
 		return;
