@@ -377,6 +377,10 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 	mcrawler_url *u;
 	
 	u=(mcrawler_url *)arg;
+	if (status == ARES_EDESTRUCTION) {
+		// resolving cancelled by ares_destroy
+		return;
+	}
 	if (status != ARES_SUCCESS) {
 		if ((status == ARES_ENODATA || status == ARES_ENOTFOUND) && u->addrtype == AF_INET) {
 			// zkusíme ještě IPv6
@@ -386,7 +390,7 @@ static void dnscallback(void *arg, int status, int timeouts, struct hostent *hos
 			return;
 		}
 		debugf("[%d] gethostbyname error: %d: %s (%d timeouts)\n", u->index, status, ares_strerror(status), timeouts);
-		sprintf(u->error_msg, "%.255s", ares_strerror(status));
+		sprintf(u->error_msg, "DNS: %.250s", ares_strerror(status));
 		set_atomic_int(&u->state, MCURL_S_ERROR);
 		return;
 	}
