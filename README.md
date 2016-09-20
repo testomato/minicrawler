@@ -154,6 +154,11 @@ On Linux with apt-get run:
 apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev
 ```
 
+The GNU Autotools are also needed and the GNU Compiler Collection, they can be installed by:
+```
+apt-get install make autoconf automake autotools-dev libtool gcc
+```
+
 On OS X with [homebrew](http://brew.sh/) run:
 
 ```
