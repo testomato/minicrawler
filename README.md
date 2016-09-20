@@ -172,9 +172,10 @@ Then run:
 ./autogen.sh
 ./configure [--without-ssl] [--without-http2]
 make
-[make check]
 sudo make install
 ```
+
+### Link libminicrawler to your project
 
 On OS X with homebrew `CFLAGS` and `LDFLAGS` need to contain proper paths. You can assign them directly as the configure script options.
 
@@ -188,6 +189,11 @@ After installation you can link `libminicrawler` by adding this to your Makefile
 CFLAGS += $(shell pkg-config --cflags libminicrawler-4)
 LDFLAGS += $(shell pkg-config --libs libminicrawler-4)
 ```
+
+### Unit Tests
+
+Unit tests are done by simply runnning `make check`. The need php5-cli to be installed.
+
 
 ## Users
 
