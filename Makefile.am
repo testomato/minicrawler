@@ -44,6 +44,3 @@ EXTRA_DIST = $(TESTS) test/urltestdata.json libminicrawler.pc.in libminicrawler-
 
 minicrawler_docdir = $(docdir)-@MINICRAWLER_API_VERSION@
 dist_minicrawler_doc_DATA = README.md
-
-install-exec-hook:
-	cd $(DESTDIR)$(bindir) && $(LN_S) -f minicrawler@MINICRAWLER_API_VERSION@$(EXEEXT) minicrawler$(EXEEXT)

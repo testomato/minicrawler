@@ -22,7 +22,6 @@ if test "${ac_cv_prog_cc_c99}" = "no"; then
 fi
 AC_PROG_LIBTOOL
 AC_PROG_AWK
-AC_PROG_LN_S
 
 # Checks for libraries.
 AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares dev files]))
