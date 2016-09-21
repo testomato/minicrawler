@@ -192,8 +192,20 @@ LDFLAGS += $(shell pkg-config --libs libminicrawler-4)
 
 ### Unit Tests
 
-Unit tests are done by simply runnning `make check`. The need php5-cli to be installed.
+Unit tests are done by simply runnning `make check`. They need php5-cli to be installed.
 
+### Integration Tests
+
+Integration tests require a running instance of [httpbin](https://github.com/Runscope/httpbin). You can use public one like [on nghttp2.org](https://nghttp2.org/httpbin/) or install it locally. For example as a library from PyPI and run it using Gunicorn:
+```
+pip install httpbin
+gunicorn httpbin:app
+```
+
+Then run the following command under `integration-tests` directory
+```
+make check HTTPBIN_URL=http://127.0.0.1:8000
+```
 
 ## Users
 

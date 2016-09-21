@@ -1,0 +1,99 @@
+#!/usr/bin/php5
+<?php
+$errors = [];
+set_error_handler('errorHandler');
+
+include __DIR__ . '/test_cases.php';
+
+echo '1..' . count($tests) . "\n";
+foreach ($tests as $i => $case) {
+	try {
+		$case();
+		echo "ok $i\n";
+	} catch (\TestFailedException $e) {
+		echo "not ok $i {$e->getMessage()}\n";
+	}
+}
+
+function host() {
+	global $argv;
+	return isset($argv[1]) ? parse_url($argv[1], PHP_URL_HOST) : 
+		getenv('HTTPBIN_URL') ? parse_url(getenv('HTTPBIN_URL'), PHP_URL_HOST) : '127.0.0.1';
+}
+
+function url($path) {
+	global $argv;
+	return rtrim(isset($argv[1]) ? $argv[1] : getenv('HTTPBIN_URL') ?: 'http://127.0.0.1:8000', '/') . $path;
+}
+
+function check_result_for_path($path, array $args, array $checks) {
+	$argsString = '';
+	foreach ($args as $flag=>$arg) $argsString .= ' ' . (is_string($flag) ? $flag . ' ' . escapeshellarg($arg) : $arg);
+	$cli = __DIR__ . "/../minicrawler4 $argsString  " . escapeshellarg(url($path));
+	$result = shell_exec($cli);
+	$lines = explode("\n", $result);
+	$headers = [];
+	$cookies = [];
+	$body = '';
+	while ($line = array_shift($lines)) {
+		if ($line === '') break;
+		$p = strpos($line, ':');
+		$key = $p !== false ? substr($line, 0, $p) : null;
+		$val = substr($line, $p === false ? 0 : $p + 2);
+		if ($key == 'Cookies') {
+			for ($i = 0; $i < $val; $i++) {
+				$cookies[] = array_shift($lines);
+			}
+		} elseif (isset($headers[$key])) {
+			if (is_array($headers[$key])) {
+				$headers[$key][] = $val;
+			} else {
+				$headers[$key] = [$headers[$key], $val];
+			}
+		} else {
+			$headers[$key] = $val;
+		}
+	}
+	$headers['Cookies'] = $cookies;
+	$body = implode("\n", $lines);
+	$result = json_decode($body, true);
+	if (!$result) {
+		$result = $body;
+	}
+	foreach ($checks as $check) {
+		list($expected, $actual, $msg) = $check($result, $headers);
+		if ($expected !== $actual) {
+			foreach ([&$expected, &$actual] as &$arr) {
+				if (is_array($arr)) {
+					$arr = trim(preg_replace('/^Array\s*\((.*)\)\s*$/s', '\1', print_r($arr, true)));
+				} else {
+					$arr = var_export($arr, true);
+				}
+			}
+			$msg = "$msg\n    $expected\n but got\n    $actual\n";
+			if ($errs = getErrors()) {
+				$msg .= "    " . implode("\n    ", $errs) . "\n";
+			}
+			$msg .= " for: $cli\n";
+			throw new TestFailedException($msg);
+		}
+	}
+	if ($msg = getErrors()) throw new TestFailedException(implode("\n    ", $msg));
+}
+
+class TestFailedException extends Exception {}
+
+function errorHandler($errno, $errstr, $errfile, $errline) {
+	global $errors;
+	$errors[] = [$errno, $errstr, $errfile, $errline];
+	return true;
+}
+
+function getErrors() {
+	global $errors;
+	$msg = [];
+	while (($err = array_shift($errors))) {
+		$msg[] = "$err[1] on line $err[3]";
+	}
+	return $msg;
+}

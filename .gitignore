@@ -15,6 +15,8 @@ test-suite.log
 /test/url
 /test/run.log
 /test/run.trs
+/integration-tests/run.log
+/integration-tests/run.trs
 
 # GNU Build System
 /autom4te.cache

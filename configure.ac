@@ -79,6 +79,6 @@ AC_CHECK_FUNC([clock_gettime], [], AC_CHECK_FUNC([gettimeofday], [], AC_MSG_ERRO
 AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday timegm SSL_get0_param nghttp2_http2_strerror])
 ##AC_CHECK_FUNCS([memmove memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
 
-AC_CONFIG_FILES([Makefile libminicrawler/libminicrawler-$MINICRAWLER_API_VERSION.pc:libminicrawler.pc.in libminicrawler/libminicrawler-url-$MINICRAWLER_API_VERSION.pc:libminicrawler-url.pc.in])
+AC_CONFIG_FILES([Makefile integration-tests/Makefile libminicrawler/libminicrawler-$MINICRAWLER_API_VERSION.pc:libminicrawler.pc.in libminicrawler/libminicrawler-url-$MINICRAWLER_API_VERSION.pc:libminicrawler-url.pc.in])
 AC_REQUIRE_AUX_FILE([tap-driver.sh])
 AC_OUTPUT
