@@ -39,7 +39,8 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libminicrawler/libminicrawler-$(MINICRAWLER_API_VERSION).pc libminicrawler/libminicrawler-url-$(MINICRAWLER_API_VERSION).pc
 
 DISTCLEANFILES = $(pkgconfig_DATA)
-EXTRA_DIST = libminicrawler.pc.in libminicrawler-url.pc.in
+
+EXTRA_DIST = $(TESTS) test/urltestdata.json libminicrawler.pc.in libminicrawler-url.pc.in
 
 minicrawler_docdir = $(docdir)-@MINICRAWLER_API_VERSION@
 dist_minicrawler_doc_DATA = README.md

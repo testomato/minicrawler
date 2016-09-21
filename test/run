@@ -1,4 +1,4 @@
-#!/usr/bin/php
+#!/usr/bin/php5
 <?php
 $data = file_get_contents(__DIR__ . '/urltestdata.json');
 $data = json_decode($data, true);
