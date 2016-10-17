@@ -15,6 +15,7 @@ void printusage()
 	printf("\nminicrawler, version %s\n\nUsage:   minicrawler [options] [urloptions] url [[url2options] url2]...\n\n"
 	         "Where\n"
 	         "   options:\n"
+	         "         -2         disable HTTP/2\n"
 	         "         -6         resolve host to IPv6 address only\n"
 	         "         -8         convert from page encoding to UTF-8\n"
 	         "         -A STRING  custom user agent (max 255 bytes)\n"
@@ -94,6 +95,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-6")) {options |= 1<<MCURL_OPT_IPV6; continue;}
 		if(!strcmp(argv[t], "-u")) {SAFE_STRCPY(username, argv[t+1]); t++; continue;}
 		if(!strncmp(argv[t], "-p", 2)) {SAFE_STRCPY(password, argv[t] + 2); continue;}
+		if(!strcmp(argv[t], "-2")) {options |= 1<<MCURL_OPT_DISABLE_HTTP2; continue;}
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {

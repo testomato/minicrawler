@@ -185,7 +185,7 @@ static void sec_handshake(mcrawler_url *u) {
 		const unsigned char *data;
 		unsigned int len;
 		SSL_get0_next_proto_negotiated(u->ssl, &data, &len);
-		debugf("[%d] Selected protocol: %.*s\n", u->index, len, data);
+		debugf("[%d] Negotiated protocol: %.*s\n", u->index, len, data);
 		if (len && !strncmp((const char *)data, NGHTTP2_PROTO_VERSION_ID, len)) {
 			((mcrawler_url_func *)u->f)->gen_request = genrequest_http2;
 			((mcrawler_url_func *)u->f)->recv_reply = readreply_http2;
@@ -975,10 +975,11 @@ static int http2_on_stream_close_callback(nghttp2_session *session, int32_t stre
 #ifdef HAVE_NGHTTP2_HTTP2_STRERROR
 			// since nghttp2 1.9.0
 			debugf("[%d] HTTP2 stream %d closes with error %s (%d)\n", u->index, stream_id, nghttp2_http2_strerror(error_code), error_code);
+			sprintf(u->error_msg, "HTTP2 stream closes with error %s", nghttp2_http2_strerror(error_code));
 #else
 			debugf("[%d] HTTP2 stream %d closes with error %d\n", u->index, stream_id, error_code);
-#endif
 			sprintf(u->error_msg, "HTTP2 stream closes with error %d", error_code);
+#endif
 			set_atomic_int(&u->state, MCURL_S_ERROR);
 			rv = nghttp2_session_terminate_session(session, NGHTTP2_NO_ERROR);
 			if (rv) {

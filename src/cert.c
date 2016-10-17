@@ -178,13 +178,24 @@ static int verify_callback(int ok, X509_STORE_CTX *ctx)
 static int select_next_proto_cb(SSL *ssl, unsigned char **out,
                                 unsigned char *outlen, const unsigned char *in,
                                 unsigned int inlen, void *arg) {
-	int rv;
-	rv = nghttp2_select_next_protocol(out, outlen, in, inlen);
-	if (rv == -1) {
-		return SSL_TLSEXT_ERR_NOACK;
-		//berr_exit("Server did not advertise " NGHTTP2_PROTO_VERSION_ID);
+	mcrawler_url *url = (mcrawler_url *)SSL_get_app_data(ssl);
+	if (url->options & 1<<MCURL_OPT_DISABLE_HTTP2) {
+		// only http/1.1 is suppported
+		const unsigned char client[] = "\x8http/1.1";
+		unsigned int client_len = sizeof(client) - 1;
+		if (OPENSSL_NPN_NEGOTIATED == SSL_select_next_proto(
+					out, outlen, in, inlen, client, client_len
+					)
+				) {
+			return SSL_TLSEXT_ERR_OK;
+		}
+		return SSL_TLSEXT_ERR_OK;
+	} else {
+		if (-1 == nghttp2_select_next_protocol(out, outlen, in, inlen)) {
+			return SSL_TLSEXT_ERR_NOACK;
+		}
+		return SSL_TLSEXT_ERR_OK;
 	}
-	return SSL_TLSEXT_ERR_OK;
 }
 #endif
 
@@ -292,6 +303,7 @@ int create_ssl(mcrawler_url *u) {
 	SSL_set_bio(ssl, sbio, sbio);
 	SSL_set_options(ssl, u->ssl_options);
 	SSL_set_tlsext_host_name(ssl, u->hostname);
+	SSL_set_app_data(ssl, (char *)u);
 
 #ifdef HAVE_SSL_GET0_PARAM
 	X509_VERIFY_PARAM *vpm = SSL_get0_param(ssl);;

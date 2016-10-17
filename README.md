@@ -81,6 +81,7 @@ void main() {
 
 ```
    options:
+         -2         disable HTTP/2
          -6         resolve host to IPv6 address only
          -8         convert from page encoding to UTF-8
          -A STRING  custom user agent (max 255 bytes)
