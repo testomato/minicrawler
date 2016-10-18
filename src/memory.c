@@ -3,6 +3,29 @@
 #include "url/minicrawler-url.h"
 
 
+void free_addr(mcrawler_addr *addr) {
+	while (addr) {
+		mcrawler_addr *next = addr->next;
+		free(addr);
+		addr = next;
+	}
+}
+
+void cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src) {
+	dst->name = malloc(strlen(src->name) + 1);
+	dst->value = malloc(strlen(src->value) + 1);
+	dst->domain = malloc(strlen(src->domain) + 1);
+	dst->path = malloc(strlen(src->path) + 1);
+
+	strcpy(dst->name, src->name);
+	strcpy(dst->value, src->value);
+	strcpy(dst->domain, src->domain);
+	strcpy(dst->path, src->path);
+	dst->host_only = src->host_only;
+	dst->secure = src->secure;
+	dst->expires = src->expires;
+}
+
 void mcrawler_free_cookie(mcrawler_cookie *cookie) {
 	if (cookie->name) free(cookie->name);
 	if (cookie->value) free(cookie->value);

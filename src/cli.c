@@ -4,9 +4,9 @@
 #include <stdio.h>
 #include <arpa/inet.h>
 
-#include "h/minicrawler.h"
 #include "h/config.h"
 #include "h/string.h"
+#include "h/proto.h"
 
 /** vypise napovedu
  */

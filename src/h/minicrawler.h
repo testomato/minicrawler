@@ -70,29 +70,6 @@ struct mcrawler_addr {
 };
 typedef struct mcrawler_addr mcrawler_addr;
 
-static inline void free_addr(mcrawler_addr *addr) {
-	while (addr) {
-		mcrawler_addr *next = addr->next;
-		free(addr);
-		addr = next;
-	}
-}
-
-static inline void cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src) {
-	dst->name = malloc(strlen(src->name) + 1);
-	dst->value = malloc(strlen(src->value) + 1);
-	dst->domain = malloc(strlen(src->domain) + 1);
-	dst->path = malloc(strlen(src->path) + 1);
-
-	strcpy(dst->name, src->name);
-	strcpy(dst->value, src->value);
-	strcpy(dst->domain, src->domain);
-	strcpy(dst->path, src->path);
-	dst->host_only = src->host_only;
-	dst->secure = src->secure;
-	dst->expires = src->expires;
-}
-
 enum mcrawler_url_s {
 	MCURL_S_JUSTBORN,
 	MCURL_S_PARSEDURL,

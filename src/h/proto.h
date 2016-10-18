@@ -67,3 +67,7 @@ int eatchunked(mcrawler_url *u);
 
 // http2.c
 int http2_session_send(mcrawler_url *u);
+
+// memory.c
+void free_addr(mcrawler_addr *);
+void cp_cookie(mcrawler_cookie *, const mcrawler_cookie *);
