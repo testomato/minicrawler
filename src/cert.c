@@ -57,7 +57,7 @@ static const char xxx[] =
 
 static BIO *bio_err = NULL;
 static SSL_CTX *ctx = NULL;
-static certs_loaded = 0;
+static int certs_loaded = 0;
 
 /**
 Helper function for "reading" of the password.
