@@ -92,6 +92,7 @@ void main() {
          -h         enable output of HTTP headers
          -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)
          -k         disable SSL certificate verification (allow insecure connections)
+         -l         do not follow redirects
          -pSTRING   password for HTTP authentication (basic or digest, max 31 bytes)
          -S         disable SSL/TLS support
          -tSECONDS  set timeout (default is 5 seconds)
