@@ -82,7 +82,7 @@ AC_TYPE_UINT64_T
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_CHECK_FUNC([clock_gettime], [], AC_CHECK_FUNC([gettimeofday], [], AC_MSG_ERROR([clock_gettime or gettimeofday needed to measure time])))
-AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday timegm SSL_get0_param nghttp2_http2_strerror])
+AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday timegm SSL_get0_param nghttp2_http2_strerror nghttp2_session_callbacks_set_error_callback])
 ##AC_CHECK_FUNCS([memmove memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
 
 AC_CONFIG_FILES([Makefile integration-tests/Makefile libminicrawler/libminicrawler-$MINICRAWLER_API_VERSION.pc:libminicrawler.pc.in libminicrawler/libminicrawler-url-$MINICRAWLER_API_VERSION.pc:libminicrawler-url.pc.in])
