@@ -1115,12 +1115,12 @@ static void genrequest_http2(mcrawler_url *u) {
 	}
 
 	// User-Agent
+	char useragent[sizeof(DEFAULTAGENT) + sizeof(VERSION)];
 	if (u->customagent[0]) {
 		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV("user-agent", u->customagent);
 	} else {
-		char tmp[sizeof(DEFAULTAGENT) + sizeof(VERSION)];
-		int len = sprintf(tmp, DEFAULTAGENT, VERSION);
-		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("user-agent", tmp, len);
+		int len = sprintf(useragent, DEFAULTAGENT, VERSION);
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("user-agent", useragent, len);
 	}
 
 	// Cookie
@@ -1137,10 +1137,10 @@ static void genrequest_http2(mcrawler_url *u) {
 	}
 
 	nghttp2_data_provider data_provider, *p_data_provider = NULL;
+	char postlen[6];
 	if (u->post != NULL) {
-		char len[6];
-		sprintf(len, "%d", u->postlen);
-		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("content-length", len, strlen(len));
+		sprintf(postlen, "%d", u->postlen);
+		hdrs.nv[hdrs.len++] = (nghttp2_nv) MAKE_NGHTTP2_NV_COPY_L("content-length", postlen, strlen(postlen));
 
 		char *p = strstr(u->customheader, "Content-Type:");
 		if (p && (p == u->customheader || *(p-1) == '\n')) {
