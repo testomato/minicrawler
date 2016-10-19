@@ -201,7 +201,7 @@ void output(mcrawler_url *u, void *arg) {
 		if (n > 0) hlen += n;
 		hlen += format_timing(h+hlen, &rinfo->timing, MCURL_S_DOWNLOADED);
 	}
-	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %d\n", u->status, u->bufp-u->headlen);
+	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %zd\n", u->status, u->bufp-u->headlen);
 	if (n > 0) hlen += n;
 
 	if (url_state <= MCURL_S_RECVREPLY) {

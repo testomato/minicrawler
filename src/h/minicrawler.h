@@ -97,10 +97,11 @@ enum mcrawler_url_options {
 };
 
 enum {
-	BUFSIZE = 700*1024,
+	BUFSIZE = 700*1024UL,
 	MAXURLSIZE = 8191,
 	COOKIESTORAGESIZE = 25,
 };
+// 700 KiB is enough for 99% requests, see https://bigquery.cloud.google.com/results/www-testomato-com:bquijob_78729d01_157d7e26b6c
 
 struct mcrawler_url {
 
@@ -123,7 +124,7 @@ struct mcrawler_url {
 	char location[MAXURLSIZE + 1];	// presne to co je v hlavicce Location - pro ucely redirect
 	char *redirectedto;	// co nakonec hlasime ve vystupu v hlavicce
 	int chunked;		// 1  pokud transfer-encoding: chunked
-	int nextchunkedpos;
+	size_t nextchunkedpos;
 	mcrawler_cookie cookies[COOKIESTORAGESIZE];
 	int cookiecnt;
 	char customagent[256];
@@ -165,9 +166,10 @@ struct mcrawler_url {
 
 	// obsah
 	unsigned char buf[BUFSIZE];
-	int bufp;
-	int headlen;
-	int contentlen;
+	size_t bufp;
+	size_t headlen;
+	size_t contentlen;
+	int has_contentlen;
 	int status;		// http navratovy kod
 	char error_msg[256];
 

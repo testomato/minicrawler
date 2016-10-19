@@ -86,10 +86,9 @@ int parsehead(const unsigned char *s, const size_t len, int *status, header_call
  *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
  */
 int eatchunked(mcrawler_url *u) {
-	int t,i;
+	int i;
 	unsigned char hex[10];
-	int size;
-	int movestart;
+	size_t t, size, movestart;
 
 	// čte velikost chunku
 	for (t=u->nextchunkedpos, i=0; u->buf[t] != '\r' && u->buf[t] != '\n' && t < u->bufp; t++) {
@@ -107,7 +106,7 @@ int eatchunked(mcrawler_url *u) {
 	hex[i] = 0;
 	size = strtol((char *)hex, NULL, 16);
 
-	debugf("[%d] Chunksize at %d (buffer %d): '%s' (=%d)\n", u->index, u->nextchunkedpos, u->bufp, hex, size);
+	debugf("[%d] Chunksize at %zd (buffer %zd): '%s' (=%zd)\n", u->index, u->nextchunkedpos, u->bufp, hex, size);
 
 	movestart = u->nextchunkedpos;
 	if (u->nextchunkedpos != u->headlen) {

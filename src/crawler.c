@@ -1259,8 +1259,9 @@ static void header_cb(const char *name, char *value, void *data) {
 	}
 
 	if (!strcasecmp(name, "Content-Length")) {
+		u->has_contentlen = 1;
 		u->contentlen = atoi(value);
-		debugf("[%d] Head, Content-Length: %d\n", u->index, u->contentlen);
+		debugf("[%d] Head, Content-Length: %zd\n", u->index, u->contentlen);
 		if (!strcmp(u->method, "HEAD")) { // there will be no content
 			u->contentlen = 0;
 			debugf("[%d] HEAD request, no content\n", u->index);
@@ -1283,8 +1284,10 @@ static void header_cb(const char *name, char *value, void *data) {
 			return;
 		}
 		strcpy(u->location, value);
-		if (u->contentlen == -1 && !u->chunked) {
-			u->contentlen = 0; // do not need content - some servers returns no content-length and keeps conection open
+		if (!u->has_contentlen && !u->chunked) {
+			// do not need content - some servers returns no content-length and keeps conection open
+			u->has_contentlen = 1;
+			u->contentlen = 0; 
 		}
 		debugf("[%d] Location='%s'\n", u->index, u->location);
 		return;
@@ -1299,7 +1302,7 @@ static void header_cb(const char *name, char *value, void *data) {
 		if (!strcasecmp(value, "chunked")) {
 			u->chunked = 1;
 			u->nextchunkedpos = u->headlen;
-			u->contentlen = -1;
+			u->has_contentlen = 0; // we will read until empty chunk, not until contentlen is reached
 			debugf("[%d] Chunked!\n", u->index);
 		}
 		return;
@@ -1404,7 +1407,7 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 		buf = (unsigned char *)malloc(u->bufp);
 		memcpy(buf, u->buf + u->headlen, u->bufp - u->headlen);
 		ret = gunzip(u->buf + u->headlen, &buflen, buf, u->bufp - u->headlen);
-		debugf("[%d] gzip decompress status: %d (input length: %d, output length: %d)\n", u->index, ret, u->bufp - u->headlen, buflen);
+		debugf("[%d] gzip decompress status: %d (input length: %zd, output length: %d)\n", u->index, ret, u->bufp - u->headlen, buflen);
 		u->bufp = buflen + u->headlen;
 		if (ret != 0) {
 			sprintf(u->error_msg, "Gzip decompression error %d", ret);
@@ -1460,7 +1463,8 @@ static void reset_url(mcrawler_url *u) {
 	u->location[0] = 0;
 	u->bufp = 0;
 	u->headlen = 0;
-	u->contentlen = -1;
+	u->contentlen = 0;
+	u->has_contentlen = 0;
 	u->chunked = 0;
 	u->gzipped = 0;
 	u->ssl_options = 0;
@@ -1646,7 +1650,7 @@ static void readreply(mcrawler_url *u) {
 		u->timing.firstbyte = u->timing.lastread;
 	}
 
-	debugf("[%d] Read %zd bytes; bufp = %d; chunked = %d; data = [%.*s]\n", u->index, t, u->bufp, !!u->chunked, (int)t, u->buf + u->bufp - t);
+	debugf("[%d] Read %zd bytes; bufp = %zd; chunked = %d; data = [%.*s]\n", u->index, t, u->bufp, !!u->chunked, (int)t, u->buf + u->bufp - t);
 
 	unsigned char *head_end;
 	if (u->headlen == 0 && (head_end = find_head_end(u->buf, (size_t)u->bufp))) {
@@ -1666,7 +1670,7 @@ static void readreply(mcrawler_url *u) {
 		}
 	}
 	
-	if(t == MCURL_IO_EOF || t == MCURL_IO_ERROR || (u->contentlen != -1 && u->bufp >= u->headlen + u->contentlen)) {
+	if(t == MCURL_IO_EOF || t == MCURL_IO_ERROR || (u->has_contentlen && u->bufp >= u->headlen + u->contentlen)) {
 		if (t == MCURL_IO_ERROR) {
 			set_atomic_int(&u->state, MCURL_S_ERROR);
 		} else if (get_atomic_int(&u->state) != MCURL_S_ERROR) {
@@ -1969,7 +1973,6 @@ void mcrawler_init_url(mcrawler_url *u, const char *url) {
 	} else if (url) {
 		strcpy(u->rawurl, url);
 	}
-	u->contentlen = -1;
 
 	// init callbacks
 	mcrawler_url_func f = (mcrawler_url_func) {
