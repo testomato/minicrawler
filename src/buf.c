@@ -3,8 +3,10 @@
 
 static inline void buf_alloc(mcrawler_buf *buf, size_t len) {
 	buf->dyn_buf = malloc(len);
-	buf->buf_sz = len;
-	memcpy(buf->dyn_buf, buf->stat_buf, buf->bufp);
+	if (buf->dyn_buf) {
+		buf->buf_sz = len;
+		memcpy(buf->dyn_buf, buf->stat_buf, buf->bufp);
+	}
 }
 
 unsigned char *buf_p(mcrawler_url *u) {
@@ -43,8 +45,8 @@ void buf_get(mcrawler_url *u, const size_t min_sz, unsigned char **data, size_t 
 			return;
 		}
 	}
-	left = buf->buf_sz - buf->bufp;
-	*data = buf->dyn_buf + buf->bufp;
+	left = (buf->dyn_buf ? buf->buf_sz : BUFSIZE) - buf->bufp;
+	*data = (buf->dyn_buf ? buf->dyn_buf : buf->stat_buf) + buf->bufp;
 	*len = left;
 }
 
