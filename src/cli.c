@@ -6,7 +6,7 @@
 
 #include "h/config.h"
 #include "h/string.h"
-#include "h/proto.h"
+#include "h/minicrawler.h"
 
 /** vypise napovedu
  */
@@ -124,7 +124,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 			strcpy(url->method, url->post ? "POST" : "GET");
 		}
 		for (int i = 0; i < ccnt; i++) {
-			cp_cookie(&url->cookies[i], &cookies[i]);
+			mcrawler_cp_cookie(&url->cookies[i], &cookies[i]);
 		}
 		url->cookiecnt = ccnt;
 		strcpy(url->customagent, customagent);

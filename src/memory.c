@@ -11,7 +11,7 @@ void free_addr(mcrawler_addr *addr) {
 	}
 }
 
-void cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src) {
+void mcrawler_cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src) {
 	dst->name = malloc(strlen(src->name) + 1);
 	dst->value = malloc(strlen(src->value) + 1);
 	dst->domain = malloc(strlen(src->domain) + 1);

@@ -215,6 +215,7 @@ MCRAWLER_EXTERN int   mcrawler_url_unserialize(mcrawler_url *url, void *buffer, 
 MCRAWLER_EXTERN void *mcrawler_urls_serialize(mcrawler_url **urls, mcrawler_settings *settings, void **buffer, int *buffer_size);
 MCRAWLER_EXTERN int   mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings, void *buffer, int buffer_size, void *(*alloc_func)(size_t size));
 
+MCRAWLER_EXTERN void  mcrawler_cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src);
 MCRAWLER_EXTERN void  mcrawler_free_url(mcrawler_url *);
 MCRAWLER_EXTERN void  mcrawler_free_cookie(mcrawler_cookie *);
 
