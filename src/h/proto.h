@@ -26,6 +26,10 @@ int test_free_channel(const unsigned char u_ip[16], const unsigned milis, const 
 time_t timegm(struct tm *tm);
 #endif
 
+// crawler.c
+mcrawler_url_func get_url_callbacks();
+void reset_url(mcrawler_url *u);
+
 // converthtml2text.c
 int converthtml2text(char *s, int len);
 

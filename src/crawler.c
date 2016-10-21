@@ -1450,7 +1450,7 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 /**
  * Sets the url to initial state
  */
-static void reset_url(mcrawler_url *u) {
+void reset_url(mcrawler_url *u) {
 	u->status = 0;
 	u->location[0] = 0;
 	u->headlen = 0;
@@ -1944,29 +1944,8 @@ static void outputpartial(mcrawler_url **urls, mcrawler_url_callback callback, v
 	}
 }
 
-void mcrawler_init_settings(mcrawler_settings *settings) {
-	memset(settings, 0, sizeof(mcrawler_settings));
-	settings->timeout = DEFAULT_TIMEOUT;
-	settings->delay = DEFAULT_DELAY;
-}
-
-/**
- * Init URL struct
- */
-void mcrawler_init_url(mcrawler_url *u, const char *url) {
-	u->state = MCURL_S_JUSTBORN;
-	u->redirect_limit = MAX_REDIRECTS;
-	if (url && strlen(url) > MAXURLSIZE) {
-		*(char*)mempcpy(u->rawurl, url, MAXURLSIZE) = 0;
-		sprintf(u->error_msg, "URL is too long");
-		u->status = MCURL_S_JUSTBORN - MCURL_S_ERROR;
-		set_atomic_int(&u->state, MCURL_S_ERROR);
-	} else if (url) {
-		strcpy(u->rawurl, url);
-	}
-
-	// init callbacks
-	mcrawler_url_func f = (mcrawler_url_func) {
+mcrawler_url_func get_url_callbacks() {
+	return (mcrawler_url_func) {
 		read:plain_read,
 		write:plain_write,
 		parse_url:parseurl,
@@ -1979,8 +1958,6 @@ void mcrawler_init_url(mcrawler_url *u, const char *url) {
 		send_request:sendrequest,
 		recv_reply:readreply,
 	};
-	u->f = (mcrawler_url_func*)malloc(sizeof(mcrawler_url_func));
-	memcpy(u->f, &f, sizeof(mcrawler_url_func));
 }
 
 /**
@@ -2031,16 +2008,4 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 	if(done) {
 		debugf("All successful. Took %d ms.\n", get_time_int());
 	}
-}
-
-/**
- * Sets the url to initial state
- */
-void mcrawler_reset_url(mcrawler_url *u) {
-	reset_url(u);
-	u->state = MCURL_S_PARSEDURL;
-}
-
-char *mcrawler_version() {
-	return VERSION;
 }
