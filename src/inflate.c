@@ -1,6 +1,6 @@
 #include <zlib.h>
 
-int gunzip(unsigned char *out, int *outlen, unsigned char *in, int inlen) {
+int gunzip(unsigned char *in, size_t inlen, unsigned char *out, size_t *outlen) {
 	int ret;
 	z_stream strm;
 

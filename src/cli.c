@@ -27,10 +27,11 @@ void printusage()
 	         "         -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)\n"
 	         "         -k         disable SSL certificate verification (allow insecure connections)\n"
 	         "         -l         do not follow redirects\n"
+	         "         -mINT      maximum page size in MiB (default 2 MiB)\n"
+	         "         -pSTRING   password for HTTP authentication (basic or digest, max 31 bytes)\n"
 #ifdef HAVE_LIBSSL
 	         "         -S         disable SSL/TLS support\n"
 #endif
-	         "         -pSTRING   password for HTTP authentication (basic or digest, max 31 bytes)\n"
 	         "         -tSECONDS  set timeout (default is 5 seconds)\n"
 	         "         -u STRING  username for HTTP authentication (basic or digest, max 31 bytes)\n"
 	         "         -v         verbose output (to stderr)\n"
@@ -54,6 +55,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 	char customagent[256] = "";
 	char username[32] = "";
 	char password[32] = "";
+	size_t maxpagesize = 0;
 	mcrawler_cookie cookies[COOKIESTORAGESIZE];
 	char *p, *q;
 	int ccnt = 0, i = 0;
@@ -96,6 +98,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-u")) {SAFE_STRCPY(username, argv[t+1]); t++; continue;}
 		if(!strncmp(argv[t], "-p", 2)) {SAFE_STRCPY(password, argv[t] + 2); continue;}
 		if(!strcmp(argv[t], "-2")) {options |= 1<<MCURL_OPT_DISABLE_HTTP2; continue;}
+		if(!strncmp(argv[t], "-m", 2)) {maxpagesize = atoi(argv[t]+2)*1024*1024UL; continue;}
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
@@ -132,6 +135,9 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		strcpy(url->username, username);
 		strcpy(url->password, password);
 		url->options = options;
+		if (maxpagesize) {
+			url->maxpagesize = maxpagesize;
+		}
 
 		urls[i-1] = url;
 		url = (mcrawler_url *)malloc(sizeof(mcrawler_url));
@@ -186,9 +192,13 @@ static int format_timing(char *dest, mcrawler_timing *timing, int state) {
 void output(mcrawler_url *u, void *arg) {
 	const int url_state = u->state;
 
-	unsigned char header[16384];
+	unsigned char header[16384], *http_header, *http_body;
 	char *h = (char *)header;
 	int n, hlen = 0;
+	size_t http_header_len, http_body_len;
+
+	mcrawler_url_header(u, &http_header, &http_header_len);
+	mcrawler_url_body(u, &http_body, &http_body_len);
 
 	n = sprintf(h + hlen, "URL: %s", u->rawurl);
 	if (n > 0) hlen += n;
@@ -201,7 +211,7 @@ void output(mcrawler_url *u, void *arg) {
 		if (n > 0) hlen += n;
 		hlen += format_timing(h+hlen, &rinfo->timing, MCURL_S_DOWNLOADED);
 	}
-	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %zd\n", u->status, u->bufp-u->headlen);
+	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %zd\n", u->status, http_body_len);
 	if (n > 0) hlen += n;
 
 	if (url_state <= MCURL_S_RECVREPLY) {
@@ -289,13 +299,13 @@ void output(mcrawler_url *u, void *arg) {
 
 	write_all(STDOUT_FILENO, header, hlen);
 	if (writehead) {
-		write_all(STDOUT_FILENO, u->buf, u->headlen);
+		write_all(STDOUT_FILENO, http_header, http_header_len);
 		if (0 == u->headlen) {
 			write_all(STDOUT_FILENO, (unsigned char*)"\n", 1); // PHP library expects one empty line at the end of headers, in normal circumstances it is contained
 						      // within u->buf[0 .. u->headlen] .
 		}
 	}
 
-	write_all(STDOUT_FILENO, u->buf+u->headlen, u->bufp-u->headlen);
+	write_all(STDOUT_FILENO, http_body, http_body_len);
 	write_all(STDOUT_FILENO, (unsigned char *)"\n", 1); // jinak se to vývojářům v php špatně parsuje
 }

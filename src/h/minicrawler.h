@@ -3,8 +3,7 @@
 # define WIN32
 #endif
 
-#include <stdlib.h>
-#include <string.h>
+#include <stddef.h>
 #include <time.h>
 
 #ifdef MCRAWLER_STATICLIB
@@ -24,6 +23,13 @@
 #endif
 
 #define DEFAULTAGENT "minicrawler/%s"
+
+enum {
+	MAXURLSIZE = 8191,
+	COOKIESTORAGESIZE = 25,
+	BUFSIZE = 700*1024UL,
+};
+// 700 KiB is enough for 99% requests, see https://bigquery.cloud.google.com/results/www-testomato-com:bquijob_78729d01_157d7e26b6c
 
 struct mcrawler_settings {
 	int debug;
@@ -70,6 +76,14 @@ struct mcrawler_addr {
 };
 typedef struct mcrawler_addr mcrawler_addr;
 
+struct mcrawler_buf {
+	unsigned char stat_buf[BUFSIZE];
+	unsigned char *dyn_buf;
+	size_t bufp;
+	size_t buf_sz;
+};
+typedef struct mcrawler_buf mcrawler_buf;
+
 enum mcrawler_url_s {
 	MCURL_S_JUSTBORN,
 	MCURL_S_PARSEDURL,
@@ -95,13 +109,6 @@ enum mcrawler_url_options {
 	MCURL_OPT_NOT_FOLLOW_REDIRECTS,
 	MCURL_OPT_DISABLE_HTTP2,
 };
-
-enum {
-	BUFSIZE = 700*1024UL,
-	MAXURLSIZE = 8191,
-	COOKIESTORAGESIZE = 25,
-};
-// 700 KiB is enough for 99% requests, see https://bigquery.cloud.google.com/results/www-testomato-com:bquijob_78729d01_157d7e26b6c
 
 struct mcrawler_url {
 
@@ -165,8 +172,8 @@ struct mcrawler_url {
 	int addrtype;
 
 	// obsah
-	unsigned char buf[BUFSIZE];
-	size_t bufp;
+	size_t maxpagesize;
+	mcrawler_buf buf;
 	size_t headlen;
 	size_t contentlen;
 	int has_contentlen;
@@ -197,7 +204,9 @@ MCRAWLER_EXTERN void  mcrawler_init_settings(mcrawler_settings *settings);
 MCRAWLER_EXTERN void  mcrawler_init_url(mcrawler_url *u, const char *url);
 
 MCRAWLER_EXTERN void  mcrawler_go(mcrawler_url **url, const mcrawler_settings *settings, mcrawler_url_callback callback, void *callback_arg);
-MCRAWLER_EXTERN void  mcrawler_reset_url(mcrawler_url *u);
+MCRAWLER_EXTERN void  mcrawler_reset_url(mcrawler_url *u); 
+MCRAWLER_EXTERN void mcrawler_url_header(mcrawler_url *u, unsigned char **header, size_t *headlen);
+MCRAWLER_EXTERN void mcrawler_url_body(mcrawler_url *u, unsigned char **body, size_t *bodylen);
 
 MCRAWLER_EXTERN char *mcrawler_version();
 

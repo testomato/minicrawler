@@ -55,9 +55,12 @@ void digestauth(mcrawler_url *u, struct challenge *ch) {
 	*strchrnul(u->username, ':') = 0; // dobledot not allowed in unserid
 
 	if (!strcasecmp("auth-int", qop)) {
+		unsigned char *buf;
+		size_t len;
+		buf_get(u, 1, &buf, &len);
 		MD5_CTX context;
 		MD5_Init(&context);
-		MD5_Update(&context, u->buf + u->headlen, u->bufp - u->headlen);
+		MD5_Update(&context, buf, len);
 		MD5_Final(HEntity, &context);
 	}
 

@@ -36,7 +36,7 @@ char *consume_entity(char *s, const char *end, int *code);
 char *put_code(char *dst, const unsigned dst_len, const int code);
 
 // inflate.c
-int gunzip(unsigned char *out, int *outlen, unsigned char *in, int inlen);
+int gunzip(unsigned char *in, size_t inlen, unsigned char *out, size_t *outlen);
 
 // malloc.c
 void *rpl_malloc(size_t n);
@@ -63,11 +63,22 @@ void parse_authchallenge(mcrawler_url *u, char *challenge);
 typedef void (*header_callback)(const char *name, char *value, void *);
 unsigned char *find_head_end(unsigned char *s, const size_t len);
 int parsehead(const unsigned char *s, const size_t len, int *status, header_callback header_callback, void *data, int index);
-int eatchunked(mcrawler_url *u);
+int eatchunk(mcrawler_url *u);
 
 // http2.c
 int http2_session_send(mcrawler_url *u);
 
 // memory.c
 void free_addr(mcrawler_addr *);
-void cp_cookie(mcrawler_cookie *, const mcrawler_cookie *);
+
+// buf.c
+unsigned char *buf_p(mcrawler_url *);
+size_t buf_len(mcrawler_url *);
+void buf_set_len(mcrawler_url *, size_t);
+void buf_get(mcrawler_url *, const size_t min_sz, unsigned char **data, size_t *len);
+#define buf_write_lit(u, string) {buf_write(u, (const unsigned char*)string, sizeof(string));}
+size_t buf_write(mcrawler_url *, const unsigned char *data, size_t len);
+void buf_inc(mcrawler_url *, size_t len);
+void buf_del(mcrawler_url *, size_t dellen);
+void buf_free(mcrawler_url *);
+

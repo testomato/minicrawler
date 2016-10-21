@@ -926,20 +926,15 @@ static int http2_on_header_callback(nghttp2_session *session, const nghttp2_fram
 				header_cb((const char *)name, val, user_data);
 				free(val);
 
-				if (u->bufp + namelen + 2 + valuelen + 4 < BUFSIZE) {
-					if (u->bufp > 0) {
-						// delete the last empty line
-						u->bufp -= 2;
-					}
-					memcpy(u->buf + u->bufp, name, namelen);
-					strcpy((char *)u->buf + u->bufp + namelen, ": ");
-					memcpy(u->buf + u->bufp + namelen + 2, value, valuelen);
-					strcpy((char *)u->buf + u->bufp + namelen + 2 + valuelen, "\r\n\r\n");
-					u->bufp += namelen + 2 + valuelen + 4;
-					u->headlen = u->bufp;
-				} else {
-					debugf("[%d] Buffer is full\n", u->index);
+				if (buf_len(u) > 0) {
+					// delete the last empty line
+					buf_del(u, 2);
 				}
+				buf_write(u, name, namelen);
+				buf_write_lit(u, ": ");
+				buf_write(u, value, valuelen);
+				buf_write_lit(u, "\r\n\r\n");
+				u->headlen = buf_len(u);
 
 				break;
 			}
@@ -954,12 +949,9 @@ static int http2_on_data_chunk_recv_callback(nghttp2_session *session, uint8_t f
 	mcrawler_url *u = (mcrawler_url *)user_data;
 	http2_session_data *session_data = (http2_session_data *)u->http2_session;
 	if (session_data->stream_id == stream_id) {
-		if (u->bufp + len <= BUFSIZE) {
-			memcpy(u->buf + u->bufp, data, len);
-			u->bufp += len;
-		} else {
-			memcpy(u->buf + u->bufp, data, BUFSIZE - u->bufp);
-			u->bufp = BUFSIZE;
+		size_t written = buf_write(u, data, len);
+		if (written < len) {
+			debugf("[%d] Buffer is full\n", u->index);
 		}
 	}
 
@@ -1401,25 +1393,25 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 
 	if (u->gzipped) {
 		unsigned char *buf;
-		int buflen = BUFSIZE - u->headlen;
+		size_t len, resp_len = buf_len(u) - u->headlen;
 		int ret;
 
-		buf = (unsigned char *)malloc(u->bufp);
-		memcpy(buf, u->buf + u->headlen, u->bufp - u->headlen);
-		ret = gunzip(u->buf + u->headlen, &buflen, buf, u->bufp - u->headlen);
-		debugf("[%d] gzip decompress status: %d (input length: %zd, output length: %d)\n", u->index, ret, u->bufp - u->headlen, buflen);
-		u->bufp = buflen + u->headlen;
+		buf_get(u, 7*resp_len, &buf, &len); // 7times -> approx size after ungzip
+		ret = gunzip(buf_p(u) + u->headlen, resp_len, buf, &len);
+		debugf("[%d] gzip decompress status: %d (input length: %zd, output length: %zd)\n", u->index, ret, resp_len, len);
 		if (ret != 0) {
 			sprintf(u->error_msg, "Gzip decompression error %d", ret);
 			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
+		} else {
+			memmove(buf_p(u) + u->headlen, buf, len);
+			buf_set_len(u, u->headlen + len);
 		}
-		free(buf);
 	}
 
 	if (u->options & 1<<MCURL_OPT_CONVERT_TO_UTF8) {
 		if (!*u->charset) {
 			unsigned charset_len = 0;
-			char *charset = detect_charset_from_html((char *)u->buf + u->headlen, u->bufp - u->headlen, &charset_len);
+			char *charset = detect_charset_from_html((char *)buf_p(u) + u->headlen, buf_len(u) - u->headlen, &charset_len);
 			if (charset && charset_len < sizeof(u->charset)) {
 				*(char*)mempcpy(u->charset, charset, charset_len) = 0;
 			}
@@ -1436,12 +1428,12 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 			debugf("[%d] conversion error: %m\n", u->index);
 			sprintf(u->error_msg, "Charset conversion error (%.200m)");
 			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
-			u->bufp = u->headlen;  // discard whole input in case of error
 		}
 	}
 
 	if (u->options & 1<<MCURL_OPT_CONVERT_TO_TEXT) {
-		u->bufp = converthtml2text((char *)u->buf+u->headlen, u->bufp-u->headlen)+u->headlen;
+		size_t new_len = converthtml2text((char *)buf_p(u)+u->headlen, buf_len(u)-u->headlen);
+		buf_set_len(u, new_len+u->headlen);
 	}
 
 	remove_expired_cookies(u);
@@ -1461,7 +1453,6 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 static void reset_url(mcrawler_url *u) {
 	u->status = 0;
 	u->location[0] = 0;
-	u->bufp = 0;
 	u->headlen = 0;
 	u->contentlen = 0;
 	u->has_contentlen = 0;
@@ -1476,6 +1467,7 @@ static void reset_url(mcrawler_url *u) {
 		free(u->wwwauthenticate);
 		u->wwwauthenticate = NULL;
 	}
+	buf_free(u);
 
 	memset(&u->timing, 0, sizeof(u->timing));
 }
@@ -1621,12 +1613,18 @@ static int cont(mcrawler_url *u) {
 Try read some data from the socket, check that we have some available place in the buffer.
 */
 static ssize_t try_read(mcrawler_url *u) {
-	ssize_t left = BUFSIZE - u->bufp;
-	if(left <= 0) {
+	size_t len;
+	unsigned char *buf;
+	buf_get(u, 1, &buf, &len);
+	if (len <= 0) {
 		return 0;
 	}
 
-	return ((mcrawler_url_func *)u->f)->read(u, u->buf + u->bufp, left, (char *)&u->error_msg);
+	ssize_t read = ((mcrawler_url_func *)u->f)->read(u, buf, len, (char *)&u->error_msg);
+	if (read > 0) {
+		buf_inc(u, (size_t)read);
+	}
+	return read;
 }
 
 /** cti odpoved
@@ -1643,34 +1641,27 @@ static void readreply(mcrawler_url *u) {
 		return;
 	}
 	if (t >= 0) {
-		u->bufp += t;
 		u->timing.lastread = get_time_int();
 	}
 	if (t > 0 && !u->timing.firstbyte) {
 		u->timing.firstbyte = u->timing.lastread;
 	}
 
-	debugf("[%d] Read %zd bytes; bufp = %zd; chunked = %d; data = [%.*s]\n", u->index, t, u->bufp, !!u->chunked, (int)t, u->buf + u->bufp - t);
+	debugf("[%d] Read %zd bytes; buf_len = %zd; chunked = %d\n", u->index, t, buf_len(u), !!u->chunked);
 
-	unsigned char *head_end;
-	if (u->headlen == 0 && (head_end = find_head_end(u->buf, (size_t)u->bufp))) {
+	unsigned char *head_end, *buf = buf_p(u);
+	if (u->headlen == 0 && (head_end = find_head_end(buf, buf_len(u)))) {
 		debugf("[%d] Found head end\n", u->index);
-		u->headlen = head_end - u->buf;
-		parsehead(u->buf, u->headlen, &u->status, header_cb, (void *)u, u->index);
+		u->headlen = head_end - buf;
+		parsehead(buf, u->headlen, &u->status, header_cb, (void *)u, u->index);
 	}
 	
 	// u->chunked is set in parsehead()
-	if(t > 0 && u->chunked) {
-		//debugf("debug: bufp=%d nextchunkedpos=%d",u->bufp,u->nextchunkedpos);
-		while(u->bufp > u->nextchunkedpos) {
-			const int i = eatchunked(u);	// pokud jsme presli az pres chunked hlavicku, tak ji sezer
-			if(i == -1) {
-				break;
-			}
-		}
+	if (t > 0 && u->chunked) {
+		while (eatchunk(u));
 	}
 	
-	if(t == MCURL_IO_EOF || t == MCURL_IO_ERROR || (u->has_contentlen && u->bufp >= u->headlen + u->contentlen)) {
+	if (t == MCURL_IO_EOF || t == MCURL_IO_ERROR || (u->has_contentlen && buf_len(u) >= u->headlen + u->contentlen)) {
 		if (t == MCURL_IO_ERROR) {
 			set_atomic_int(&u->state, MCURL_S_ERROR);
 		} else if (get_atomic_int(&u->state) != MCURL_S_ERROR) {

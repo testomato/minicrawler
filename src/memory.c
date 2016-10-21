@@ -1,7 +1,7 @@
-#include "h/minicrawler.h"
+#include <string.h>
 #include "h/config.h"
 #include "url/minicrawler-url.h"
-
+#include "h/proto.h"
 
 void free_addr(mcrawler_addr *addr) {
 	while (addr) {
@@ -59,4 +59,5 @@ void mcrawler_free_url(mcrawler_url *url) {
 	if (url->addr) free_addr(url->addr);
 	if (url->prev_addr) free_addr(url->prev_addr);
 	if (url->f) free(url->f);
+	buf_free(url);
 }

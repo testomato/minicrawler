@@ -66,8 +66,8 @@ void *mcrawler_url_serialize(mcrawler_url *url, void **buffer, int *buffer_size)
 	request.sz = url->request_len;
 	request.addr = url->request;
 
-	buf.sz = url->bufp;
-	buf.addr = url->buf;
+	buf.sz = buf_len(url);
+	buf.addr = buf_p(url);
 
 	URL_TPL_MAP;
 	if (!tn) {
@@ -121,8 +121,8 @@ int mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size) {
 	url->request = request.addr;
 	url->request_len = request.sz;
 
-	memcpy(url->buf, buf.addr, buf.sz); free(buf.addr);
-	url->bufp = buf.sz;
+	buf_write(url, buf.addr, buf.sz);
+	free(buf.addr);
 
 	url->cookiecnt = tpl_Alen(tn, 1);
 	for (int i = 0; i < url->cookiecnt; i++) {

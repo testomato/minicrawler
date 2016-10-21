@@ -83,38 +83,45 @@ int parsehead(const unsigned char *s, const size_t len, int *status, header_call
 
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
- *  @return 0 je ok, -1 pokud tam neni velikost chunku zapsana cela
+ *  @return 0 - stop, 1 - continue with the next chunk
  */
-int eatchunked(mcrawler_url *u) {
+int eatchunk(mcrawler_url *u) {
 	int i;
 	unsigned char hex[10];
 	size_t t, size, movestart;
 
+	unsigned char *buf = buf_p(u);
+	size_t buflen = buf_len(u);
+
+	if (buflen <= u->nextchunkedpos) {
+		return 0;
+	}
+
 	// čte velikost chunku
-	for (t=u->nextchunkedpos, i=0; u->buf[t] != '\r' && u->buf[t] != '\n' && t < u->bufp; t++) {
+	for (t=u->nextchunkedpos, i=0; buf[t] != '\r' && buf[t] != '\n' && t < buflen; t++) {
 		if (i < 9) {
-			hex[i++] = u->buf[t];
+			hex[i++] = buf[t];
 		}
 	}
 	t += 2; // eat CRLF
-	if (t > u->bufp) {
+	if (t > buflen) {
 		debugf("[%d] Missing end of chunksize!", u->index);
-		return -1;
+		return 0;
 	}
 
 	assert(i > 0);
 	hex[i] = 0;
 	size = strtol((char *)hex, NULL, 16);
 
-	debugf("[%d] Chunksize at %zd (buffer %zd): '%s' (=%zd)\n", u->index, u->nextchunkedpos, u->bufp, hex, size);
+	debugf("[%d] Chunksize at %zd: '%s' (=%zd)\n", u->index, u->nextchunkedpos, hex, size);
 
 	movestart = u->nextchunkedpos;
 	if (u->nextchunkedpos != u->headlen) {
 		movestart -= 2; // CRLF before chunksize
 	}
-	assert(t <= u->bufp);
-	memmove(u->buf+movestart, u->buf+t, u->bufp-t);		// cely zbytek posun
-	u->bufp -= (t-movestart);					// ukazatel taky
+	assert(t <= buflen);
+	memmove(buf+movestart, buf+t, buflen-t);		// cely zbytek posun
+	buf_del(u, t-movestart);					// ukazatel taky
 	
 	u->nextchunkedpos = movestart+size+2;			// 2 more for CRLF
 	
@@ -122,9 +129,11 @@ int eatchunked(mcrawler_url *u) {
 		// a to je konec, pratele! ... taaadydaaadydaaa!
 		debugf("[%d] Chunksize=0 (end)\n", u->index);
 		// zbytek odpovedi zahodime
-		u->bufp = movestart;
+		buf_set_len(u, movestart);
 		u->contentlen = movestart - u->headlen;
+		u->has_contentlen = 1;
+		return 0;
 	}
 	
-	return 0;
+	return 1;
 }
