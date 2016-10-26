@@ -156,6 +156,8 @@ static void close_conn(mcrawler_url *u) {
 static void genrequest_http2(mcrawler_url *u);
 static void readreply_http2(mcrawler_url *u);
 #endif
+static void genrequest(mcrawler_url *u);
+static void readreply(mcrawler_url *u);
 
 
 /** Impement handshake over SSL non-blocking socket.
@@ -189,6 +191,9 @@ static void sec_handshake(mcrawler_url *u) {
 		if (len && !strncmp((const char *)data, NGHTTP2_PROTO_VERSION_ID, len)) {
 			((mcrawler_url_func *)u->f)->gen_request = genrequest_http2;
 			((mcrawler_url_func *)u->f)->recv_reply = readreply_http2;
+		} else {
+			((mcrawler_url_func *)u->f)->gen_request = genrequest;
+			((mcrawler_url_func *)u->f)->recv_reply = readreply;
 		}
 #endif
 		u->timing.sslend = get_time_int();
@@ -1507,6 +1512,8 @@ static int check_proto(mcrawler_url *u) {
 			f->read = plain_read;
 			f->write = plain_write;
 			f->handshake = empty_handshake;
+			f->gen_request = genrequest;
+			f->recv_reply = readreply;
 			break;
 #ifdef HAVE_LIBSSL
 		case 443:
