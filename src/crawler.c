@@ -1603,7 +1603,8 @@ static int cont(mcrawler_url *u) {
 	if (u->options & 1<<MCURL_OPT_NOT_FOLLOW_REDIRECTS) {
 		return 1;
 	} else if (u->location[0] && strcmp(u->method, "HEAD")) {
-		return resolvelocation(u);
+		resolvelocation(u);
+		return 0;
 	} else if (u->authorization && u->status == 401) {
 		if (!u->auth_attempt) {
 			// try to authorize
