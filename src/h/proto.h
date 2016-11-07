@@ -80,7 +80,7 @@ unsigned char *buf_p(mcrawler_url *);
 size_t buf_len(mcrawler_url *);
 void buf_set_len(mcrawler_url *, size_t);
 void buf_get(mcrawler_url *, const size_t min_sz, unsigned char **data, size_t *len);
-#define buf_write_lit(u, string) {buf_write(u, (const unsigned char*)string, sizeof(string));}
+#define buf_write_lit(u, string) {buf_write(u, (const unsigned char*)string, (sizeof(string)-1));}
 size_t buf_write(mcrawler_url *, const unsigned char *data, size_t len);
 void buf_inc(mcrawler_url *, size_t len);
 void buf_del(mcrawler_url *, size_t dellen);
