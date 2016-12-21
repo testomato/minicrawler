@@ -668,15 +668,7 @@ static void opensocket(mcrawler_url *u)
 	struct sockaddr_storage addr;
 	socklen_t addrlen;
 
-	if (u->sockfd && !u->close_connection &&
-			!memcmp(u->addr->ip, u->prev_addr->ip, sizeof(u->addr->ip)) &&
-			u->port == u->prev_port
-	) {
-		// use existing connection
-		debugf("[%d] Using existing connection at socket %d!\n", u->index, u->sockfd);
-		set_atomic_int(&u->state, MCURL_S_GENREQUEST);
-		return;
-	} else if (u->sockfd) {
+	if (u->sockfd) {
 		close_conn(u);
 		u->close_connection = 0;
 	}
@@ -1557,8 +1549,14 @@ static int resolvelocation(mcrawler_url *u) {
 	u->redirectedto = mcrawler_url_serialize_url(u->uri, 0);
 
 	if (strcmp(u->hostname, ohost) == 0) {
-		// muzes se pripojit na tu puvodni IP
-		set_atomic_int(&u->state, MCURL_S_GOTIP);
+		if (!u->close_connection && u->port == u->prev_port) {
+			// the same host & post -> send request to the previous connection
+			debugf("[%d] Using existing connection at socket %d!\n", u->index, u->sockfd);
+			set_atomic_int(&u->state, MCURL_S_GENREQUEST);
+		} else {
+			// muzes se pripojit na tu puvodni IP
+			set_atomic_int(&u->state, MCURL_S_GOTIP);
+		}
 	} else {
 		// zmena host
 		if (get_atomic_int(&u->state) != MCURL_S_GOTIP) {
