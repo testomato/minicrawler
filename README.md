@@ -1,7 +1,7 @@
 Minicrawler
 ===========
 
-Minicrawler parses URLs, executes HTTP (HTTP/2) requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread* by opening a socket for each connection. The whole Minicrawler suite is licensed under the [AGPL license](license.txt).
+Minicrawler parses URLs, executes HTTP (HTTP/2) requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread*. It multiplexes connections, running the read/write communication asynchronously. The whole Minicrawler suite is licensed under the [AGPL license](license.txt).
 
 ## URL Library (libminicrawler-url)
 
