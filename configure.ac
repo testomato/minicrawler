@@ -1,12 +1,12 @@
 AC_PREREQ([2.69])
-AC_INIT([minicrawler], [5.0.5], [admins@wikidi.com])
+AC_INIT([minicrawler], [5.0.6], [admins@wikidi.com])
 AC_SUBST([MINICRAWLER_API_VERSION], [5])
 # 1. Update the version information only immediately before a public release of your software. More frequent updates are unnecessary, and only guarantee that the current interface number gets larger faster.
 # 2. If the library source code has changed at all since the last update, then increment revision (‘c:r:a’ becomes ‘c:r+1:a’).
 # 3. If any interfaces have been added, removed, or changed since the last update, increment current, and set revision to 0.
 # 4. If any interfaces have been added since the last public release, then increment age.
 # 5. If any interfaces have been removed or changed since the last public release, then set age to 0.
-AC_SUBST([MINICRAWLER_LT_VERSION], [5:5:0])
+AC_SUBST([MINICRAWLER_LT_VERSION], [5:6:0])
 AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 
