@@ -1025,6 +1025,8 @@ static int http2_on_frame_recv_callback(nghttp2_session *session, const nghttp2_
 static int http2_on_error_callback(nghttp2_session *session, const char *msg, size_t len, void *user_data) {
 	mcrawler_url *u = (mcrawler_url *)user_data;
 	debugf("[%d] HTTP2 error: %.*s\n", u->index, (int)len, msg);
+	sprintf(u->error_msg, "HTTP2 error (%.200s)", msg);
+	set_atomic_int(&u->state, MCURL_S_ERROR);
 	return 0;
 }
 #endif
