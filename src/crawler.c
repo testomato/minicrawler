@@ -1025,7 +1025,8 @@ static int http2_on_frame_recv_callback(nghttp2_session *session, const nghttp2_
 static int http2_on_error_callback(nghttp2_session *session, const char *msg, size_t len, void *user_data) {
 	mcrawler_url *u = (mcrawler_url *)user_data;
 	debugf("[%d] HTTP2 error: %.*s\n", u->index, (int)len, msg);
-	sprintf(u->error_msg, "HTTP2 error (%.200s)", msg);
+	if (len > 200) len = 200;
+	sprintf(u->error_msg, "HTTP2 error (%.*s)", (int)len, msg);
 	set_atomic_int(&u->state, MCURL_S_ERROR);
 	return 0;
 }
@@ -1047,13 +1048,13 @@ static int http2_create_session(mcrawler_url *u) {
 	nghttp2_session_callbacks_set_on_stream_close_callback(callbacks, http2_on_stream_close_callback);
 	nghttp2_session_callbacks_set_on_header_callback(callbacks, http2_on_header_callback);
 	nghttp2_session_callbacks_set_on_begin_headers_callback(callbacks, http2_on_begin_headers_callback);
+#ifdef HAVE_NGHTTP2_SESSION_CALLBACKS_SET_ERROR_CALLBACK
+	nghttp2_session_callbacks_set_error_callback(callbacks, http2_on_error_callback);
+#endif
 
 	if (debug) {
 		nghttp2_session_callbacks_set_on_frame_send_callback(callbacks, http2_on_frame_send_callback);
 		nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, http2_on_frame_recv_callback);
-#ifdef HAVE_NGHTTP2_SESSION_CALLBACKS_SET_ERROR_CALLBACK
-		nghttp2_session_callbacks_set_error_callback(callbacks, http2_on_error_callback);
-#endif
 	}
 
 	// init session data
