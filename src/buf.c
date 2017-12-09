@@ -1,4 +1,5 @@
 #include "h/config.h"
+#include "h/string.h"
 #include "h/proto.h"
 
 static inline void buf_alloc(mcrawler_buf *buf, size_t len) {

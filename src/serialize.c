@@ -1,5 +1,6 @@
 #include "h/config.h"
 
+#include "h/string.h"
 #include "h/proto.h"
 #include "tpl/tpl.h"
 

@@ -10,6 +10,7 @@
 #endif
 #include <assert.h>
 
+#include "h/string.h"
 #include "h/proto.h"
 
 /**

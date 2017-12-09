@@ -1,6 +1,7 @@
 #include <assert.h>
 
 #include "h/config.h"
+#include "h/string.h"
 #include "h/proto.h"
 
 /**  Tries to find the end of a head in the server's reply.
