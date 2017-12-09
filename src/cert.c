@@ -244,7 +244,11 @@ static SSL_CTX *mossad() {
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
 
 #ifdef HAVE_LIBNGHTTP2
+# ifdef HAVE_SSL_CTX_SET_ALPN_PROTOS
+	SSL_CTX_set_alpn_protos(ctx, (const unsigned char *)"\x02h2\x08http/1.1", 12);
+# else
 	SSL_CTX_set_next_proto_select_cb(ctx, select_next_proto_cb, NULL);
+# endif
 #endif
 	return ctx;
 }
@@ -314,6 +318,14 @@ int create_ssl(mcrawler_url *u) {
 	} else {
 		load_verify_locations();
 	}
+
+#ifdef HAVE_LIBNGHTTP2
+#ifdef HAVE_SSL_CTX_SET_ALPN_PROTOS
+	if (u->options & 1<<MCURL_OPT_DISABLE_HTTP2) {
+		SSL_set_alpn_protos(ssl, (const unsigned char *)"\x08http/1.1", 9);
+	}
+#endif
+#endif
 
 	u->ssl = ssl;
 	return 0;

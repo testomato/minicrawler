@@ -184,11 +184,19 @@ static void sec_handshake(mcrawler_url *u) {
 	if (t == 1) {
 #ifdef HAVE_LIBNGHTTP2
 		// zjistíme aplikační protokol
-		const unsigned char *data;
-		unsigned int len;
-		SSL_get0_next_proto_negotiated(u->ssl, &data, &len);
-		debugf("[%d] Negotiated protocol: %.*s\n", u->index, len, data);
-		if (len && !strncmp((const char *)data, NGHTTP2_PROTO_VERSION_ID, len)) {
+		const unsigned char *alpn = NULL;
+		unsigned int alpnlen = 0;
+# ifdef HAVE_SSL_CTX_SET_ALPN_PROTOS
+		SSL_get0_alpn_selected(u->ssl, &alpn, &alpnlen);
+		debugf("[%d] ALPN negotiated protocol: %.*s\n", u->index, alpnlen, alpn);
+# else
+		SSL_get0_next_proto_negotiated(u->ssl, &alpn, &alpnlen);
+		debugf("[%d] NPN negotiated protocol: %.*s\n", u->index, alpnlen, alpn);
+# endif
+		if (alpn
+				&& alpnlen == sizeof(NGHTTP2_PROTO_VERSION_ID) - 1
+				&& !strncmp((const char *)alpn, NGHTTP2_PROTO_VERSION_ID, alpnlen)
+		) {
 			((mcrawler_url_func *)u->f)->gen_request = genrequest_http2;
 			((mcrawler_url_func *)u->f)->recv_reply = readreply_http2;
 		} else {
