@@ -29,7 +29,7 @@ function url($path) {
 function check_result_for_path($path, array $args, array $checks) {
 	$argsString = '';
 	foreach ($args as $flag=>$arg) $argsString .= ' ' . (is_string($flag) ? $flag . ' ' . escapeshellarg($arg) : $arg);
-	$cli = __DIR__ . "/../minicrawler4 $argsString  " . escapeshellarg(url($path));
+	$cli = __DIR__ . "/../minicrawler5 $argsString  " . escapeshellarg(url($path));
 	$result = shell_exec($cli);
 	$lines = explode("\n", $result);
 	$headers = [];

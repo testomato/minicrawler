@@ -195,7 +195,7 @@ LDFLAGS += $(shell pkg-config --libs libminicrawler-4)
 
 ### Unit Tests
 
-Unit tests are done by simply runnning `make check`. They need php5-cli to be installed.
+Unit tests are done by simply runnning `make check`. They need php-cli to be installed.
 
 ### Integration Tests
 
