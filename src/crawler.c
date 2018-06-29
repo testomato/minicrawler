@@ -1404,7 +1404,7 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 		size_t len, resp_len = buf_len(u) - u->headlen;
 		int ret;
 
-		buf_get(u, 7*resp_len, &buf, &len); // 7times -> approx size after ungzip
+		buf_get(u, 9*resp_len, &buf, &len); // 9times -> approx size after ungzip
 		ret = gunzip(buf_p(u) + u->headlen, resp_len, buf, &len);
 		debugf("[%d] gzip decompress status: %d (input length: %zd, output length: %zd)\n", u->index, ret, resp_len, len);
 		if (ret != 0) {
