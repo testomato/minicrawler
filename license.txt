@@ -1,6 +1,6 @@
 minicrawler - single-treaded multi-socket HTTP(S) client
 
-Copyright (C) 2011, Devel.cz LAB s.r.o. <info@testomato.com>
+Copyright (C) 2011-2020, Testomato s.r.o. <info@testomato.com>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
