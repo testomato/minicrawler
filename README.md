@@ -1,5 +1,4 @@
-Minicrawler
-===========
+# Minicrawler
 
 Minicrawler parses URLs, executes HTTP (HTTP/2) requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread*. It multiplexes connections, running the read/write communication asynchronously. The whole Minicrawler suite is licensed under the [AGPL license](license.txt).
 
@@ -79,7 +78,7 @@ void main() {
 
 ### Options
 
-```text
+```txt
    options:
          -2         disable HTTP/2
          -6         resolve host to IPv6 address only
@@ -140,7 +139,7 @@ Minicrawler prepends its own header into the output with the following meaning
  * HTTP2 – [Nghttp2](https://nghttp2.org/)
  * Unicode processing – [ICU](http://site.icu-project.org/)
 
-## Build with docker
+## Build
 
 Tested platforms: Debian Linux, Red Hat Linux, OS X.
 
@@ -151,21 +150,25 @@ Install following dependencies (including header files, i.e. dev packages):
  * OpenSSL (optional)
  * nghttp2 (optional)
 
+On Linux with apt-get run:
 
-First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build docker image
-
-```shell
-docker-compose build minicrawler
-docker-compose run minicrawler
+```shell script
+apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev
 ```
 
-Build minicrawler:
+The GNU Autotools are also needed and the GNU Compiler Collection, they can be installed by:
 
-```shell
+```shell script
+apt-get install make autoconf automake autotools-dev libtool gcc
+```
+
+Then run:
+
+```
 ./autogen.sh
-./configure --prefix=$PREFIX --with-ca-bundle=/var/lib/certs/ca-bundle.crt --with-ca-path=/etc/ssl/certs
+./configure [--without-ssl] [--without-http2]
 make
-make install
+sudo make install
 ```
 
 ### Link libminicrawler to your project
