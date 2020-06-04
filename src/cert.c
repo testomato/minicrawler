@@ -5,6 +5,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/x509v3.h>
+#include <openssl/asn1.h>
 #ifdef HAVE_LIBNGHTTP2
 #include <nghttp2/nghttp2.h>
 #endif
@@ -124,11 +125,18 @@ static int verify_callback(int ok, X509_STORE_CTX *ctx)
 		err = X509_STORE_CTX_get_error(ctx);
 		depth = X509_STORE_CTX_get_error_depth(ctx);
 
-		BIO_printf(bio_err, "depth=%d ", depth);
+		BIO_printf(bio_err, "depth=%d\n", depth);
 		if (err_cert) {
+			BIO_puts(bio_err, "s: ");
 			X509_NAME_print_ex(bio_err,
 							   X509_get_subject_name(err_cert),
 							   0, XN_FLAG_ONELINE);
+			BIO_puts(bio_err, "\ni: ");
+			X509_NAME_print_ex(bio_err,
+							   X509_get_issuer_name(err_cert),
+							   0, XN_FLAG_ONELINE);
+			BIO_puts(bio_err, "\nsn: ");
+			i2a_ASN1_INTEGER(bio_err, X509_get_serialNumber(err_cert));
 			BIO_puts(bio_err, "\n");
 		} else
 			BIO_puts(bio_err, "<no cert>\n");
