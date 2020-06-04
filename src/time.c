@@ -100,12 +100,12 @@ static int *get_hash_item(const unsigned char key[16])
  * If the slot is free, then actual time is assigned to it and the time is returned.
  * Zero is returned otherwise.
  */
-int test_free_channel(const unsigned char u_ip[16], const unsigned milis, const int force)
+int test_free_channel(const unsigned char u_ip[16], const int milis, const int force)
 {
 	const int now = get_time_int();
 	int *slot = get_hash_item(u_ip);
-	debugf("%d; %d => %d || %d\n", now, *slot, force, (int)milis <= 0 || *slot + (int)milis <= now);
-	if (force || (int)milis <= 0 || *slot + (int)milis <= now) {
+	debugf("%d; %d => %d || %d\n", now, *slot, force, milis <= 0 || *slot + milis <= now);
+	if (force || milis <= 0 || *slot + milis <= now) {
 		return *slot = now;
 	}
 	else {
