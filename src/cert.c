@@ -58,7 +58,7 @@ static const char xxx[] =
 
 static BIO *bio_err = NULL;
 static SSL_CTX *ctx = NULL;
-static int certs_loaded = 0;
+static long long certs_loaded = 0;
 
 /**
 Helper function for "reading" of the password.
@@ -255,10 +255,12 @@ static SSL_CTX *mossad() {
 }
 
 static void load_verify_locations() {
-	if (certs_loaded) {
+	const long long now = get_uptime();
+	// load certs at least once a day
+	if (now - certs_loaded < 1000LL*3600*24) {
 		return;
 	}
-	certs_loaded = 1;
+	certs_loaded = now;
 
 #ifdef CA_BUNDLE
 # ifdef CA_PATH

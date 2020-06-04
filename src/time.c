@@ -15,7 +15,7 @@
 /**
  * monotonic time since some unspecified starting point
  */
-static long long get_uptime(void)
+long long get_uptime(void)
 {
 	struct timespec tm;
 	long long uptime;

@@ -18,6 +18,7 @@ void free_mossad(void);
 #endif
 
 // time.c
+long long get_uptime(void);
 void init_birth(void);
 int get_time_int(void);
 unsigned get_time_slot(const unsigned char key[16]);
