@@ -24,6 +24,7 @@ AC_PROG_LIBTOOL
 AC_PROG_AWK
 
 # Checks for libraries.
+AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares dev files]))
 AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([please install zlib dev files]))
 AC_CHECK_LIB([icuuc], [uidna_nameToASCII_52], [],
