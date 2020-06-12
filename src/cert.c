@@ -265,7 +265,7 @@ static SSL_CTX *mossad() {
 static void load_verify_locations() {
 	const long long now = get_uptime();
 	// load certs at least once a day
-	if (now - certs_loaded < 1000LL*3600*24) {
+	if (certs_loaded > 0 && now - certs_loaded < 1000LL*3600*24) {
 		return;
 	}
 	certs_loaded = now;
