@@ -1017,6 +1017,27 @@ static inline const char *strframetype(uint8_t type) {
 	}
 }
 
+static inline const char *str_settings_id(int32_t id) {
+    switch (id) {
+        case NGHTTP2_SETTINGS_HEADER_TABLE_SIZE:
+            return "HEADER_TABLE_SIZE";
+        case NGHTTP2_SETTINGS_ENABLE_PUSH:
+            return "ENABLE_PUSH";
+        case NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS:
+            return "MAX_CONCURRENT_STREAMS";
+        case NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE:
+            return "INITIAL_WINDOW_SIZE";
+        case NGHTTP2_SETTINGS_MAX_FRAME_SIZE:
+            return "MAX_FRAME_SIZE";
+        case NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE:
+            return "MAX_HEADER_LIST_SIZE";
+        case NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL:
+            return "ENABLE_CONNECT_PROTOCOL";
+        default:
+            return "UNKNOWN";
+    }
+}
+
 static int http2_on_frame_send_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data) {
 	mcrawler_url *u = (mcrawler_url *)user_data;
 	debugf("[%d] Sent %s frame of length %zu in stream %d\n", u->index, strframetype(frame->hd.type), frame->hd.length, frame->hd.stream_id);
@@ -1025,7 +1046,25 @@ static int http2_on_frame_send_callback(nghttp2_session *session, const nghttp2_
 
 static int http2_on_frame_recv_callback(nghttp2_session *session, const nghttp2_frame *frame, void *user_data) {
 	mcrawler_url *u = (mcrawler_url *)user_data;
-	debugf("[%d] Received %s frame of length %zu in stream %d\n", u->index, strframetype(frame->hd.type), frame->hd.length, frame->hd.stream_id);
+
+    switch (frame->hd.type) {
+		case NGHTTP2_SETTINGS:
+            debugf("[%d] Received SETTING frame:", u->index);
+            for (int i = 0; i < frame->settings.niv; i++) {
+                debugf(" %s=%u", str_settings_id(frame->settings.iv[i].settings_id), frame->settings.iv[i].value);
+            }
+            if (frame->hd.flags & NGHTTP2_FLAG_ACK) {
+                debugf(" ACK");
+            }
+            debugf("\n");
+            break;
+		case NGHTTP2_RST_STREAM:
+            debugf("[%d] Received RST_STREAM frame with error %u in stream %d\n", u->index, frame->rst_stream.error_code, frame->hd.stream_id);
+            break;
+        default:
+            debugf("[%d] Received %s frame of length %zu in stream %d\n", u->index, strframetype(frame->hd.type), frame->hd.length, frame->hd.stream_id);
+    }
+
 	return 0;
 }
 
