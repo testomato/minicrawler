@@ -1031,8 +1031,10 @@ static inline const char *str_settings_id(int32_t id) {
             return "MAX_FRAME_SIZE";
         case NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE:
             return "MAX_HEADER_LIST_SIZE";
+#if HAVE_DECL_NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL
         case NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL:
             return "ENABLE_CONNECT_PROTOCOL";
+#endif
         default:
             return "UNKNOWN";
     }
