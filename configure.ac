@@ -40,13 +40,23 @@ AC_CHECK_LIB([icuuc], [uidna_nameToASCII_52], [],
     AC_CHECK_LIB([icuuc], [uidna_nameToASCII_62], [],
         AC_CHECK_LIB([icuuc], [uidna_nameToASCII_63], [], AC_MSG_ERROR([please install libicu dev files])))))))))))))
 AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv dev files]))
+
 AC_ARG_WITH([ssl],
 			[AS_HELP_STRING([--without-ssl], [disable support for https])],
 			[],
 			[with_ssl=check])
-AS_IF([test "${with_ssl}" != "no"],
-			[AC_CHECK_LIB([crypto], [ERR_get_error], [], AC_MSG_ERROR([please install OpenSSL dev files or use option --without-ssl]))
-			AC_CHECK_LIB([ssl], [SSL_new], [], AC_MSG_ERROR([please install OpenSSL dev files or use option --without-ssl]))])
+
+# configre with libssl
+AS_IF([test "${with_ssl}" != "no"], [
+       AC_CHECK_LIB([crypto], [ERR_get_error], [],
+            AC_MSG_ERROR([please install OpenSSL dev files or use option --without-ssl]))
+       AC_CHECK_LIB([ssl], [SSL_new], [
+            LIBS="-lssl $LIBS"
+            AC_DEFINE([HAVE_LIBSSL], [1], [Define if you have the ssl library (-lssl).])
+            AC_CHECK_FUNCS([SSL_get0_param SSL_CTX_set_alpn_protos])
+            ],
+            AC_MSG_ERROR([please install OpenSSL dev files or use option --without-ssl]))])
+
 AC_ARG_WITH([http2],
 			[AS_HELP_STRING([--without-http2], [disable support for http2])],
 			[],
@@ -99,7 +109,7 @@ AC_TYPE_UINT64_T
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_CHECK_FUNC([clock_gettime], [], AC_CHECK_FUNC([gettimeofday], [], AC_MSG_ERROR([clock_gettime or gettimeofday needed to measure time])))
-AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday timegm SSL_get0_param SSL_CTX_set_alpn_protos])
+AC_CHECK_FUNCS([mempcpy strchrnul clock_gettime gettimeofday timegm])
 ##AC_CHECK_FUNCS([memmove memset select socket strcasecmp strchr strerror strpbrk strstr strtol stpcpy])
 
 AC_CONFIG_FILES([Makefile integration-tests/Makefile libminicrawler/libminicrawler-$MINICRAWLER_API_VERSION.pc:libminicrawler.pc.in libminicrawler/libminicrawler-url-$MINICRAWLER_API_VERSION.pc:libminicrawler-url.pc.in])
