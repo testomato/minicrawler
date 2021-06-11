@@ -23,4 +23,5 @@ void append_query_s(mcrawler_url_url *url, int *pos, const char *s);
 
 void init_fragment(mcrawler_url_url *url);
 void append_fragment(mcrawler_url_url *url, const char c);
+void append_fragment_s(mcrawler_url_url *url, const char *s);
 

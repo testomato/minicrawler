@@ -91,7 +91,6 @@ static inline int is_special(mcrawler_url_url *url) {
 	if (!strcmp("https", url->scheme)) return 443;
 	if (!strcmp("ftp", url->scheme)) return 21;
 	if (!strcmp("file", url->scheme)) return -1;
-	if (!strcmp("gopher", url->scheme)) return 70;
 	if (!strcmp("ws", url->scheme)) return 80;
 	if (!strcmp("wss", url->scheme)) return 443;
 	return 0;
@@ -105,16 +104,28 @@ static inline void pop_path(mcrawler_url_url *url) {
 }
 
 
-static inline int is_simple_encode_set(unsigned char c) {
+static inline int is_c0_encode_set(unsigned char c) {
 	return c < 0x20 || c >= 0x7F;
 }
 
-static inline int is_default_encode_set(unsigned char c) {
-	return is_simple_encode_set(c) || c == 0x20 || c == '"' || c == '#' || c == '<' || c == '>' || c == '?' || c == '`' || c == '{' || c == '}';
+static inline int is_frament_encode_set(unsigned char c) {
+	return is_c0_encode_set(c) || c == 0x20 ||  c == '"' || c == '<' || c == '>' || c == '`';
+}
+
+static inline int is_query_encode_set(unsigned char c) {
+	return is_c0_encode_set(c) || c == 0x20 ||  c == '"' || c == '#' || c == '<' || c == '>';
+}
+
+static inline int is_special_query_encode_set(unsigned char c) {
+	return is_query_encode_set(c) || c == 0x27;
+}
+
+static inline int is_path_encode_set(unsigned char c) {
+	return is_query_encode_set(c) || c == '?' || c == '`' || c == '{' || c == '}';
 }
 
 static inline int is_userinfo_encode_set(unsigned char c) {
-	return is_default_encode_set(c) || c == '/' || c == ':' || c == ';' || c == '=' || c == '@' || c == '[' || c == ']' || c == '\\' || c == '^' || c == '|';
+	return is_path_encode_set(c) || c == '/' || c == ':' || c == ';' || c == '=' || c == '@' || c == '[' || c == ']' || c == '\\' || c == '^' || c == '|';
 }
 
 static inline void percent_encode(char *buf, unsigned char c) {
@@ -157,7 +168,10 @@ static void percent_decode(char *output, int *length, const char *input) {
 }
 
 static int domain_to_ascii(char *result, int length, char *domain) {
-	// Let result be the result of running Unicode ToASCII with domain_name set to domain, UseSTD3ASCIIRules set to false, processing_option set to Transitional_Processing, and VerifyDnsLength set to false.
+	// Let result be the result of running Unicode ToASCII with domain_name set
+	// to domain, UseSTD3ASCIIRules set to beStrict, CheckHyphens set to false,
+	// CheckBidi set to true, CheckJoiners set to true, Transitional_Processing
+	// set to false, and VerifyDnsLength set to beStrict. 
 	if (domain[0] == 0) {
 		result[0] = 0;
 		return MCRAWLER_URL_SUCCESS;
@@ -165,7 +179,11 @@ static int domain_to_ascii(char *result, int length, char *domain) {
 
 #ifdef HAVE_LIBICUUC
 	UErrorCode error = 0;
-	UIDNA *idna = uidna_openUTS46(UIDNA_DEFAULT, &error);
+	UIDNA *idna = uidna_openUTS46(
+			UIDNA_CHECK_BIDI |
+			UIDNA_CHECK_CONTEXTJ |
+			UIDNA_NONTRANSITIONAL_TO_ASCII,
+			&error);
 	if (U_FAILURE(error)) {
 		debugf("Error %s (%d) for %s\n", u_errorName(error), error, domain);
 		return MCRAWLER_URL_FAILURE;
@@ -311,13 +329,26 @@ IPv4:
 		debugf("IPv6 syntax violation (8.1) at %s\n", p);
 		return MCRAWLER_URL_FAILURE;
 	}
-	// Let dots seen be 0.
-	int dots_seen = 0;
+	// Let numbersSeen be 0.
+	int numbers_seen = 0;
 	// While c is not the EOF code point, run these substeps:
 	while ((c = *p)) {
 		// Let value be null.
 		int value_null = 1;
 		uint16_t value;
+
+		// If numbersSeen is greater than 0, then:
+		if (numbers_seen > 0) {
+			// If c is a "." and numbersSeen is less than 4, then
+			// increase pointer by one.
+			if (c == '.' && numbers_seen < 4) {
+			   c = *++p;
+			//Otherwise, syntax violation, return failure.
+			} else {
+				debugf("IPv6 syntax violation (6.5.5.2.2) at %s\n", p);
+				return MCRAWLER_URL_FAILURE;
+			}
+		}
 		// If c is not an ASCII digit, syntax violation, return failure.
 		if (!is_ascii_digit(c)) {
 			debugf("IPv6 syntax violation (10.2) at %s\n", p);
@@ -339,36 +370,27 @@ IPv4:
 			} else {
 				value = value * 10 + number;
 			}
-			// Increase pointer by one.
-			c = *++p;
 			// If value is greater than 255, syntax violation, return failure.
 			if (value > 255) {
 				debugf("IPv6 syntax violation (10.3.4) at %s\n", p);
 				return MCRAWLER_URL_FAILURE;
 			}
-		}
-		// If dots seen is less than 3 and c is not a ".", syntax violation, return failure.
-		if (dots_seen < 3 && c != '.') {
-			debugf("IPv6 syntax violation (10.4) at %s\n", p);
-			return MCRAWLER_URL_FAILURE;
+			// Increase pointer by one.
+			c = *++p;
 		}
 		// Set piece to piece × 0x100 + value.
 		*p_piece = *p_piece * 0x100 + value;
-		// If dots seen is 1 or 3, increase piece pointer by one.
-		if (dots_seen == 1 || dots_seen == 3) {
-			p_piece++;
-		}
-		// If c is not the EOF code point, increase pointer by one.
-		if (c != 0) {
+		// Increase numbersSeen by one
+		numbers_seen++;
+		// If numbersSeen is 2 or 4, then increase piece pointer by one.
+		if (numbers_seen == 2 || numbers_seen == 4) {
 			c = *++p;
 		}
-		// If dots seen is 3 and c is not the EOF code point, syntax violation, return failure.
-		if (dots_seen == 3 && c != 0) {
-			debugf("IPv6 syntax violation (10.8) at %s\n", p);
+		// If numbersSeen is not 4, syntax violation, return failure.
+		if (numbers_seen != 4) {
+			debugf("IPv6 syntax violation (6.5.6) at %s\n", p);
 			return MCRAWLER_URL_FAILURE;
 		}
-		// Increase dots seen by one.
-		dots_seen++;
 	}
 	// Finale: If compress pointer is non-null, run these substeps:
 Finale:
@@ -430,6 +452,12 @@ static int parse_ipv4_number(uint32_t *number, char *input, int *syntaxViolation
 		// Set R to 8.
 		R = 8;
 		strcpy(allowed, "01234567");
+	}
+	// If input is the empty string, then return zero.
+	// 0x/0X is an IPv4 number apparently
+	if (input[0] == '\0') {
+		*number = 0;
+		return MCRAWLER_URL_SUCCESS;
 	}
 	// If input contains a code point that is not a radix-R digit, and return failure.
 	if (strspn(input, allowed) < strlen(input)) {
@@ -561,9 +589,11 @@ int mcrawler_url_parse_host(mcrawler_url_host *host, const char *input) {
 		debugf("Host parsing failure (4) for %s\n", input);
 		return MCRAWLER_URL_FAILURE;
 	}
-	// If asciiDomain contains U+0000, U+0009, U+000A, U+000D, U+0020, "#", "%", "/", ":", "?", "@", "[", "\", or "]", syntax violation, return failure.
+	// If asciiDomain contains U+0000, U+0009, U+000A, U+000D, U+0020, "#",
+	// "%", "/", ":", "<", ">", "?", "@", "[", "\", "]", "^", or "|" syntax
+	// violation, return failure.
 	char *q;
-	if ((q = strpbrk(asciiDomain, "\x09\x0A\x0D\x20#%/:?@[\\]"))) {
+	if ((q = strpbrk(asciiDomain, "\x09\x0A\x0D\x20#%/:<>?@[\\]^|"))) {
 		debugf("Host syntax violation (5) for %s at %s\n", input, q);
 		return MCRAWLER_URL_FAILURE;
 	}
@@ -796,14 +826,17 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				}
 				break;
 			case RELATIVE_SLASH:
-				// If either c is "/", or url is special and c is "\", run these substeps:
-				if (c == '/' || (c == '\\' && is_special(url))) {
+				// If url is special and c is "/" or "\", then:
+				if ((c == '/' || c == '\\') && is_special(url)) {
 					// If c is "\", syntax violation.
 					if (c == '\\') {
 						debugf("Syntax violation (relative slash 1.1) at %s\n", p);
 					}
 					// Set state to special authority ignore slashes state.
 					*state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
+				// Otherwise, if c is "/", then set state to authority state.
+				} else if (c == '/') {
+					*state = AUTHORITY;
 				// Otherwise, set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, state to path state, and then, decrease pointer by one.
 				} else {
 					replace_username(url, base->username);
@@ -884,7 +917,17 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					// url is special and c is "\"
 					(c == '\\' && is_special(url))
 				) {
-					// then decrease pointer by the number of code points in buffer plus one, set buffer to the empty string, and set state to host state.
+					// then run these substeps:
+					// 
+					// If @ flag is set and buffer is the empty string,
+					// syntax violation, return failure.
+					if (flag_at == 1 && bufp == 0) {
+						debugf("Syntax violation (authority 2.1) at %s\n", p);
+						return MCRAWLER_URL_FAILURE;
+					}
+					// Decrease pointer by the number of code points in buffer plus
+					// one, set buffer to the empty string, and set state to
+					// host state.
 					p -= bufp + 1;
 					bufp = 0;
 					*state = HOST;
@@ -897,12 +940,13 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 			case HOSTNAME:
 				// If c is ":" and the [] flag is unset, run these substeps:
 				if (c == ':' && !flag_sq) {
-					// If url is special and buffer is the empty string, return failure.
-					if (bufp == 0 && is_special(url)) {
+					// If buffer is the empty string, syntax violation, return failure.
+					if (bufp == 0) {
 						return MCRAWLER_URL_FAILURE;
 					}
-					// Let host be the result of host parsing buffer.
-					// If host is failure, return failure.
+					// 
+					// Let host be the result of host parsing buffer with url is special.
+					// If host is failure, then return failure.
 					buf[bufp] = 0;
 					url->host = (mcrawler_url_host *)malloc(sizeof (mcrawler_url_host));
 					if (mcrawler_url_parse_host(url->host, buf) == MCRAWLER_URL_FAILURE) {
@@ -922,12 +966,12 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				) {
 					// then decrease pointer by one, and run these substeps:
 					p--;
-					// If url is special and buffer is the empty string, return failure.
+					// If url is special and buffer is the empty string, syntax vialotion, return failure.
 					if (bufp == 0 && is_special(url)) {
 						return MCRAWLER_URL_FAILURE;
 					}
-					// Let host be the result of host parsing buffer.
-					// If host is failure, return failure.
+					// Let host be the result of host parsing buffer with url is special.
+					// If host is failure, then return failure.
 					buf[bufp] = 0;
 					url->host = (mcrawler_url_host *)malloc(sizeof (mcrawler_url_host));
 					if (mcrawler_url_parse_host(url->host, buf) == MCRAWLER_URL_FAILURE) {
@@ -993,65 +1037,69 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				}
 				break;
 			case FILE_STATE:
-				// Set url’s scheme to "file", and then, switching on c:
+				// Set url’s scheme to "file".
 				replace_scheme(url, "file");
-				switch (c) {
-					case 0:
-						// If base is non-null and base’s scheme is "file", set url’s host to base’s host, url’s path to base’s path, and url’s query to base’s query.
-						if (base && !strcmp(base->scheme, "file")) {
-							url->host = dup_host(base->host);
-							replace_path(url, (const char **)base->path);
-							url->query = strdupnul(base->query);
+				// Set url’s host to the empty string.
+				if (url->host == NULL) {
+					url->host = (mcrawler_url_host *)malloc(sizeof(mcrawler_url_host));
+				}
+				url->host->type = MCRAWLER_URL_HOST_DOMAIN;
+				url->host->domain[0] = 0;
+				// If c is U+002F (/) or U+005C (\), then:
+				if (c == '/' || c == '\\') {
+					// If c is U+005C (\), validation error.
+					// Set state to file slash state.
+					*state = FILE_SLASH;
+				// Otherwise, if base is non-null and base’s scheme is "file":
+				} else if (base && !strcmp(base->scheme, "file")) {
+					// Set url’s host to base’s host, url’s path to a clone of
+					// base’s path, and url’s query to base’s query.
+					if (base->host) {
+						memcpy(url->host, base->host, sizeof(mcrawler_url_host));
+					} else {
+						free(url->host);
+						url->host = NULL;
+					}
+					replace_path(url, (const char **)base->path);
+					url->query = strdupnul(base->query);
+					// If c is U+003F (?), then set url’s query to the empty
+					// string and state to query state.
+					if (c == '?') {
+						init_query(url);
+						*state = QUERY;
+					// Otherwise, if c is U+0023 (#), set url’s fragment to the
+					// empty string and state to fragment state.
+					} else if (c == '#') {
+						init_fragment(url);
+						*state = FRAGMENT;
+					// Otherwise, if c is not the EOF code point:
+					} else if (c != 0) {
+						// Set url’s query to null.
+						if (url->query) {
+							free(url->query);
+							url->query = NULL;
 						}
-						break;
-					case '\\':
-						// If c is "\", syntax violation.
-						debugf("Syntax violation (\\) at %s\n", p);
-					case '/':
-						// Set state to file slash state.
-						*state = FILE_SLASH;
-						break;
-					case '?':
-						// If base is non-null and base’s scheme is "file", set url’s host to base’s host, url’s path to base’s path, url’s query to the empty string, and state to query state.
-						if (base && !strcmp(base->scheme, "file")) {
-							url->host = dup_host(base->host);
-							replace_path(url, (const char **)base->path);
-							init_query(url);
-							*state = QUERY;
-						}
-						break;
-					case '#':
-						// If base is non-null and base’s scheme is "file", set url’s host to base’s host, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, and state to fragment state.
-						if (base && !strcmp(base->scheme, "file")) {
-							url->host = dup_host(base->host);
-							replace_path(url, (const char **)base->path);
-							url->query = strdupnul(base->query);
-							init_fragment(url);
-							*state = FRAGMENT;
-						}
-						break;
-					default:
-						// If base is non-null, base’s scheme is "file", and at least one of the following is true
-						if (base && !strcmp(base->scheme, "file") && (
-							// c and the first code point of remaining are not a Windows drive letter
-							!is_windows_drive_letter(p) ||
-							// remaining consists of one code point
-							(p[1] != 0 && p[2] == 0) ||
-							// remaining’s second code point is not "/", "\", "?", or "#"
-							(p[2] != '/' && p[2] != '\\' && p[2] != '?' && p[2] != '#')
-						)) {
-							// then set url’s host to base’s host, url’s path to base’s path, and then pop url’s path.
-							url->host = dup_host(base->host);
-							replace_path(url, (const char **)base->path);
+						// If the substring from pointer in input does not
+						// start with a Windows drive letter, then shorten
+						// url’s path.
+						if (!is_windows_drive_letter(p)) {
 							pop_path(url);
-							// This is a (platform-independent) Windows drive letter quirk.
-						// Otherwise, if base is non-null and base’s scheme is "file", syntax violation.
-						} else if (base && !strcmp(base->scheme, "file")) {
-							debugf("Syntax violation (file otherwise 2) at %s\n", p);
+						// Otherwise:
+						} else {
+							// Validation error.
+							// Set url’s path to an empty list.
+							while (url->path_len > 0) {
+								do_pop_path(url);
+							}
 						}
-						// Set state to path state, and decrease pointer by one.
+						// Set state to path state and decrease pointer by 1.
 						*state = PATH;
 						p--;
+					}
+				// Otherwise, set state to path state, and decrease pointer by 1.
+				} else {
+					*state = PATH;
+					p--;
 				}
 				break;
 			case FILE_SLASH:
@@ -1065,12 +1113,22 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					*state = FILE_HOST;
 				// Otherwise, run these substeps:
 				} else {
-					// If base is non-null, base’s scheme is "file", and base’s path first string is a normalized Windows drive letter, append base’s path first string to url’s path.
-					if (base && !strcmp(base->scheme, "file") && base->path_len >= 1 && is_normalized_windows_drive_letter(base->path[0])) {
-						append_path(url, base->path[0]);
-						// This is a (platform-independent) Windows drive letter quirk. Both url’s and base’s host are null under these conditions and therefore not copied.
+					// If base is non-null and base’s scheme is "file", then: 
+					if (base && !strcmp(base->scheme, "file")) {
+						// Set url’s host to base’s host.
+						url->host = dup_host(base->host);
+						// If the substring from pointer in input does not
+						// start with a Windows drive letter and base’s path[0]
+						// is a normalized Windows drive letter, then append
+						// base’s path[0] to url’s path.
+						if (!is_windows_drive_letter(p)
+							&& base->path_len >= 1 && is_normalized_windows_drive_letter(base->path[0]))
+						{
+							append_path(url, base->path[0]);
+							// This is a (platform-independent) Windows drive letter quirk.
+						}
 					}
-					// Set state to path state, and decrease pointer by one.
+					// Set state to path state, and decrease pointer by 1.
 					*state = PATH;
 					p--;
 				}
@@ -1111,14 +1169,39 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				}
 				break;
 			case PATH_START:
-				// If url is special and c is "\", syntax violation.
-				if (c == '\\' && is_special(url)) {
-					debugf("Syntax violation (\\) at %s\n", p);
-				}
-				// Set state to path state, and if neither c is "/", nor url is special and c is "\", decrease pointer by one.
-				*state = PATH;
-				if (c != '/' && !(c == '\\' && is_special(url))) {
-					p--;
+				// If url is special, then:
+				if (is_special(url)) {
+					// If c is "\", syntax violation.
+					if (c == '\\') {
+						debugf("Syntax violation (\\) at %s\n", p);
+					}
+					// Set state to path state.
+					*state = PATH;
+					// If c is neither "/" nor "\", then decrease
+					// pointer by one.
+					if (c != '/' && c != '\\') {
+						p--;
+					}
+				// Otherwise, if state override is not given and c is "?",
+				// then set url's query to the empty string and state to
+				// query state.
+				} else if (c == '?') {
+					init_query(url);
+					*state = QUERY;
+				// Otherwise, if state override is not given and c is "#",
+				// then set url's fragment to the empty string and state to
+				// fragment state.
+				} else if (c == '#') {
+					init_fragment(url);
+					*state = FRAGMENT;
+				// Otherwise, if c is not EOF code point, then: set state to
+				// path state and if c is not "/", then decrease pointer by
+				// one.
+				} else if (c != 0) {
+					*state = PATH;
+					if (c != '/') {
+						p--;
+					}
 				}
 				break;
 			case PATH:
@@ -1136,9 +1219,16 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 						debugf("Syntax violation (\\) at %s\n", p);
 					}
 					buf[bufp] = 0;
-					// If buffer is a double-dot path segment, pop url’s path, and then if neither c is "/", nor url is special and c is "\", append the empty string to url’s path.
+					// If buffer is a double-dot path segment
 					if (is_double_dot(buf)) {
+						// Shorten url's path
 						pop_path(url);
+						// If neither c is U+002F (/), nor url is special and c
+						// is U+005C (\), append the empty string to url's
+						// path.
+						//
+						// This means that for input /usr/.. the result is /
+						// and not a lack of a path.
 						if (c != '/' && !(c == '\\' && is_special(url))) {
 							append_path(url, "");
 						}
@@ -1149,15 +1239,9 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 						}
 					// Otherwise, if buffer is not a single-dot path segment, run these subsubsteps:
 					} else {
-						// If url’s scheme is "file", url’s path is empty, and buffer is a Windows drive letter, run these subsubsubsteps:
+						// If url’s scheme is "file", url’s path is empty, and buffer is a Windows drive letter,
 						if (url->path[0] == NULL && !strcmp(url->scheme, "file") && is_windows_drive_letter(buf) && buf[2] == 0) {
-							// If url’s host is non-null, syntax violation.
-							if (url->host) {
-								debugf("Syntax violation (path 1.4.1.1) at %s\n", p);
-								free(url->host);
-							}
-							// Set url’s host to null and replace the second code point in buffer with ":".
-							url->host = NULL;
+							// Replace the second code point in buffer with ":".
 							buf[1] = ':';
 							// This is a (platform-independent) Windows drive letter quirk.
 						}
@@ -1182,20 +1266,14 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 
 					// If c is "%" and remaining does not start with two ASCII hex digits, syntax violation.
 
-					// If c is "%" and remaining, ASCII lowercased starts with "2e", append "." to buffer and increase pointer by two.
-					if (c == '%' && p[1] == '2' && tolowercase(p[2]) == 'e') {
-						buf[bufp++] = '.';
-						p += 2;
-					// Otherwise, UTF-8 percent encode c using the default encode set, and append the result to buffer.
+					// UTF-8 percent encode c using the default encode set, and append the result to buffer.
+					if (is_path_encode_set(c)) {
+						char encodedCodePoints[4];
+						percent_encode(encodedCodePoints, c);
+						strcpy(buf + bufp, encodedCodePoints);
+						bufp += strlen(encodedCodePoints);
 					} else {
-						if (is_default_encode_set(c)) {
-							char encodedCodePoints[4];
-							percent_encode(encodedCodePoints, c);
-							strcpy(buf + bufp, encodedCodePoints);
-							bufp += strlen(encodedCodePoints);
-						} else {
-							buf[bufp++] = c;
-						}
+						buf[bufp++] = c;
 					}
 				}
 				break;
@@ -1216,7 +1294,7 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 
 					// If c is not EOF code point, UTF-8 percent encode c using the simple encode set, and append the result to the first string in url’s path.
 					if (c != 0) {
-						if (is_simple_encode_set(c)) {
+						if (is_c0_encode_set(c)) {
 							char encodedCodePoints[4];
 							percent_encode(encodedCodePoints, c);
 							append_path0_s(url, encodedCodePoints);
@@ -1227,52 +1305,66 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				}
 				break;
 			case QUERY:
-				// If c is EOF code point, or state override is not given and c is "#", run these substeps:
-				if (c == 0 || c == '#') {
+				// If encoding is not UTF-8 and one of the following is true:
+					// url is not special
+					// url’s scheme is "ws" or "wss"
+				// then set encoding to UTF-8.
 
-					// If url is not special or url’s scheme is either "ws" or "wss", set encoding to UTF-8.
-					// Set buffer to the result of encoding buffer using encoding.
-					// For each byte in buffer run these subsubsteps:
+				// If one of the following is true:
+				// state override is not given and c is U+0023 (#)
+				// c is the EOF code point
+				if (c == 0 || c == '#') {
+					int special = is_special(url);
 					int query_p = strlen(url->query);
+					// Let queryPercentEncodeSet be the special-query
+					// percent-encode set if url is special; otherwise the
+					// query percent-encode set.
 					for (int i = 0; i < bufp; i++) {
-						// If byte is less than 0x21, greater than 0x7E, or is 0x22, 0x23, 0x3C, or 0x3E, append byte, percent encoded, to url’s query.
-						if (buf[i] < 0x21 || buf[i] > 0x7E || buf[i] == 0x22 || buf[i] == 0x23 || buf[i] == 0x3C || buf[i] == 0x3E) {
+						// Percent-encode after encoding, with encoding,
+						// buffer, and queryPercentEncodeSet, and append the
+						// result to url’s query.
+						if (is_query_encode_set(buf[i]) || special && is_special_query_encode_set(buf[i])) {
 							char encodedCodePoints[4];
 							percent_encode(encodedCodePoints, buf[i]);
 							append_query_s(url, &query_p, encodedCodePoints);
-						// Otherwise, append a code point whose value is byte to url’s query.
 						} else {
 							append_query_c(url, &query_p, buf[i]);
 						}
 					}
 					// Set buffer to the empty string.
 					bufp = 0;
-					// If c is "#", set url’s fragment to the empty string, and state to fragment state.
+					// If c is U+0023 (#), then set url’s fragment to the empty
+					// string and state to fragment state.
 					if (c == '#') {
 						init_fragment(url);
 						*state = FRAGMENT;
 					}
-				// Otherwise, run these substeps:
-				} else {
-					// If c is not a URL code point and not "%", syntax violation.
-					// If c is "%" and remaining does not start with two ASCII hex digits, syntax violation.
+				// Otherwise, if c is not the EOF code point:
+				} else if (c != 0) {
+					// If c is not a URL code point and not U+0025 (%),
+					// validation error.
+					// If c is U+0025 (%) and remaining does not start with two
+					// ASCII hex digits, validation error.
 					// Append c to buffer.
 					buf[bufp++] = c;
 				}
 				break;
 			case FRAGMENT:
-				switch (c) {
-					case 0:
-						// Do nothing.
-						break;
-					// case U+0000
-						// Syntax violation.
-					default:
-						// If c is not a URL code point and not "%", syntax violation.
-						// If c is "%" and remaining does not start with two ASCII hex digits, syntax violation.
-						// Append c to url’s fragment.
+				// If c is not the EOF code point, then:
+				if (c != 0) {
+					// If c is not a URL code point and not U+0025 (%),
+					// validation error.
+					// If c is U+0025 (%) and remaining does not start with two
+					// ASCII hex digits, validation error.
+					// UTF-8 percent-encode c using the fragment percent-encode
+					// set and append the result to url’s fragment.
+					if (is_frament_encode_set(c)) {
+						char encodedCodePoints[4];
+						percent_encode(encodedCodePoints, c);
+						append_fragment_s(url, encodedCodePoints);
+					} else {
 						append_fragment(url, c);
-						// Unfortunately not using percent-encoding is intentional as implementations with majority market share exhibit this behavior.
+					}
 				}
 				break;
 		}

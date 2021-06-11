@@ -93,7 +93,7 @@
   {
     "input": "http://f:21/ b ? d # e ",
     "base": "http://example.org/foo/bar",
-    "href": "http://f:21/%20b%20?%20d%20# e",
+    "href": "http://f:21/%20b%20?%20d%20#%20e",
     "origin": "http://f:21",
     "protocol": "http:",
     "username": "",
@@ -103,7 +103,7 @@
     "port": "21",
     "pathname": "/%20b%20",
     "search": "?%20d%20",
-    "hash": "# e"
+    "hash": "#%20e"
   },
   {
     "input": "http://f:/c",
@@ -493,7 +493,7 @@
   {
     "input": "foo://",
     "base": "http://example.org/foo/bar",
-    "href": "foo:///",
+    "href": "foo://",
     "origin": "null",
     "protocol": "foo:",
     "username": "",
@@ -501,7 +501,7 @@
     "host": "",
     "hostname": "",
     "port": "",
-    "pathname": "/",
+    "pathname": "",
     "search": "",
     "hash": ""
   },
@@ -945,21 +945,6 @@
     "hash": ""
   },
   {
-    "input": "gopher:/example.com/",
-    "base": "http://example.org/foo/bar",
-    "href": "gopher://example.com/",
-    "origin": "gopher://example.com",
-    "protocol": "gopher:",
-    "username": "",
-    "password": "",
-    "host": "example.com",
-    "hostname": "example.com",
-    "port": "",
-    "pathname": "/",
-    "search": "",
-    "hash": ""
-  },
-  {
     "input": "ws:/example.com/",
     "base": "http://example.org/foo/bar",
     "href": "ws://example.com/",
@@ -1110,21 +1095,6 @@
     "hash": ""
   },
   {
-    "input": "gopher:example.com/",
-    "base": "http://example.org/foo/bar",
-    "href": "gopher://example.com/",
-    "origin": "gopher://example.com",
-    "protocol": "gopher:",
-    "username": "",
-    "password": "",
-    "host": "example.com",
-    "hostname": "example.com",
-    "port": "",
-    "pathname": "/",
-    "search": "",
-    "hash": ""
-  },
-  {
     "input": "ws:example.com/",
     "base": "http://example.org/foo/bar",
     "href": "ws://example.com/",
@@ -1262,7 +1232,7 @@
   {
     "input": "#β",
     "base": "http://example.org/foo/bar",
-    "href": "http://example.org/foo/bar#β",
+    "href": "http://example.org/foo/bar#%CE%B2",
     "origin": "http://example.org",
     "protocol": "http:",
     "username": "",
@@ -1272,7 +1242,7 @@
     "port": "",
     "pathname": "/foo/bar",
     "search": "",
-    "hash": "#β"
+    "hash": "#%CE%B2"
   },
   {
     "input": "data:text/html,test#test",
@@ -1740,7 +1710,7 @@
   {
     "input": "http://example.com/foo/%2e%2",
     "base": "about:blank",
-    "href": "http://example.com/foo/.%2",
+    "href": "http://example.com/foo/%2e%2",
     "origin": "http://example.com",
     "protocol": "http:",
     "username": "",
@@ -1748,14 +1718,14 @@
     "host": "example.com",
     "hostname": "example.com",
     "port": "",
-    "pathname": "/foo/.%2",
+    "pathname": "/foo/%2e%2",
     "search": "",
     "hash": ""
   },
   {
     "input": "http://example.com/foo/%2e./%2e%2e/.%2e/%2e.bar",
     "base": "about:blank",
-    "href": "http://example.com/..bar",
+    "href": "http://example.com/%2e.bar",
     "origin": "http://example.com",
     "protocol": "http:",
     "username": "",
@@ -1763,7 +1733,7 @@
     "host": "example.com",
     "hostname": "example.com",
     "port": "",
-    "pathname": "/..bar",
+    "pathname": "/%2e.bar",
     "search": "",
     "hash": ""
   },
@@ -2116,7 +2086,7 @@
   {
     "input": "http://www.google.com/foo?bar=baz# »",
     "base": "about:blank",
-    "href": "http://www.google.com/foo?bar=baz# »",
+    "href": "http://www.google.com/foo?bar=baz#%20%C2%BB",
     "origin": "http://www.google.com",
     "protocol": "http:",
     "username": "",
@@ -2126,12 +2096,12 @@
     "port": "",
     "pathname": "/foo",
     "search": "?bar=baz",
-    "hash": "# »"
+    "hash": "#%20%C2%BB"
   },
   {
     "input": "data:test# »",
     "base": "about:blank",
-    "href": "data:test# »",
+    "href": "data:test#%20%C2%BB",
     "origin": "null",
     "protocol": "data:",
     "username": "",
@@ -2141,7 +2111,7 @@
     "port": "",
     "pathname": "test",
     "search": "",
-    "hash": "# »"
+    "hash": "#%20%C2%BB"
   },
   {
     "input": "http://[www.google.com]/",
@@ -2181,7 +2151,7 @@
   {
     "input": "http://www/foo%2Ehtml",
     "base": "about:blank",
-    "href": "http://www/foo.html",
+    "href": "http://www/foo%2Ehtml",
     "origin": "http://www",
     "protocol": "http:",
     "username": "",
@@ -2189,7 +2159,7 @@
     "host": "www",
     "hostname": "www",
     "port": "",
-    "pathname": "/foo.html",
+    "pathname": "/foo%2Ehtml",
     "search": "",
     "hash": ""
   },
@@ -2356,14 +2326,14 @@
   {
     "input": "gopher://foo:70/",
     "base": "about:blank",
-    "href": "gopher://foo/",
+    "href": "gopher://foo:70/",
     "origin": "gopher://foo",
     "protocol": "gopher:",
     "username": "",
     "password": "",
-    "host": "foo",
+    "host": "foo:70",
     "hostname": "foo",
-    "port": "",
+    "port": "70",
     "pathname": "/",
     "search": "",
     "hash": ""
@@ -2593,21 +2563,6 @@
     "hash": ""
   },
   {
-    "input": "gopher:/example.com/",
-    "base": "about:blank",
-    "href": "gopher://example.com/",
-    "origin": "gopher://example.com",
-    "protocol": "gopher:",
-    "username": "",
-    "password": "",
-    "host": "example.com",
-    "hostname": "example.com",
-    "port": "",
-    "pathname": "/",
-    "search": "",
-    "hash": ""
-  },
-  {
     "input": "ws:/example.com/",
     "base": "about:blank",
     "href": "ws://example.com/",
@@ -2754,21 +2709,6 @@
     "hostname": "",
     "port": "",
     "pathname": "example.com/",
-    "search": "",
-    "hash": ""
-  },
-  {
-    "input": "gopher:example.com/",
-    "base": "about:blank",
-    "href": "gopher://example.com/",
-    "origin": "gopher://example.com",
-    "protocol": "gopher:",
-    "username": "",
-    "password": "",
-    "host": "example.com",
-    "hostname": "example.com",
-    "port": "",
-    "pathname": "/",
     "search": "",
     "hash": ""
   },
