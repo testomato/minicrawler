@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#ifdef HAVE_LIBICUUC
 #include <unicode/uidna.h>
+#endif
 
 #include "minicrawler-url.h"
 #include "alloc.h"
@@ -161,6 +163,7 @@ static int domain_to_ascii(char *result, int length, char *domain) {
 		return MCRAWLER_URL_SUCCESS;
 	}
 
+#ifdef HAVE_LIBICUUC
 	UErrorCode error = 0;
 	UIDNA *idna = uidna_openUTS46(UIDNA_DEFAULT, &error);
 	if (U_FAILURE(error)) {
@@ -178,6 +181,31 @@ static int domain_to_ascii(char *result, int length, char *domain) {
 		debugf("Error %s (%d) for %s\n", u_errorName(error), error, domain);
 	}
 	return MCRAWLER_URL_FAILURE;
+#else
+	// If beStrict is false, domain is an ASCII string, and strictly splitting domain on U+002E (.) does not produce any item that starts with "xn--", this step is equivalent to ASCII lowercasing domain. 
+	for (int i = 0; i < length; i++) {
+		unsigned char c = domain[i];
+		if (c > '\x7f') {
+			debugf("Domain %s contains non-ascii characters\n", domain);
+			return MCRAWLER_URL_FAILURE;
+		} else if (c == '\0') {
+			result[i] = c;
+
+			if (!strncmp(result, "xn--", 4) || strstr(result, ".xn--") != NULL) {
+				debugf("IDNA domains (%s) is not supported without libicu\n", domain);
+				return MCRAWLER_URL_FAILURE;
+			}
+			return MCRAWLER_URL_SUCCESS;
+		} else if (c >= 'A' && c <= 'Z') {
+			result[i] = c + 32;
+		} else {
+			result[i] = c;
+		}
+	}
+
+	debugf("Domain %s is longer than 255 characters\n", domain);
+	return MCRAWLER_URL_FAILURE;
+#endif
 }
 
 static inline int is_single_dot(char *s) {
