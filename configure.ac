@@ -38,7 +38,11 @@ AC_CHECK_LIB([icuuc], [uidna_nameToASCII_52], [],
     AC_CHECK_LIB([icuuc], [uidna_nameToASCII_60], [],
     AC_CHECK_LIB([icuuc], [uidna_nameToASCII_61], [],
     AC_CHECK_LIB([icuuc], [uidna_nameToASCII_62], [],
-        AC_CHECK_LIB([icuuc], [uidna_nameToASCII_63], [], AC_MSG_ERROR([please install libicu dev files])))))))))))))
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_63], [],
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_64], [],
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_65], [],
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_66], [],
+        AC_CHECK_LIB([icuuc], [uidna_nameToASCII_67], [], AC_MSG_ERROR([please install libicu dev files])))))))))))))))))
 AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv dev files]))
 
 AC_ARG_WITH([ssl],
