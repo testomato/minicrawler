@@ -535,7 +535,7 @@ int mcrawler_url_parse_host(mcrawler_url_host *host, const char *input) {
 	}
 	// If asciiDomain contains U+0000, U+0009, U+000A, U+000D, U+0020, "#", "%", "/", ":", "?", "@", "[", "\", or "]", syntax violation, return failure.
 	char *q;
-	if ((q = strpbrk(asciiDomain, "\x09\x0A\x09\x20#%/:?@[\\]"))) {
+	if ((q = strpbrk(asciiDomain, "\x09\x0A\x0D\x20#%/:?@[\\]"))) {
 		debugf("Host syntax violation (5) for %s at %s\n", input, q);
 		return MCRAWLER_URL_FAILURE;
 	}
