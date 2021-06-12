@@ -3,13 +3,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string>
 #include <arpa/inet.h>
 #ifdef HAVE_LIBICUUC
 #include <unicode/uidna.h>
 #endif
 
 #include "minicrawler-url.h"
-#include "alloc.h"
+#include "url.hh"
 
 #define debugf(...)   {fprintf(stderr, __VA_ARGS__);}
 
@@ -38,20 +39,6 @@ enum {
 	FRAGMENT
 };
 
-static inline char *strdupnul(const char *s) {
-	return s ? strdup(s) : NULL;
-}
-
-static inline mcrawler_url_host *dup_host(mcrawler_url_host *host) {
-	if (!host) {
-		return NULL;
-	}
-
-	mcrawler_url_host *new = (mcrawler_url_host *)malloc(sizeof(mcrawler_url_host));
-	memcpy(new, host, sizeof(mcrawler_url_host));
-	return new;
-}
-
 static void trim_controls_and_space(char *str) {
 	size_t len = strlen(str);
 	char *p = str;
@@ -62,47 +49,9 @@ static void trim_controls_and_space(char *str) {
 	}
 }
 
-static inline int is_ascii_alpha(unsigned char c) {
-	return (0x41 <= c && c <= 0x5A) || (0x61 <= c && c <= 0x7A);
-}
-
-static inline int is_ascii_digit(unsigned char c) {
-	return 0x30 <= c && c <= 0x39;
-}
-
-static inline int is_ascii_hexdigit(unsigned char c) {
-	return is_ascii_digit(c) || (0x41 <= c && c <= 0x46) || (0x61 <= c && c <= 0x66);
-}
-
-static inline int is_windows_drive_letter(char *s) {
-	return is_ascii_alpha(s[0]) && (s[1] == ':' || s[1] == '|');
-}
-
-static inline int is_normalized_windows_drive_letter(char *s) {
-	return is_ascii_alpha(s[0]) && s[1] == ':' && s[3] == 0;
-}
-
 static inline char tolowercase(unsigned char c) {
 	return c >= 0x41 && c <= 0x5A ? c + (0x61-0x41) : c;
 }
-
-static inline int is_special(mcrawler_url_url *url) {
-	if (!strcmp("http", url->scheme)) return 80;
-	if (!strcmp("https", url->scheme)) return 443;
-	if (!strcmp("ftp", url->scheme)) return 21;
-	if (!strcmp("file", url->scheme)) return -1;
-	if (!strcmp("ws", url->scheme)) return 80;
-	if (!strcmp("wss", url->scheme)) return 443;
-	return 0;
-}
-
-static inline void pop_path(mcrawler_url_url *url) {
-	// if url’s scheme is not "file" or url’s path does not contain a single string that is a normalized Windows drive letter, remove url’s path’s last string, if any.
-	if (strcmp(url->scheme, "file") || !(url->path_len == 1 && is_normalized_windows_drive_letter(url->path[0]))) {
-		do_pop_path(url);
-	}
-}
-
 
 static inline int is_c0_encode_set(unsigned char c) {
 	return c < 0x20 || c >= 0x7F;
@@ -178,7 +127,7 @@ static int domain_to_ascii(char *result, int length, char *domain) {
 	}
 
 #ifdef HAVE_LIBICUUC
-	UErrorCode error = 0;
+	UErrorCode error = U_ZERO_ERROR;
 	UIDNA *idna = uidna_openUTS46(
 			UIDNA_CHECK_BIDI |
 			UIDNA_CHECK_CONTEXTJ |
@@ -188,14 +137,13 @@ static int domain_to_ascii(char *result, int length, char *domain) {
 		debugf("Error %s (%d) for %s\n", u_errorName(error), error, domain);
 		return MCRAWLER_URL_FAILURE;
 	}
-	error = 0;
 	UIDNAInfo info = UIDNA_INFO_INITIALIZER;
 	uidna_nameToASCII_UTF8(idna, domain, -1, result, length, &info, &error);
 	uidna_close(idna);
 	if (U_SUCCESS(error) && error != U_STRING_NOT_TERMINATED_WARNING && info.errors == 0) {
 		return MCRAWLER_URL_SUCCESS;
 	}
-	if (error) {
+	if (U_FAILURE(error)) {
 		debugf("Error %s (%d) for %s\n", u_errorName(error), error, domain);
 	}
 	return MCRAWLER_URL_FAILURE;
@@ -236,6 +184,7 @@ static inline int is_double_dot(char *s) {
 
 
 int mcrawler_url_parse_ipv6(mcrawler_url_host *host, const char *input) {
+	int numbers_seen;
 	// Let address be a new IPv6 address with its 16-bit pieces initialized to 0.
 	uint16_t address[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 	// Let piece pointer be a pointer into address’s 16-bit pieces, initially zero (pointing to the first 16-bit piece), and let piece be the 16-bit piece it points to.
@@ -330,7 +279,7 @@ IPv4:
 		return MCRAWLER_URL_FAILURE;
 	}
 	// Let numbersSeen be 0.
-	int numbers_seen = 0;
+	numbers_seen = 0;
 	// While c is not the EOF code point, run these substeps:
 	while ((c = *p)) {
 		// Let value be null.
@@ -552,9 +501,8 @@ int mcrawler_url_parse_ipv4(mcrawler_url_host *host, const char *input) {
 	return MCRAWLER_URL_SUCCESS;
 }
 
-int mcrawler_url_parse_host(mcrawler_url_host *host, const char *input) {
-	memset(host, 0, sizeof(mcrawler_url_host));
-
+int mcrawler_url_parse_host(mcrawler_url_host* host, const char *input) {
+    memset(host, 0, sizeof(mcrawler_url_host));
 	if (!input) {
 		return MCRAWLER_URL_FAILURE;
 	}
@@ -612,31 +560,21 @@ int mcrawler_url_parse_host(mcrawler_url_host *host, const char *input) {
 	return MCRAWLER_URL_SUCCESS;
 }
 
-int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcrawler_url_url *base, mcrawler_url_parse_state *state_arg)
+int mcrawler_url_parse2(mcrawler_url_url *u, const char *input_arg, const mcrawler_url_url *base, mcrawler_url_parse_state *state_arg)
 {
 	if (!input_arg) {
 		return MCRAWLER_URL_FAILURE;
 	}
 
-	size_t len = strlen(input_arg);
-	char input[len + 1];
-	strcpy(input, input_arg);
+    Url url = Url();
 
-	mcrawler_url_parse_state *state;
-	mcrawler_url_parse_state state_stack;
-	if (state_arg != NULL) {
-		state = state_arg;
-	} else {
-		state = &state_stack;
-	}
+    char *input = strdup(input_arg);
 
-	// Set url to a new URL.
-	init_url(url);
-
-	// Remove any leading and trailing C0 controls and space from input.
-	trim_controls_and_space(input);
+    // Remove any leading and trailing C0 controls and space from input.
+    trim_controls_and_space(input);
 
 	char *p;
+    size_t len = strlen(input);
 
 	// Remove all tab and newline from input.
 	p = input;
@@ -650,7 +588,7 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 	}
 
 	// Let state be Scheme start state
-	*state = SCHEME_START;
+	int state = SCHEME_START;
 
 	// Let buffer be the empty string.
 	char buf[3 * len + 1]; // 3x because percent encoding
@@ -663,15 +601,15 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 	p = input;
 	do {
 		char c = *p;
-		switch (*state) {
+		switch (state) {
 			case SCHEME_START:
 				// If c is an ASCII alpha, append c, lowercased, to buffer, and set state to scheme state.
 				if (is_ascii_alpha(c)) {
 					buf[bufp++] = tolowercase(c);
-					*state = SCHEME;
+					state = SCHEME;
 				// Otherwise, if state override is not given, set state to no scheme state, and decrease pointer by one.
 				} else {
-					*state = NO_SCHEME;
+					state = NO_SCHEME;
 					p--;
 				}
 				break;
@@ -683,39 +621,39 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				} else if (c == ':') {
 					// Set url’s scheme to buffer.
 					buf[bufp] = 0;
-					replace_scheme(url, buf);
+					url.set_scheme(buf);
 					// Set buffer to the empty string.
 					bufp = 0;
 					// If url’s scheme is "file", run these subsubsteps:
-					if (!strcmp("file", url->scheme)) {
+					if ("file" == url.scheme()) {
 						// If remaining does not start with "//", syntax violation.
 						if (p[1] != '/' || p[2] != '/') {
 							debugf("syntax violation (scheme 2.5.1) at %s\n", p);
 						}
 						// Set state to file state.
-						*state = FILE_STATE;
+						state = FILE_STATE;
 					// Otherwise, if url is special, base is non-null, and base’s scheme is equal to url’s scheme, set state to special relative or authority state.
-					} else if (is_special(url)) {
-						if (base && !strcmp(url->scheme, base->scheme)) {
-							*state = SPECIAL_RELATIVE_OR_AUTHORITY;
+					} else if (url.is_special()) {
+						if (base && url.scheme() == base->scheme) {
+							state = SPECIAL_RELATIVE_OR_AUTHORITY;
 						// Otherwise, if url is special, set state to special authority slashes state.
 						} else {
-							*state = SPECIAL_AUTHORITY_SLASHES;
+							state = SPECIAL_AUTHORITY_SLASHES;
 						}
 					// Otherwise, if remaining starts with an "/", set state to path or authority state, and increase pointer by one.
 					} else if (p[1] == '/') {
-						*state = PATH_OR_AUTHORITY;
+						state = PATH_OR_AUTHORITY;
 						p++;
 					// Otherwise, set url’s cannot-be-a-base-URL flag, append an empty string to url’s path, and set state to cannot-be-a-base-URL path state.
 					} else {
-						url->cannot_be_a_base_url = 1;
-						append_path(url, "");
-						*state = CANNOT_BE_A_BASE_URL_PATH;
+						url.cannot_be_a_base_url();
+						url.append_path("");
+						state = CANNOT_BE_A_BASE_URL_PATH;
 					}
 				// Otherwise, if state override is not given, set buffer to the empty string, state to no scheme state, and start over (from the first code point in input).
 				} else {
 					bufp = 0;
-					*state = NO_SCHEME;
+					state = NO_SCHEME;
 					p = input - 1;
 				}
 				break;
@@ -723,147 +661,142 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				// If base is null, or base’s cannot-be-a-base-URL flag is set and c is not "#", syntax violation, return failure.
 				if (!base || (base->cannot_be_a_base_url && c != '#')) {
 					debugf("Syntax violation (no scheme 1) at %s\n", p);
-					return MCRAWLER_URL_FAILURE;
+                    goto failed;
 				// Otherwise, if base’s cannot-be-a-base-URL flag is set and c is "#", set url’s scheme to base’s scheme, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, set url’s cannot-be-a-base-URL flag, and set state to fragment state.
 				} else if (base->cannot_be_a_base_url && c == '#') {
-					replace_scheme(url, base->scheme);
-					replace_path(url, (const char **)base->path);
-					url->query = strdupnul(base->query);
-					init_fragment(url);
-					url->cannot_be_a_base_url = 1;
-					*state = FRAGMENT;
+					url.set_scheme(base->scheme);
+					url.replace_path((const char **)base->path);
+					url.set_query(base->query);
+					url.set_fragment("");
+					url.cannot_be_a_base_url();
+					state = FRAGMENT;
 				// Otherwise, if base’s scheme is not "file", set state to relative state and decrease pointer by one.
 				} else if (!base->scheme || strcmp(base->scheme, "file")) {
-					*state = RELATIVE;
+					state = RELATIVE;
 					p--;
 				// Otherwise, set state to file state and decrease pointer by one.
 				} else {
-					*state = FILE_STATE;
+					state = FILE_STATE;
 					p--;
 				}
 				break;
 			case SPECIAL_RELATIVE_OR_AUTHORITY:
 				// If c is "/" and remaining starts with "/", set state to special authority ignore slashes state and increase pointer by one.
 				if (c == '/' && p[1] == '/') {
-					*state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
+					state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
 					p++;
 				// Otherwise, syntax violation, set state to relative state and decrease pointer by one.
 				} else {
 					debugf("Syntax violation (special relative or authority) at %s\n", p);
-					*state = RELATIVE;
+					state = RELATIVE;
 					p--;
 				}
 				break;
 			case PATH_OR_AUTHORITY:
 				// If c is "/", set state to authority state.
 				if (c == '/') {
-					*state = AUTHORITY;
+					state = AUTHORITY;
 				// Otherwise, set state to path state, and decrease pointer by one.
 				} else {
-					*state = PATH;
+					state = PATH;
 					p--;
 				}
 				break;
 			case RELATIVE:
 				// Set url’s scheme to base’s scheme, and then, switching on c:
-				replace_scheme(url, base->scheme);
+				url.set_scheme(base->scheme);
 				switch (c) {
 					case 0:
 						// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, and url’s query to base’s query.
-						replace_username(url, base->username);
-						url->password = strdupnul(base->password);
-						url->host = dup_host(base->host);
-						url->port = base->port;
-						url->port_not_null = base->port_not_null;
-						replace_path(url, (const char **)base->path);
-						url->query = strdupnul(base->query);
+						url.set_username(base->username);
+						url.set_password(base->password);
+						url.set_host(base->host);
+						url.set_port(base->port, base->port_not_null);
+						url.replace_path((const char **)base->path);
+						url.set_query(base->query);
 						break;
 					case '/':
 						// Set state to relative slash state.
-						*state = RELATIVE_SLASH;
+						state = RELATIVE_SLASH;
 						break;
 					case '?':
 						// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, url’s query to the empty string, and state to query state.
-						replace_username(url, base->username);
-						url->password = strdupnul(base->password);
-						url->host = dup_host(base->host);
-						url->port = base->port;
-						url->port_not_null = base->port_not_null;
-						replace_path(url, (const char **)base->path);
-						init_query(url);
-						*state = QUERY;
+						url.set_username(base->username);
+						url.set_password(base->password);
+						url.set_host(base->host);
+						url.set_port(base->port, base->port_not_null);
+						url.replace_path((const char **)base->path);
+						url.set_query("");
+						state = QUERY;
 						break;
 					case '#':
 						// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string, and state to fragment state.
-						replace_username(url, base->username);
-						url->password = strdupnul(base->password);
-						url->host = dup_host(base->host);
-						url->port = base->port;
-						url->port_not_null = base->port_not_null;
-						replace_path(url, (const char **)base->path);
-						url->query = strdupnul(base->query);
-						init_fragment(url);
-						*state = FRAGMENT;
+						url.set_username(base->username);
+						url.set_password(base->password);
+						url.set_host(base->host);
+						url.set_port(base->port, base->port_not_null);
+						url.replace_path((const char **)base->path);
+						url.set_query(base->query);
+						url.set_fragment("");
+						state = FRAGMENT;
 						break;
 					default:
 						// If url is special and c is "\", syntax violation, set state to relative slash state.
-						if (c == '\\' && is_special(url)) {
+						if (c == '\\' && url.is_special()) {
 							debugf("Syntax violation (relative) at %s\n", p);
-							*state = RELATIVE_SLASH;
+							state = RELATIVE_SLASH;
 						} else {
 							// Set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, url’s path to base’s path, and then remove url’s path’s last entry, if any.
-							replace_username(url, base->username);
-							url->password = strdupnul(base->password);
-							url->host = dup_host(base->host);
-							url->port = base->port;
-							url->port_not_null = base->port_not_null;
-							replace_path(url, (const char **)base->path);
-							do_pop_path(url);
+							url.set_username(base->username);
+							url.set_password(base->password);
+							url.set_host(base->host);
+                            url.set_port(base->port, base->port_not_null);
+							url.replace_path((const char **)base->path);
+							url.pop_path();
 							// Set state to path state, and decrease pointer by one.
-							*state = PATH;
+							state = PATH;
 							p--;
 						}
 				}
 				break;
 			case RELATIVE_SLASH:
 				// If url is special and c is "/" or "\", then:
-				if ((c == '/' || c == '\\') && is_special(url)) {
+				if ((c == '/' || c == '\\') && url.is_special()) {
 					// If c is "\", syntax violation.
 					if (c == '\\') {
 						debugf("Syntax violation (relative slash 1.1) at %s\n", p);
 					}
 					// Set state to special authority ignore slashes state.
-					*state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
+					state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
 				// Otherwise, if c is "/", then set state to authority state.
 				} else if (c == '/') {
-					*state = AUTHORITY;
+					state = AUTHORITY;
 				// Otherwise, set url’s username to base’s username, url’s password to base’s password, url’s host to base’s host, url’s port to base’s port, state to path state, and then, decrease pointer by one.
 				} else {
-					replace_username(url, base->username);
-					url->password = strdupnul(base->password);
-					url->host = dup_host(base->host);
-					url->port = base->port;
-					url->port_not_null = base->port_not_null;
-					*state = PATH;
+					url.set_username(base->username);
+					url.set_password(base->password);
+					url.set_host(base->host);
+                    url.set_port(base->port, base->port_not_null);
+					state = PATH;
 					p--;
 				}
 				break;
 			case SPECIAL_AUTHORITY_SLASHES:
 				// If c is "/" and remaining starts with "/", set state to special authority ignore slashes state, and increase pointer by one.
 				if (c == '/' && p[1] == '/') {
-					*state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
+					state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
 					p++;
 				// Otherwise, syntax violation, set state to special authority ignore slashes state, and decrease pointer by one.
 				} else {
 					debugf("Syntax violation (special authority slashes) at %s\n", p);
-					*state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
+					state = SPECIAL_AUTHORITY_IGNORE_SLASHES;
 					p--;
 				}
 				break;
 			case SPECIAL_AUTHORITY_IGNORE_SLASHES:
 				// If c is neither "/" nor "\", set state to authority state, and decrease pointer by one.
 				if (c != '/' && c != '\\') {
-					*state = AUTHORITY;
+					state = AUTHORITY;
 					p--;
 				} else {
 					// Otherwise, syntax violation.
@@ -884,12 +817,10 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					// Set the @ flag.
 					flag_at = 1;
 					// For each codePoint in buffer, run these substeps:
-					int username_p = strlen(url->username);
-					int password_p = url->password ? strlen(url->password) : 0;
 					for (int i = 0; i < bufp; i++) {
 						// If codePoint is ":" and url’s password is null, set url’s password to the empty string and run these substeps for the next code point.
-						if (buf[i] == ':' && !url->password) {
-							init_password(url);
+						if (buf[i] == ':' && url.is_password_null()) {
+                            url.set_password("");
 							continue;
 						}
 						// Let encodedCodePoints be the result of running UTF-8 percent encode codePoint using the userinfo encode set.
@@ -901,10 +832,10 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 						}
 						// If url’s password is non-null, append encodedCodePoints to url’s password.
 						// Otherwise, append encodedCodePoints to url’s username.
-						if (url->password) {
-							append_password(url, &password_p, encodedCodePoints);
+						if (!url.is_password_null()) {
+                            url.append_password(encodedCodePoints);
 						} else {
-							append_username(url, &username_p, encodedCodePoints);
+                            url.append_username(encodedCodePoints);
 						}
 					}
 					// Set buffer to the empty string.
@@ -915,7 +846,7 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					// c is EOF code point, "/", "?", or "#"
 					(c == 0 || c == '/' || c == '?' || c == '#') ||
 					// url is special and c is "\"
-					(c == '\\' && is_special(url))
+					(c == '\\' && url.is_special())
 				) {
 					// then run these substeps:
 					// 
@@ -923,14 +854,14 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					// syntax violation, return failure.
 					if (flag_at == 1 && bufp == 0) {
 						debugf("Syntax violation (authority 2.1) at %s\n", p);
-						return MCRAWLER_URL_FAILURE;
+                        goto failed;
 					}
 					// Decrease pointer by the number of code points in buffer plus
 					// one, set buffer to the empty string, and set state to
 					// host state.
 					p -= bufp + 1;
 					bufp = 0;
-					*state = HOST;
+					state = HOST;
 				// Otherwise, append c to buffer.
 				} else {
 					buf[bufp++] = c;
@@ -942,46 +873,40 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				if (c == ':' && !flag_sq) {
 					// If buffer is the empty string, syntax violation, return failure.
 					if (bufp == 0) {
-						return MCRAWLER_URL_FAILURE;
+                        goto failed;
 					}
 					// 
 					// Let host be the result of host parsing buffer with url is special.
 					// If host is failure, then return failure.
 					buf[bufp] = 0;
-					url->host = (mcrawler_url_host *)malloc(sizeof (mcrawler_url_host));
-					if (mcrawler_url_parse_host(url->host, buf) == MCRAWLER_URL_FAILURE) {
-						free(url->host);
-						url->host = NULL;
-						return MCRAWLER_URL_FAILURE;
+					if (mcrawler_url_parse_host(url.new_host().get(), buf) == MCRAWLER_URL_FAILURE) {
+                        goto failed;
 					}
 					// Set url’s host to host, buffer to the empty string, and state to port state.
 					bufp = 0;
-					*state = PORT;
+					state = PORT;
 				// Otherwise, if one of the following is true
 				} else if (
 					// c is EOF code point, "/", "?", or "#"
 					(c == 0 || c == '/' || c == '?' || c == '#') ||
 					// url is special and c is "\"
-					(c == '\\' && is_special(url))
+					(c == '\\' && url.is_special())
 				) {
 					// then decrease pointer by one, and run these substeps:
 					p--;
 					// If url is special and buffer is the empty string, syntax vialotion, return failure.
-					if (bufp == 0 && is_special(url)) {
-						return MCRAWLER_URL_FAILURE;
+					if (bufp == 0 && url.is_special()) {
+                        goto failed;
 					}
 					// Let host be the result of host parsing buffer with url is special.
 					// If host is failure, then return failure.
 					buf[bufp] = 0;
-					url->host = (mcrawler_url_host *)malloc(sizeof (mcrawler_url_host));
-					if (mcrawler_url_parse_host(url->host, buf) == MCRAWLER_URL_FAILURE) {
-						free(url->host);
-						url->host = NULL;
-						return MCRAWLER_URL_FAILURE;
+					if (mcrawler_url_parse_host(url.new_host().get(), buf) == MCRAWLER_URL_FAILURE) {
+                        goto failed;
 					}
 					// Set url’s host to host, buffer to the empty string, and state to path start state.
 					bufp = 0;
-					*state = PATH_START;
+					state = PATH_START;
 				// Otherwise, run these substeps:
 				} else {
 					// If c is "[", set the [] flag.
@@ -1005,7 +930,7 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					// c is EOF code point, "/", "?", or "#"
 					(c == 0 || c == '/' || c == '?' || c == '#') ||
 					// url is special and c is "\"
-					(c == '\\' && is_special(url))
+					(c == '\\' && url.is_special())
 				) {
 					// If buffer is not the empty string, run these subsubsteps:
 					if (bufp) {
@@ -1015,90 +940,75 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 						// If port is greater than 2^16 − 1, syntax violation, return failure.
 						if (port > (1L<<16) - 1) {
 							debugf("Syntax violation (port 2.1.2) at %s\n", p);
-							return MCRAWLER_URL_FAILURE;
+                            goto failed;
 						}
 						// Set url’s port to null, if port is url’s scheme’s default port, and to port otherwise.
-						if (is_special(url) == port) {
-							url->port_not_null = 0;
+						if (url.get_special_scheme_port() == port) {
+                            url.set_port(nullptr);
 						} else {
-							url->port_not_null = 1;
-							url->port = port;
+                            url.set_port(port);
 						}
 						// Set buffer to the empty string.
 						bufp = 0;
 					}
 					// Set state to path start state, and decrease pointer by one.
-					*state = PATH_START;
+					state = PATH_START;
 					p--;
 				// Otherwise, syntax violation, return failure.
 				} else {
 					debugf("Syntax violation (port 3) at %s\n", p);
-					return MCRAWLER_URL_FAILURE;
+                    goto failed;
 				}
 				break;
 			case FILE_STATE:
 				// Set url’s scheme to "file".
-				replace_scheme(url, "file");
+				url.set_scheme("file");
 				// Set url’s host to the empty string.
-				if (url->host == NULL) {
-					url->host = (mcrawler_url_host *)malloc(sizeof(mcrawler_url_host));
-				}
-				url->host->type = MCRAWLER_URL_HOST_DOMAIN;
-				url->host->domain[0] = 0;
+                url.new_host();
 				// If c is U+002F (/) or U+005C (\), then:
 				if (c == '/' || c == '\\') {
 					// If c is U+005C (\), validation error.
 					// Set state to file slash state.
-					*state = FILE_SLASH;
+					state = FILE_SLASH;
 				// Otherwise, if base is non-null and base’s scheme is "file":
 				} else if (base && !strcmp(base->scheme, "file")) {
 					// Set url’s host to base’s host, url’s path to a clone of
 					// base’s path, and url’s query to base’s query.
-					if (base->host) {
-						memcpy(url->host, base->host, sizeof(mcrawler_url_host));
-					} else {
-						free(url->host);
-						url->host = NULL;
-					}
-					replace_path(url, (const char **)base->path);
-					url->query = strdupnul(base->query);
+                    url.set_host(base->host);
+					url.replace_path((const char **)base->path);
+					url.set_query(base->query);
 					// If c is U+003F (?), then set url’s query to the empty
 					// string and state to query state.
 					if (c == '?') {
-						init_query(url);
-						*state = QUERY;
+						url.set_query("");
+						state = QUERY;
 					// Otherwise, if c is U+0023 (#), set url’s fragment to the
 					// empty string and state to fragment state.
 					} else if (c == '#') {
-						init_fragment(url);
-						*state = FRAGMENT;
+						url.set_fragment("");
+						state = FRAGMENT;
 					// Otherwise, if c is not the EOF code point:
 					} else if (c != 0) {
 						// Set url’s query to null.
-						if (url->query) {
-							free(url->query);
-							url->query = NULL;
-						}
+                        url.set_query(nullptr);
 						// If the substring from pointer in input does not
 						// start with a Windows drive letter, then shorten
 						// url’s path.
 						if (!is_windows_drive_letter(p)) {
-							pop_path(url);
+							url.shorten_path();
 						// Otherwise:
 						} else {
 							// Validation error.
 							// Set url’s path to an empty list.
-							while (url->path_len > 0) {
-								do_pop_path(url);
-							}
+                            url.replace_path(0);
 						}
 						// Set state to path state and decrease pointer by 1.
-						*state = PATH;
+						state = PATH;
 						p--;
 					}
 				// Otherwise, set state to path state, and decrease pointer by 1.
 				} else {
-					*state = PATH;
+					state = PATH;
 					p--;
 				}
 				break;
@@ -1110,13 +1020,13 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 						debugf("Syntax violation (\\) at %s\n", p);
 					}
 					// Set state to file host state.
-					*state = FILE_HOST;
+					state = FILE_HOST;
 				// Otherwise, run these substeps:
 				} else {
 					// If base is non-null and base’s scheme is "file", then: 
 					if (base && !strcmp(base->scheme, "file")) {
 						// Set url’s host to base’s host.
-						url->host = dup_host(base->host);
+						url.set_host(base->host);
 						// If the substring from pointer in input does not
 						// start with a Windows drive letter and base’s path[0]
 						// is a normalized Windows drive letter, then append
@@ -1124,12 +1034,12 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 						if (!is_windows_drive_letter(p)
 							&& base->path_len >= 1 && is_normalized_windows_drive_letter(base->path[0]))
 						{
-							append_path(url, base->path[0]);
+							url.append_path(base->path[0]);
 							// This is a (platform-independent) Windows drive letter quirk.
 						}
 					}
 					// Set state to path state, and decrease pointer by 1.
-					*state = PATH;
+					state = PATH;
 					p--;
 				}
 				break;
@@ -1141,27 +1051,25 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					// If buffer is a Windows drive letter, syntax violation, set state to path state.
 					if (is_windows_drive_letter(buf) && buf[2] == 0) {
 						debugf("Syntax violation (file host 1.1) at %s\n", p);
-						*state = PATH;
+						state = PATH;
 						// This is a (platform-independent) Windows drive letter quirk. buffer is not reset here and instead used in the path state.
 					// Otherwise, if buffer is the empty string, set state to path start state.
 					} else if (bufp == 0) {
-						*state = PATH_START;
+						state = PATH_START;
 					// Otherwise, run these steps:
 					} else {
 						// Let host be the result of host parsing buffer.
 						// If host is failure, return failure.
-						url->host = (mcrawler_url_host *)malloc(sizeof (mcrawler_url_host));
-						if (mcrawler_url_parse_host(url->host, buf) == MCRAWLER_URL_FAILURE) {
-							return MCRAWLER_URL_FAILURE;
+						if (mcrawler_url_parse_host(url.new_host().get(), buf) == MCRAWLER_URL_FAILURE) {
+							goto failed;
 						}
 						// If host is not "localhost", set url’s host to host.
-						if (!strcmp(url->host->domain, "localhost")) {
-							free(url->host);
-							url->host = NULL;
+						if (url.is_localhost()) {
+                            url.set_host(nullptr);
 						}
 						// Set buffer to the empty string and state to path start state.
 						bufp = 0;
-						*state = PATH_START;
+						state = PATH_START;
 					}
 				// Otherwise, append c to buffer.
 				} else {
@@ -1170,13 +1078,13 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				break;
 			case PATH_START:
 				// If url is special, then:
-				if (is_special(url)) {
+				if (url.is_special()) {
 					// If c is "\", syntax violation.
 					if (c == '\\') {
 						debugf("Syntax violation (\\) at %s\n", p);
 					}
 					// Set state to path state.
-					*state = PATH;
+					state = PATH;
 					// If c is neither "/" nor "\", then decrease
 					// pointer by one.
 					if (c != '/' && c != '\\') {
@@ -1186,19 +1094,19 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				// then set url's query to the empty string and state to
 				// query state.
 				} else if (c == '?') {
-					init_query(url);
-					*state = QUERY;
+					url.set_query("");
+					state = QUERY;
 				// Otherwise, if state override is not given and c is "#",
 				// then set url's fragment to the empty string and state to
 				// fragment state.
 				} else if (c == '#') {
-					init_fragment(url);
-					*state = FRAGMENT;
+					url.set_fragment("");
+					state = FRAGMENT;
 				// Otherwise, if c is not EOF code point, then: set state to
 				// path state and if c is not "/", then decrease pointer by
 				// one.
 				} else if (c != 0) {
-					*state = PATH;
+					state = PATH;
 					if (c != '/') {
 						p--;
 					}
@@ -1210,55 +1118,55 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					// c is EOF code point or "/"
 					(c == 0 || c == '/') ||
 					// url is special and c is "\"
-					(c == '\\' && is_special(url)) ||
+					(c == '\\' && url.is_special()) ||
 					// state override is not given and c is "?" or "#"
 					(c == '?' || c == '#')
 				) {
 					// If url is special and c is "\", syntax violation.
-					if (c == '\\' && is_special(url)) {
+					if (c == '\\' && url.is_special()) {
 						debugf("Syntax violation (\\) at %s\n", p);
 					}
 					buf[bufp] = 0;
 					// If buffer is a double-dot path segment
 					if (is_double_dot(buf)) {
 						// Shorten url's path
-						pop_path(url);
+						url.shorten_path();
 						// If neither c is U+002F (/), nor url is special and c
 						// is U+005C (\), append the empty string to url's
 						// path.
 						//
 						// This means that for input /usr/.. the result is /
 						// and not a lack of a path.
-						if (c != '/' && !(c == '\\' && is_special(url))) {
-							append_path(url, "");
+						if (c != '/' && !(c == '\\' && url.is_special())) {
+							url.append_path("");
 						}
 					// Otherwise, if buffer is a single-dot path segment and if neither c is "/", nor url is special and c is "\", append the empty string to url’s path.
 					} else if (is_single_dot(buf)) {
-						if (c != '/' && !(c == '\\' && is_special(url))) {
-							append_path(url, "");
+						if (c != '/' && !(c == '\\' && url.is_special())) {
+							url.append_path("");
 						}
 					// Otherwise, if buffer is not a single-dot path segment, run these subsubsteps:
 					} else {
 						// If url’s scheme is "file", url’s path is empty, and buffer is a Windows drive letter,
-						if (url->path[0] == NULL && !strcmp(url->scheme, "file") && is_windows_drive_letter(buf) && buf[2] == 0) {
+						if (url.empty_path() && url.scheme() == "file" && is_windows_drive_letter(buf) && buf[2] == 0) {
 							// Replace the second code point in buffer with ":".
 							buf[1] = ':';
 							// This is a (platform-independent) Windows drive letter quirk.
 						}
 						// Append buffer to url’s path.
-						append_path(url, buf);
+						url.append_path(buf);
 					}
 					// Set buffer to the empty string.
 					bufp = 0;
 					// If c is "?", set url’s query to the empty string, and state to query state.
 					if (c == '?') {
-						init_query(url);
-						*state = QUERY;
+						url.set_query("");
+						state = QUERY;
 					}
 					// If c is "#", set url’s fragment to the empty string, and state to fragment state.
 					if (c == '#') {
-						init_fragment(url);
-						*state = FRAGMENT;
+						url.set_fragment("");
+						state = FRAGMENT;
 					}
 				// Otherwise, run these steps:
 				} else {
@@ -1280,12 +1188,12 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 			case CANNOT_BE_A_BASE_URL_PATH:
 				// If c is "?", set url’s query to the empty string and state to query state.
 				if (c == '?') {
-					init_query(url);
-					*state = QUERY;
+					url.set_query("");
+					state = QUERY;
 				// Otherwise, if c is "#", set url’s fragment to the empty string and state to fragment state.
 				} else if (c == '#') {
-					init_fragment(url);
-					*state = FRAGMENT;
+					url.set_fragment("");
+					state = FRAGMENT;
 				// Otherwise, run these substeps:
 				} else {
 					// If c is not EOF code point, not a URL code point, and not "%", syntax violation.
@@ -1297,9 +1205,9 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 						if (is_c0_encode_set(c)) {
 							char encodedCodePoints[4];
 							percent_encode(encodedCodePoints, c);
-							append_path0_s(url, encodedCodePoints);
+							url.append_path0(encodedCodePoints);
 						} else {
-							append_path0_c(url, c);
+							url.append_path0(c);
 						}
 					}
 				}
@@ -1314,8 +1222,6 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 				// state override is not given and c is U+0023 (#)
 				// c is the EOF code point
 				if (c == 0 || c == '#') {
-					int special = is_special(url);
-					int query_p = strlen(url->query);
 					// Let queryPercentEncodeSet be the special-query
 					// percent-encode set if url is special; otherwise the
 					// query percent-encode set.
@@ -1323,12 +1229,12 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 						// Percent-encode after encoding, with encoding,
 						// buffer, and queryPercentEncodeSet, and append the
 						// result to url’s query.
-						if (is_query_encode_set(buf[i]) || special && is_special_query_encode_set(buf[i])) {
+						if (is_query_encode_set(buf[i]) || url.is_special() && is_special_query_encode_set(buf[i])) {
 							char encodedCodePoints[4];
 							percent_encode(encodedCodePoints, buf[i]);
-							append_query_s(url, &query_p, encodedCodePoints);
+							url.append_query(encodedCodePoints);
 						} else {
-							append_query_c(url, &query_p, buf[i]);
+							url.append_query(buf[i]);
 						}
 					}
 					// Set buffer to the empty string.
@@ -1336,8 +1242,8 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					// If c is U+0023 (#), then set url’s fragment to the empty
 					// string and state to fragment state.
 					if (c == '#') {
-						init_fragment(url);
-						*state = FRAGMENT;
+						url.set_fragment("");
+						state = FRAGMENT;
 					}
 				// Otherwise, if c is not the EOF code point:
 				} else if (c != 0) {
@@ -1361,9 +1267,9 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 					if (is_frament_encode_set(c)) {
 						char encodedCodePoints[4];
 						percent_encode(encodedCodePoints, c);
-						append_fragment_s(url, encodedCodePoints);
+						url.append_fragment(encodedCodePoints);
 					} else {
-						append_fragment(url, c);
+						url.append_fragment(c);
 					}
 				}
 				break;
@@ -1371,7 +1277,17 @@ int mcrawler_url_parse2(mcrawler_url_url *url, const char *input_arg, const mcra
 
 	} while ((p < input || *p) && p++);
 
+    url.set_struct(u);
+    if (state_arg != NULL) {
+        *state_arg = static_cast<mcrawler_url_parse_state>(state);
+    }
 	return MCRAWLER_URL_SUCCESS;
+
+failed:
+    if (state_arg != NULL) {
+        *state_arg = static_cast<mcrawler_url_parse_state>(state);
+    }
+	return MCRAWLER_URL_FAILURE;
 }
 
 int mcrawler_url_parse(mcrawler_url_url *url, const char *input, const mcrawler_url_url *base)

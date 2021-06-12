@@ -20,6 +20,7 @@ AC_PROG_CC_C99
 if test "${ac_cv_prog_cc_c99}" = "no"; then
 	AC_MSG_ERROR([your compiler does not support ISO Standard C 99])
 fi
+AC_PROG_CXX
 AC_PROG_LIBTOOL
 AC_PROG_AWK
 

@@ -1,10 +1,11 @@
 ## No default includes
 DEFAULT_INCLUDES = 
+AM_CXXFLAGS = -std=c++17
 
 minicrawlerincludedir = $(includedir)/libminicrawler-@MINICRAWLER_API_VERSION@/minicrawler
 minicrawlerinclude_HEADERS = src/url/minicrawler-url.h src/h/minicrawler.h
 
-libminicrawler_url_sources = src/url/parse.c src/url/serialize.c src/url/api.c src/url/alloc.c
+libminicrawler_url_sources = src/url/parse.cc src/url/serialize.c src/url/api.c src/url/alloc.c
 libminicrawler_sources = src/crawler.c src/cert.c src/conv.c src/converthtml2text.c src/entities.c src/inflate.c src/time.c src/malloc.c src/base64.c src/digcalc.c src/cookies.c src/tpl/tpl.c src/serialize.c src/memory.c src/auth.c src/http1.c src/http2.c src/debug.c src/buf.c src/api.c $(libminicrawler_url_sources)
 minicrawler_sources = src/main.c src/cli.c $(libminicrawler_sources)
 

@@ -1,3 +1,10 @@
+#ifndef MCRAWLER_URL_H
+#define MCRAWLER_URL_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Define WIN32 when build target is Win32 API (borrowed from libcurl) */
 #if (defined(_WIN32) || defined(__WIN32__)) && !defined(WIN32)
 # define WIN32
@@ -84,7 +91,6 @@ MCRAWLER_EXTERN int mcrawler_url_parse2(mcrawler_url_url *url, const char *input
 MCRAWLER_EXTERN int mcrawler_url_parse_host(mcrawler_url_host *host, const char *input);
 MCRAWLER_EXTERN int mcrawler_url_parse_ipv6(mcrawler_url_host *host, const char *input);
 MCRAWLER_EXTERN int mcrawler_url_parse_ipv4(mcrawler_url_host *host, const char *input);
-MCRAWLER_EXTERN void mcrawler_url_free_url(mcrawler_url_url *url);
 
 MCRAWLER_EXTERN char *mcrawler_url_serialize_ipv6(mcrawler_url_host *host, char *dest);
 MCRAWLER_EXTERN char *mcrawler_url_serialize_ipv4(mcrawler_url_host *host, char *dest);
@@ -102,3 +108,27 @@ MCRAWLER_EXTERN char *mcrawler_url_get_port(mcrawler_url_url *url);
 MCRAWLER_EXTERN char *mcrawler_url_get_pathname(mcrawler_url_url *url);
 MCRAWLER_EXTERN char *mcrawler_url_get_search(mcrawler_url_url *url);
 MCRAWLER_EXTERN char *mcrawler_url_get_hash(mcrawler_url_url *url);
+
+inline MCRAWLER_EXTERN void
+mcrawler_url_free_url(mcrawler_url_url *url) {
+	free(url->scheme);
+	free(url->username);
+	free(url->password);
+	free(url->query);
+	free(url->fragment);
+	free(url->object);
+	if (url->path) {
+		char *part, **p = url->path;
+		while ((part = *p++)) {
+			free(part);
+		}
+	}
+	free(url->path);
+	free(url->host);
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
