@@ -213,5 +213,4 @@ make check HTTPBIN_URL=http://127.0.0.1:8000
 ## Users
 
  * [Testomato](https://testomato.com) – A simple website monitoring tool
- * [Flowreader](https://flowreader.com/) – A modern reader with a social twist
  * [add me here](mailto:jan.prachar@wikidi.com)
