@@ -152,13 +152,13 @@ Install following dependencies (including header files, i.e. dev packages):
 
 On Linux with apt-get run:
 
-```shell script
+```shell
 apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev
 ```
 
 The GNU Autotools are also needed and the GNU Compiler Collection, they can be installed by:
 
-```shell script
+```shell
 apt-get install make autoconf automake autotools-dev libtool gcc
 ```
 
