@@ -146,15 +146,17 @@ class Url {
 		void append_path0(const char *s) {
 			if (d_path.size() == 0) {
 				d_path.emplace_back(s);
+			} else {
+				d_path[0] += s;
 			}
-			d_path[0] += s;
 		}
 
 		void append_path0(unsigned char c) {
 			if (d_path.size() == 0) {
 				d_path.emplace_back(1, c);
+			} else {
+				d_path[0].append(1, c);
 			}
-			d_path[0].append(1, c);
 		}
 
 		void replace_path(int len) {
@@ -203,15 +205,17 @@ class Url {
 		void append_query(const char *s) {
 			if (d_query == nullptr) {
 				d_query = std::make_unique<std::string>(s);
+			} else {
+				d_query->append(s);
 			}
-			d_query->append(s);
 		}
 
 		void append_query(unsigned char c) {
 			if (d_query == nullptr) {
 				d_query = std::make_unique<std::string>(1, c);
+			} else {
+				d_query->append(1, c);
 			}
-			d_query->append(1, c);
 		}
 
 		void set_fragment(std::string&& frag) {
@@ -229,15 +233,17 @@ class Url {
 		void append_fragment(const char *s) {
 			if (d_fragment == nullptr) {
 				d_fragment = std::make_unique<std::string>(s);
+			} else {
+				d_fragment->append(s);
 			}
-			d_fragment->append(s);
 		}
 
 		void append_fragment(unsigned char c) {
 			if (d_fragment == nullptr) {
 				d_fragment = std::make_unique<std::string>(1, c);
+			} else {
+				d_fragment->append(1, c);
 			}
-			d_fragment->append(1, c);
 		}
 
 		void set_struct(mcrawler_url_url *url) {
