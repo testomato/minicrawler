@@ -162,14 +162,8 @@ The GNU Autotools are also needed and the GNU Compiler Collection, they can be i
 apt-get install make autoconf automake autotools-dev libtool gcc
 ```
 
-Then run:
+First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build docker image
 
-```
-./autogen.sh
-./configure [--without-ssl] [--without-http2]
-make
-sudo make install
-```
 
 ### Link libminicrawler to your project
 
@@ -205,6 +199,25 @@ Then run the following command under `integration-tests` directory
 
 ```shell
 make check HTTPBIN_URL=http://127.0.0.1:8000
+```
+
+## Build with docker
+
+Build minicrawler:
+
+```shell
+docker-compose build minicrawler
+docker-compose run minicrawler
+```
+
+Then run:
+
+```shell
+./autogen.sh
+./configure --prefix=$PREFIX --with-ca-bundle=/var/lib/certs/ca-bundle.crt --with-ca-path=/etc/ssl/certs
+make
+make install
+make check # for tests
 ```
 
 ## Users
