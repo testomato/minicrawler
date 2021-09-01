@@ -197,6 +197,7 @@ static void sec_handshake(mcrawler_url *u) {
 
 	const int t = SSL_connect(u->ssl);
 	if (t == 1) {
+		debugf("[%d] Connection will use %s\n", u->index, SSL_get_version(u->ssl));
 #ifdef HAVE_LIBNGHTTP2
 		// zjistíme aplikační protokol
 		const unsigned char *alpn = NULL;
