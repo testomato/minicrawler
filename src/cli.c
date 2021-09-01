@@ -34,7 +34,7 @@ void printusage()
 #endif
 	         "         -tSECONDS  set timeout (default is 5 seconds)\n"
 	         "         -u STRING  username for HTTP authentication (basic or digest, max 31 bytes)\n"
-	         "         -v         verbose output (to stderr)\n"
+	         "         -v         debug output (to stderr)\n"
 	         "         -w STRING  write this custom header to all requests (max 4095 bytes)\n"
 	         "\n   urloptions:\n"
 	         "         -C STRING  parameter which replaces '%%' in the custom header\n"

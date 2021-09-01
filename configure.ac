@@ -99,6 +99,14 @@ AS_IF([test "x$want_capath" != "xno"],
 			[AC_DEFINE_UNQUOTED([CA_PATH], ["$want_capath"], [Location of default ca path])
 			AC_MSG_RESULT([CA path: $want_capath])])
 
+# debug
+AC_ARG_WITH([debug],
+			[AC_HELP_STRING([--with-debug], [build with support for debug output])],
+			[],
+			[want_debug=no])
+AS_IF([test "x$want_debug" != xno],
+			[AC_DEFINE([HAVE_DEBUG], [1], [Build with debug])])
+
 # Checks for header files.
 AC_CHECK_HEADERS([limits.h sys/types.h sys/select.h])
 ##AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h stddef.h stdlib.h string.h sys/socket.h unistd.h])

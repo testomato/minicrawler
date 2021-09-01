@@ -5,8 +5,12 @@
 #include "config.h"
 #include "struct.h"
 
+#ifdef HAVE_DEBUG
 extern int debug;
 #define debugf(...)   {if(debug) fprintf(stderr, __VA_ARGS__);}
+#else
+#define debugf(...)
+#endif
 
 #define ARRLEN(x) (sizeof(x) / sizeof(x[0]))
 

@@ -45,7 +45,9 @@
 #include "h/string.h"
 #include "h/proto.h"
 
+#ifdef HAVE_DEBUG
 int debug = 0;
+#endif
 
 /**
 Atomic setter for integer. Library c-ares uses threads and it can cause
@@ -701,11 +703,13 @@ static void opensocket(mcrawler_url *u)
 	flags = fcntl(u->sockfd, F_GETFL,0);              // Get socket flags
 	fcntl(u->sockfd, F_SETFL, flags | O_NONBLOCK);   // Add non-blocking flag	
 
+#ifdef HAVE_DEBUG
 	if (debug) {
 		char straddr[INET6_ADDRSTRLEN];
 		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
 		debugf("[%d] connecting to ip: %s; %d, port: %i (socket %d)\n", u->index, straddr, get_time_slot(u->addr->ip), u->port, u->sockfd);
 	}
+#endif
 
 	memset(&addr, 0, sizeof(addr));
 	addr.ss_family = u->addr->type;
@@ -1117,10 +1121,12 @@ static int http2_create_session(mcrawler_url *u) {
 	nghttp2_session_callbacks_set_error_callback(callbacks, http2_on_error_callback);
 #endif
 
+#ifdef HAVE_DEBUG
 	if (debug) {
 		nghttp2_session_callbacks_set_on_frame_send_callback(callbacks, http2_on_frame_send_callback);
 		nghttp2_session_callbacks_set_on_frame_recv_callback(callbacks, http2_on_frame_recv_callback);
 	}
+#endif
 
 	// init session data
 	http2_session_data *session_data = malloc(sizeof(http2_session_data));
@@ -1228,12 +1234,14 @@ static void genrequest_http2(mcrawler_url *u) {
 		parsehead((const unsigned char *)u->customheader, strlen(u->customheader), NULL, http2_custom_header_cb, &hdrs, u->index);
 	}
 
+#ifdef HAVE_DEBUG
 	if (debug) {
 		debugf("[%d] Request headers:\n", u->index);
 		for (size_t i = 0; i < hdrs.len; i++) {
 			debugf("\t%s: %s %zd %zd %ud\n", hdrs.nv[i].name, hdrs.nv[i].value, hdrs.nv[i].namelen, hdrs.nv[i].valuelen, hdrs.nv[i].flags);
 		}
 	}
+#endif
 
 	if (!u->http2_session) {
 		int rv;
@@ -1964,12 +1972,14 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 		u->status = state - stateAfter;
 	}
 
+#ifdef HAVE_DEBUG
 	if (debug) {
 		const int duration = get_time_int() - time;
 		if(duration > 200) {
 			debugf("[%d] State %d (->%d) took too long (%d ms)\n", u->index, state, get_atomic_int(&u->state), duration);
 		}
 	}
+#endif
 }
 
 /** vrati 1 pokud je dobre ukoncit se predcasne
@@ -2044,7 +2054,9 @@ void mcrawler_go(mcrawler_url **urls, const mcrawler_settings *settings, mcrawle
 
 	init_birth();
 
+#ifdef HAVE_DEBUG
 	debug = settings->debug;
+#endif
 
 	debugf("Go: timeout %d; delay %d\n", settings->timeout, settings->delay);
 

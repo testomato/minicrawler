@@ -117,6 +117,7 @@ static void policies_print(X509_STORE_CTX *ctx)
 
 static int verify_callback(int ok, X509_STORE_CTX *ctx)
 {
+#ifdef HAVE_DEBUG
 	if (debug) {
 		X509 *err_cert;
 		int err, depth;
@@ -176,7 +177,7 @@ static int verify_callback(int ok, X509_STORE_CTX *ctx)
 		if (ok)
 			BIO_printf(bio_err, "verify return:%d\n", ok);
 	}
-
+#endif
     return (ok);
 }
 
