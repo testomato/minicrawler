@@ -79,7 +79,7 @@ void main() {
 
 ### Options
 
-```
+```text
    options:
          -2         disable HTTP/2
          -6         resolve host to IPv6 address only
@@ -140,7 +140,7 @@ Minicrawler prepends its own header into the output with the following meaning
  * HTTP2 – [Nghttp2](https://nghttp2.org/)
  * Unicode processing – [ICU](http://site.icu-project.org/)
 
-## Build
+## Build with docker
 
 Tested platforms: Debian Linux, Red Hat Linux, OS X.
 
@@ -151,44 +151,34 @@ Install following dependencies (including header files, i.e. dev packages):
  * OpenSSL (optional)
  * nghttp2 (optional)
 
-On Linux with apt-get run:
 
-```
-apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev
-```
+First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build docker image
 
-The GNU Autotools are also needed and the GNU Compiler Collection, they can be installed by:
-```
-apt-get install make autoconf automake autotools-dev libtool gcc
+```shell
+docker-compose build minicrawler
+docker-compose run minicrawler
 ```
 
-On OS X with [homebrew](http://brew.sh/) run:
+Build minicrawler:
 
-```
-brew install c-ares zlib icu4c openssl nghttp2
-brew link c-ares zlib icu4c openssl nghttp2 --force
-```
-
-Then run:
-
-```
+```shell
 ./autogen.sh
-./configure [--without-ssl] [--without-http2]
+./configure --prefix=$PREFIX --with-ca-bundle=/var/lib/certs/ca-bundle.crt --with-ca-path=/etc/ssl/certs
 make
-sudo make install
+make install
 ```
 
 ### Link libminicrawler to your project
 
 On OS X with homebrew `CFLAGS` and `LDFLAGS` need to contain proper paths. You can assign them directly as the configure script options.
 
-```
+```shell
  ./configure CFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/opt -L/usr/local/lib"
 ```
 
 After installation you can link `libminicrawler` by adding this to your Makefile:
 
-```make
+```shell
 CFLAGS += $(shell pkg-config --cflags libminicrawler-4)
 LDFLAGS += $(shell pkg-config --libs libminicrawler-4)
 ```
@@ -200,17 +190,19 @@ Unit tests are done by simply runnning `make check`. They need php-cli to be ins
 ### Integration Tests
 
 Integration tests require a running instance of [httpbin](https://github.com/Runscope/httpbin). You can use public one like [on nghttp2.org](https://nghttp2.org/httpbin/) or install it locally. For example as a library from PyPI and run it using Gunicorn:
-```
+
+```shell
 pip install httpbin
 gunicorn httpbin:app
 ```
 
 Then run the following command under `integration-tests` directory
-```
+
+```shell
 make check HTTPBIN_URL=http://127.0.0.1:8000
 ```
 
 ## Users
 
  * [Testomato](https://testomato.com) – A simple website monitoring tool
- * [add me here](mailto:jan.prachar@wikidi.com)
+ * [add me here](mailto:jan@prachar.eu)

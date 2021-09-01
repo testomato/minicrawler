@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  minicrawler:
+    tty: true
+    build: etc/minicrawler
+    environment:
+      - "ENVNAME=dev"
+    volumes:
+      - ".:/minicrawler"
