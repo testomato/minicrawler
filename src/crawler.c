@@ -93,6 +93,20 @@ static inline void copy_addr_prev_addr(mcrawler_url *u) {
  * Sets lower TSL/SSL protocol
  */
 static int lower_ssl_protocol(mcrawler_url *u) {
+#ifdef HAVE_DECL_SSL_GET_MAX_PROTO_VERSION
+	int proto_ver = SSL_get_max_proto_version(u->ssl);
+
+	if (proto_ver == SSL3_VERSION) {
+		return -1;
+	}
+
+	if (proto_ver == 0) {
+		proto_ver = TLS_MAX_VERSION;
+	}
+
+	debugf("[%d] Setting maximum supported protocol to version %x\n", u->index, proto_ver-1);
+	u->ssl_options.max_proto = proto_ver - 1;
+#else
 	const long opts = SSL_get_options(u->ssl);
 
 	if (opts & SSL_OP_NO_TLSv1) {
@@ -101,15 +115,16 @@ static int lower_ssl_protocol(mcrawler_url *u) {
 
 	// SSL_CTX_set_min_proto_version since OpenSSL 1.1.0
 	if (opts & SSL_OP_NO_TLSv1_1) {
-		u->ssl_options |= SSL_OP_NO_TLSv1;
+		u->ssl_options.opts |= SSL_OP_NO_TLSv1;
 		debugf("[%d] Switch to SSLv3\n", u->index);
 	} else if (opts & SSL_OP_NO_TLSv1_2) {
-		u->ssl_options |= SSL_OP_NO_TLSv1_1;
+		u->ssl_options.opts |= SSL_OP_NO_TLSv1_1;
 		debugf("[%d] Switch to TLSv1.0\n", u->index);
 	} else {
-		u->ssl_options |= SSL_OP_NO_TLSv1_2;
+		u->ssl_options.opts |= SSL_OP_NO_TLSv1_2;
 		debugf("[%d] Switch to TLSv1.1\n", u->index);
 	}
+#endif
 	return 0;
 }
 
@@ -1507,7 +1522,7 @@ void reset_url(mcrawler_url *u) {
 	u->has_contentlen = 0;
 	u->chunked = 0;
 	u->gzipped = 0;
-	u->ssl_options = 0;
+	u->ssl_options.opts = 0;
 	if (u->contenttype) {
 		free(u->contenttype);
 		u->contenttype = NULL;

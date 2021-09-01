@@ -315,7 +315,11 @@ int create_ssl(mcrawler_url *u) {
 	BIO *sbio = BIO_new_socket(u->sockfd, BIO_NOCLOSE);
 	if (!sbio) return -2;
 	SSL_set_bio(ssl, sbio, sbio);
-	SSL_set_options(ssl, u->ssl_options);
+#ifdef HAVE_DECL_SSL_GET_MAX_PROTO_VERSION
+	SSL_set_max_proto_version(ssl, u->ssl_options.max_proto);
+#else
+	SSL_set_options(ssl, u->ssl_options.opts);
+#endif
 	SSL_set_tlsext_host_name(ssl, u->hostname);
 	SSL_set_app_data(ssl, (char *)u);
 

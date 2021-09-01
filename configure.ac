@@ -62,6 +62,7 @@ AS_IF([test "${with_ssl}" != "no"], [
             LIBS="-lssl $LIBS"
             AC_DEFINE([HAVE_LIBSSL], [1], [Define if you have the ssl library (-lssl).])
             AC_CHECK_FUNCS([SSL_get0_param SSL_CTX_set_alpn_protos])
+            AC_CHECK_DECLS([SSL_get_max_proto_version], [], [], [[#include <openssl/ssl.h>]])
             ],
             AC_MSG_ERROR([please install OpenSSL dev files or use option --without-ssl]))])
 

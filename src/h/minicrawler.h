@@ -182,7 +182,10 @@ struct mcrawler_url {
 
 	// SSL support
 	void *ssl;
-	long ssl_options;
+	union {
+		long opts;
+		int max_proto;
+	} ssl_options;
 	unsigned long ssl_error;
 
 	// HTTP2
