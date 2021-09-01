@@ -21,8 +21,8 @@ if test "${ac_cv_prog_cc_c99}" = "no"; then
 	AC_MSG_ERROR([your compiler does not support ISO Standard C 99])
 fi
 AC_PROG_CXX
-if test "${ac_cv_prog_cxx_cxx17}" = "no"; then
-	AC_MSG_ERROR([your compiler does not support standard C++17])
+if test "${ac_cv_prog_cxx_cxx14}" = "no"; then
+	AC_MSG_ERROR([your compiler does not support standard C++14])
 fi
 AC_PROG_LIBTOOL
 AC_PROG_AWK

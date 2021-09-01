@@ -1,6 +1,6 @@
 ## No default includes
 DEFAULT_INCLUDES = 
-AM_CXXFLAGS = -std=c++17
+AM_CXXFLAGS = -std=c++14
 
 minicrawlerincludedir = $(includedir)/libminicrawler-@MINICRAWLER_API_VERSION@/minicrawler
 minicrawlerinclude_HEADERS = src/url/minicrawler-url.h src/h/minicrawler.h
