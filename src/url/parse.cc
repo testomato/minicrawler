@@ -1281,12 +1281,14 @@ int mcrawler_url_parse2(mcrawler_url_url *u, const char *input_arg, const mcrawl
     if (state_arg != NULL) {
         *state_arg = static_cast<mcrawler_url_parse_state>(state);
     }
+    free(input);
 	return MCRAWLER_URL_SUCCESS;
 
 failed:
     if (state_arg != NULL) {
         *state_arg = static_cast<mcrawler_url_parse_state>(state);
     }
+    free(input);
 	return MCRAWLER_URL_FAILURE;
 }
 
