@@ -32,8 +32,11 @@ char *mcrawler_url_serialize_path_and_query(mcrawler_url_url *url) {
 			pathlen += strlen(part) + 1;
 		}
 	}
-	char *path = malloc(pathlen + (url->query ? strlen(url->query) + 2 : 0) + 1);
+	char *path = malloc(pathlen + (url->query ? strlen(url->query) + 1 : 0) + 1);
+
 	int pathp = 0;
+	path[pathp]  = '\0';
+
 	// If url’s cannot-be-a-base-URL flag is set, append the first string in url’s path to output.
 	if (url->cannot_be_a_base_url) {
 		strcpy(path, url->path[0]);
