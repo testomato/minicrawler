@@ -189,7 +189,9 @@ Unit tests are done by simply runnning `make check`. They need php-cli to be ins
 
 ### Integration Tests
 
-Integration tests require a running instance of [httpbin](https://github.com/Runscope/httpbin). You can use public one like [on nghttp2.org](https://nghttp2.org/httpbin/) or install it locally. For example as a library from PyPI and run it using Gunicorn:
+Integration tests require a running instance of [httpbin](https://github.com/Runscope/httpbin).
+You can use public one like [on nghttp2.org](https://nghttp2.org/httpbin/) or install it locally
+For example as a library from PyPI and run it using Gunicorn:
 
 ```shell
 pip install httpbin
