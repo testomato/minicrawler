@@ -29,15 +29,26 @@ int main(int argc, char *argv[]) {
 		base_url = (mcrawler_url_url *)malloc(sizeof(mcrawler_url_url));
 		if (mcrawler_url_parse(base_url, base, NULL) == MCRAWLER_URL_FAILURE) {
 			printf("{\"input\": %s, \"base\": %s, \"failure\": true}", encode(input), encode(base));
+			mcrawler_url_free_url(base_url);
+			free(base_url);
 			exit(0);
 		}
 	} else {
-		base = strdup("");
+		base = "";
 	}
 
 	if (mcrawler_url_parse(&url, input, base_url) == MCRAWLER_URL_FAILURE) {
 		printf("{\"input\": %s, \"base\": %s, \"failure\": true}", encode(input), encode(base));
+		if (base_url) {
+			mcrawler_url_free_url(base_url);
+			free(base_url);
+		}
 		exit(0);
+	}
+
+	if (base_url) {
+		mcrawler_url_free_url(base_url);
+		free(base_url);
 	}
 
 	char *href = mcrawler_url_get_href(&url);
@@ -53,6 +64,18 @@ int main(int argc, char *argv[]) {
 
 	printf("{\"input\": %s, \"base\": %s, \"href\": %s, \"protocol\": %s, \"username\": %s, \"password\": %s, \"host\": %s, \"hostname\": %s, \"port\": %s, \"pathname\": %s, \"search\": %s, \"hash\": %s}", encode(input), encode(base), encode(href), encode(protocol), encode(username), encode(password), encode(host), encode(hostname), encode(port), encode(pathname), encode(search), encode(hash));
 
+	free(href);
+	free(protocol);
+	free(username);
+	free(password);
+	free(hostname);
+	free(host);
+	free(port);
+	free(pathname);
+	free(search);
+	free(hash);
+
+	mcrawler_url_free_url(&url);
  
 	exit(0);
 }
