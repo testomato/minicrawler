@@ -109,7 +109,7 @@ MCRAWLER_EXTERN char *mcrawler_url_get_pathname(mcrawler_url_url *url);
 MCRAWLER_EXTERN char *mcrawler_url_get_search(mcrawler_url_url *url);
 MCRAWLER_EXTERN char *mcrawler_url_get_hash(mcrawler_url_url *url);
 
-inline MCRAWLER_EXTERN void
+static inline void
 mcrawler_url_free_url(mcrawler_url_url *url) {
 	free(url->scheme);
 	free(url->username);
