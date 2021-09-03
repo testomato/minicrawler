@@ -12,7 +12,11 @@
 #include "minicrawler-url.h"
 #include "url.hh"
 
+#ifdef HAVE_DEBUG
 #define debugf(...)   {fprintf(stderr, __VA_ARGS__);}
+#else
+#define debugf(...)
+#endif
 
 // shorthand name for MCRAWLER_URL_STATE_*
 enum {
