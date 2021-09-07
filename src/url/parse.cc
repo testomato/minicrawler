@@ -566,6 +566,8 @@ int mcrawler_url_parse_host(mcrawler_url_host* host, const char *input) {
 
 int mcrawler_url_parse2(mcrawler_url_url *u, const char *input_arg, const mcrawler_url_url *base, mcrawler_url_parse_state *state_arg)
 {
+	memset(u, 0, sizeof(*u));
+
 	if (!input_arg) {
 		return MCRAWLER_URL_FAILURE;
 	}

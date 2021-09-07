@@ -487,7 +487,7 @@ static int check_proto(mcrawler_url *u);
  * rawurl musí obsahovat scheme a authority!
  */
 static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_url_url *base) {
-	mcrawler_url_url *url = (mcrawler_url_url *)malloc(sizeof(mcrawler_url_url));
+	mcrawler_url_url *url = (mcrawler_url_url *)calloc(1, sizeof(mcrawler_url_url));
 
 	if (mcrawler_url_parse(url, rawurl, base) != MCRAWLER_URL_SUCCESS) {
 		debugf("[%d] error: url='%s' failed to parse\n", u->index, rawurl);

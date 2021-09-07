@@ -247,8 +247,6 @@ class Url {
 		}
 
 		void set_struct(mcrawler_url_url *url) {
-			memset(url, 0, sizeof(mcrawler_url_url));
-
 			url->scheme = strdup(d_scheme.c_str());
 			url->username = strdup(d_username.c_str());
 			if (d_password != nullptr) {
