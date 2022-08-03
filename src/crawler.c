@@ -1465,15 +1465,21 @@ ssize_t plain_write(const mcrawler_url *u, const unsigned char *buf, const size_
 static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callback_arg) {
 
 	if (u->gzipped) {
+		char *errmsg = NULL;
 		unsigned char *buf;
 		size_t len, resp_len = buf_len(u) - u->headlen;
 		int ret;
 
 		buf_get(u, 9*resp_len, &buf, &len); // 9times -> approx size after ungzip
-		ret = gunzip(buf_p(u) + u->headlen, resp_len, buf, &len);
+		ret = gunzip(buf_p(u) + u->headlen, resp_len, buf, &len, &errmsg);
 		debugf("[%d] gzip decompress status: %d (input length: %zd, output length: %zd)\n", u->index, ret, resp_len, len);
 		if (ret != 0) {
-			sprintf(u->error_msg, "Gzip decompression error %d", ret);
+			if (errmsg != NULL) {
+				sprintf(u->error_msg, "Gzip decompression error: %.200s", errmsg);
+				free(errmsg);
+			} else {
+				sprintf(u->error_msg, "Gzip decompression error (%d)", ret);
+			}
 			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
 		} else {
 			memmove(buf_p(u) + u->headlen, buf, len);

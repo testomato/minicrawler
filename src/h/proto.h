@@ -45,7 +45,7 @@ char *consume_entity(char *s, const char *end, int *code);
 char *put_code(char *dst, const unsigned dst_len, const int code);
 
 // inflate.c
-int gunzip(unsigned char *in, size_t inlen, unsigned char *out, size_t *outlen);
+int gunzip(unsigned char *in, size_t inlen, unsigned char *out, size_t *outlen, char **errmsg);
 
 // malloc.c
 void *rpl_malloc(size_t n);
