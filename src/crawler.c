@@ -1467,7 +1467,7 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 	if (u->gzipped) {
 		char *errmsg = NULL;
 		unsigned char *buf;
-		size_t len, resp_len = buf_len(u) - u->headlen;
+		size_t len = 0, resp_len = buf_len(u) - u->headlen;
 		int ret;
 
 		buf_get(u, 9*resp_len, &buf, &len); // 9times -> approx size after ungzip
@@ -1481,10 +1481,11 @@ static void finish(mcrawler_url *u, mcrawler_url_callback callback, void *callba
 				sprintf(u->error_msg, "Gzip decompression error (%d)", ret);
 			}
 			u->status = MCURL_S_DOWNLOADED - MCURL_S_ERROR;
-		} else {
-			memmove(buf_p(u) + u->headlen, buf, len);
-			buf_set_len(u, u->headlen + len);
 		}
+		if (len > 0) {
+			memmove(buf_p(u) + u->headlen, buf, len);
+		}
+		buf_set_len(u, u->headlen + len);
 	}
 
 	if (u->options & 1<<MCURL_OPT_CONVERT_TO_UTF8) {
