@@ -95,7 +95,7 @@ static inline void copy_addr_prev_addr(mcrawler_url *u) {
  * Sets lower TSL/SSL protocol
  */
 static int lower_ssl_protocol(mcrawler_url *u) {
-#ifdef HAVE_DECL_SSL_GET_MAX_PROTO_VERSION
+#if (HAVE_DECL_SSL_GET_MAX_PROTO_VERSION)
 	int proto_ver = SSL_get_max_proto_version(u->ssl);
 
 	if (proto_ver == SSL3_VERSION) {
