@@ -7,7 +7,6 @@ enum {
 	DEFAULT_TIMEOUT = 5,
 	DEFAULT_DELAY = 100,
 	MAX_REDIRECTS = 21,
-	DEFAULT_MAX_PAGE_SIZE = 2*1024*1024UL, // 2 MiB
 };
 // 2 MiB is enough for 99.9% requests, 10 MiB for 99.99%, see https://bigquery.cloud.google.com/results/www-testomato-com:bquijob_78729d01_157d7e26b6c
 

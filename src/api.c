@@ -15,7 +15,7 @@ void mcrawler_init_settings(mcrawler_settings *settings) {
 void mcrawler_init_url(mcrawler_url *u, const char *url) {
 	u->state = MCURL_S_JUSTBORN;
 	u->redirect_limit = MAX_REDIRECTS;
-	u->maxpagesize = DEFAULT_MAX_PAGE_SIZE;
+	u->maxpagesize = 0;
 	if (url && strlen(url) > MAXURLSIZE) {
 		*(char*)mempcpy(u->rawurl, url, MAXURLSIZE) = 0;
 		sprintf(u->error_msg, "URL is too long");
