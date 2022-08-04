@@ -2,61 +2,113 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <errno.h>
 
-int gunzip(unsigned char *in, size_t inlen, unsigned char *out, size_t *outlen, char **errmsg) {
-	int ret;
-	z_stream strm;
+#include "h/config.h"
+#include "h/proto.h"
 
-	strm.zalloc = Z_NULL;
-	strm.zfree = Z_NULL;
-	strm.opaque = Z_NULL;
-	strm.avail_in = 0;
-	strm.next_in = Z_NULL;
+#define ERR_PREFIX "Gzip decompression error: "
 
-	ret = inflateInit2(&strm, 16 + MAX_WBITS);
-	if (ret != Z_OK) {
-		return ret;
-	}
+int gunzip_buf(mcrawler_url *u) {
+    int             rc;
+    size_t          len, resp_len, consumed, produced;
+    z_stream        strm;
+    unsigned char  *buf, *body_start, *prev_buf;
 
-	strm.avail_in = inlen;
-	strm.next_in = in;
-	strm.avail_out = *outlen;
-	strm.next_out = out;
+    resp_len = buf_len(u) - u->headlen;
+    consumed = 0;
+    produced = 0;
 
-	ret = inflate(&strm, Z_FINISH);
-	switch (ret) {
-		case Z_STREAM_END:
-			ret = 0;
-			break;
-		case Z_NEED_DICT:
-			*errmsg = strdup("a preset dictionary is needed for decompression");
-			ret = Z_DATA_ERROR;
-			break;
-		case Z_ERRNO:
-			*errmsg = strdup(strerror(errno));
-			break;
-		case Z_STREAM_ERROR: // -2
-			// stream structure was inconsistent (for example next_in or
-			// next_out was Z_NULL, or the state was inadvertently written over
-			// by the application)
-			break;
-		case Z_DATA_ERROR:
-			*errmsg = malloc(sizeof("currupted response ()")+strlen(strm.msg));
-			sprintf(*errmsg, "currupted response (%s)", strm.msg);
-			break;
-		case Z_MEM_ERROR:
-			*errmsg = strdup("out of memory");
-			break;
-		case Z_BUF_ERROR:
-			// there was not enough room in the output buffer
-			ret = 0;
-			break;
-		case Z_VERSION_ERROR: // -6
-			break;
-	}
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+    strm.avail_in = resp_len;
+    strm.next_in = Z_NULL;
 
-	(void)inflateEnd(&strm);
-	*outlen = strm.total_out;
-	return ret;
+    rc = inflateInit2(&strm, 16 + MAX_WBITS); // we support only gzip
+    if (rc != Z_OK) {
+        return rc;
+    }
+
+    buf_get(u, 9*resp_len, &buf, &len); // 9times -> approx size after ungzip
+
+    while (1) {
+        body_start = buf_p(u) + u->headlen;
+
+        strm.next_in = body_start;
+        strm.avail_out = len - produced;
+        strm.next_out = buf + produced;
+
+        rc = inflate(&strm, Z_FINISH);
+        switch (rc) {
+            case Z_OK:
+            case Z_STREAM_END:
+                rc = 0;
+                goto done;
+                break;
+            case Z_NEED_DICT:
+                strcpy(u->error_msg,
+                       ERR_PREFIX "a preset dictionary is needed for decompression");
+                goto done;
+                break;
+            case Z_ERRNO:
+                sprintf(u->error_msg, ERR_PREFIX "%.200m");
+                goto done;
+                break;
+            case Z_DATA_ERROR:
+                sprintf(u->error_msg, ERR_PREFIX "currupted response (%.200s)", strm.msg);
+                goto done;
+                break;
+            case Z_MEM_ERROR:
+                strcpy(u->error_msg, ERR_PREFIX "out of memory");
+                goto done;
+                break;
+            case Z_STREAM_ERROR: // -2
+                // stream structure was inconsistent (for example next_in or
+                // next_out was Z_NULL, or the state was inadvertently written over
+                // by the application)
+            case Z_VERSION_ERROR: // -6
+                sprintf(u->error_msg, ERR_PREFIX "%d", rc);
+                goto done;
+                break;
+            case Z_BUF_ERROR:
+                if (strm.avail_out > 0) {
+                    debugf("[%d] gzip decompress: no progress possible (avail_in=%ld, avail_out=%ld)\n", u->index, strm.avail_in, strm.avail_out);
+                    rc = 0;
+                    goto done;
+                }
+
+                // there was not enough room in the output buffer
+                consumed = strm.next_in - body_start;
+                produced = strm.next_out - buf;
+
+                if (consumed == 0) {
+                    debugf("[%d] gzip decompress: run out of output space\n", u->index);
+                    rc = 0;
+                    goto done;
+                }
+
+                memmove(body_start, strm.next_in, strm.avail_in);
+                buf_set_len(u, buf_len(u) - consumed);
+                prev_buf = buf;
+                buf_get(u, 2*len, &buf, &len);
+                memmove(buf, prev_buf, produced);
+
+                break;
+        }
+    }
+
+done:
+
+    (void)inflateEnd(&strm);
+
+    len = strm.total_out;
+    if (len > 0) {
+        memmove(buf_p(u) + u->headlen, buf, len);
+    }
+    buf_set_len(u, u->headlen + len);
+
+    debugf("[%d] gzip decompress status: %d (input length: %zd, output length: %zd)\n",
+           u->index, rc, resp_len, len);
+
+    return rc;
 }
