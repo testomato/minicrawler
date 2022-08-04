@@ -26,6 +26,18 @@ int gunzip_buf(mcrawler_url *u) {
 
     rc = inflateInit2(&strm, 16 + MAX_WBITS); // we support only gzip
     if (rc != Z_OK) {
+        switch (rc) {
+            case Z_MEM_ERROR:
+                strcpy(u->error_msg, ERR_PREFIX "out of memory in init");
+                break;
+            case Z_VERSION_ERROR:
+                sprintf(u->error_msg, ERR_PREFIX "incompatible zlib version", rc);
+                break;
+            case Z_STREAM_ERROR: // -2
+                // parameters are invalid, such as a null pointer to the
+                // structure. msg is set to null if there is no error message.
+                sprintf(u->error_msg, ERR_PREFIX "in init (%d)", rc);
+        }
         return rc;
     }
 
