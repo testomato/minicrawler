@@ -155,9 +155,13 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 /**
  * Formats timing data for output
  */
-static int format_timing(char *dest, mcrawler_timing *timing, int state) {
+static int format_timing(char *dest, mcrawler_timing *timing, int state, int start) {
 	int n, len = 0;
 	const int now = timing->done;
+	if (start) {
+		n = sprintf(dest+len, "Redirect=%d ms; ", (timing->dnsstart ? timing->dnsstart : timing->connectionstart ? timing->connectionstart : timing->requeststart) - start);
+		if (n > 0) len += n;
+	}
 	if (timing->dnsstart) {
 		n = sprintf(dest+len, "DNS Lookup=%d ms; ", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
 		if (n > 0) len += n;
@@ -182,8 +186,12 @@ static int format_timing(char *dest, mcrawler_timing *timing, int state) {
 		n = sprintf(dest+len, "Content download=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - timing->firstbyte);
 		if (n > 0) len += n;
 	}
-	if (timing->connectionstart) {
-		n = sprintf(dest+len, "Total=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - timing->connectionstart);
+	if (start || timing->connectionstart || timing->requeststart) {
+		// after redirect only requeststart is available
+		if (!start) {
+			start = timing->connectionstart ? timing->connectionstart : timing->requeststart;
+		}
+		n = sprintf(dest+len, "Total=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - start);
 		if (n > 0) len += n;
 	}
 	return len;
@@ -209,7 +217,7 @@ void output(mcrawler_url *u, void *arg) {
 	for (mcrawler_redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
 		n = sprintf(h+hlen, "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
 		if (n > 0) hlen += n;
-		hlen += format_timing(h+hlen, &rinfo->timing, MCURL_S_DOWNLOADED);
+		hlen += format_timing(h+hlen, &rinfo->timing, MCURL_S_DOWNLOADED, 0);
 	}
 	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %zd\n", u->status, http_body_len);
 	if (n > 0) hlen += n;
@@ -293,7 +301,7 @@ void output(mcrawler_url *u, void *arg) {
 	}
 	n = sprintf(h+hlen, "\nTiming: ");
 	if (n > 0) hlen += n;
-	hlen += format_timing(h+hlen, &u->timing, url_state);
+	hlen += format_timing(h+hlen, &u->timing, url_state, u->downstart);
 	n = sprintf(h+hlen, "\nIndex: %d\n\n", u->index);
 	if (n > 0) hlen += n;
 
