@@ -1929,11 +1929,11 @@ static void goone(mcrawler_url *u, const mcrawler_settings *settings, mcrawler_u
 
 	case MCURL_S_GENREQUEST:
 		prepare_for_request(u);
+		if (!u->timing.requeststart) u->timing.requeststart = time;
 		f->gen_request(u);
 		break;
 
 	case MCURL_S_SENDREQUEST:
-		if (!u->timing.requeststart) u->timing.requeststart = time;
 		f->send_request(u);
 		break;
 
