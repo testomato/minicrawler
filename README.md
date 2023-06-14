@@ -162,9 +162,6 @@ The GNU Autotools are also needed and the GNU Compiler Collection, they can be i
 apt-get install make autoconf automake autotools-dev libtool gcc
 ```
 
-First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build docker image
-
-
 ### Link libminicrawler to your project
 
 On OS X with homebrew `CFLAGS` and `LDFLAGS` need to contain proper paths. You can assign them directly as the configure script options.
@@ -203,7 +200,7 @@ make check HTTPBIN_URL=http://127.0.0.1:8000
 
 ## Build with docker
 
-Build minicrawler:
+First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build docker image
 
 ```shell
 docker-compose build minicrawler

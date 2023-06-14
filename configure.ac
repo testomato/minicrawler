@@ -46,7 +46,12 @@ AC_CHECK_LIB([icuuc], [uidna_nameToASCII_52], [],
     AC_CHECK_LIB([icuuc], [uidna_nameToASCII_64], [],
     AC_CHECK_LIB([icuuc], [uidna_nameToASCII_65], [],
     AC_CHECK_LIB([icuuc], [uidna_nameToASCII_66], [],
-        AC_CHECK_LIB([icuuc], [uidna_nameToASCII_67], [], AC_MSG_WARN([libicu not found: non-ascii domain names won't be supported!])))))))))))))))))
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_67], [],
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_68], [],
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_69], [],
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_70], [],
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_71], [],
+        AC_CHECK_LIB([icuuc], [uidna_nameToASCII_72], [], AC_MSG_WARN([libicu not found: non-ascii domain names won't be supported!]))))))))))))))))))))))
 AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv dev files]))
 
 AC_ARG_WITH([ssl],
