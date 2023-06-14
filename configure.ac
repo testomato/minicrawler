@@ -29,30 +29,10 @@ AC_PROG_AWK
 
 # Checks for libraries.
 AC_CHECK_LIB([dl], [dlopen])
-AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([please install c-ares dev files]))
-AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([please install zlib dev files]))
-AC_CHECK_LIB([icuuc], [uidna_nameToASCII_52], [],
-	AC_CHECK_LIB([icuuc], [uidna_nameToASCII_53], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_54], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_55], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_56], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_57], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_58], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_59], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_60], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_61], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_62], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_63], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_64], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_65], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_66], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_67], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_68], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_69], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_70], [],
-    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_71], [],
-        AC_CHECK_LIB([icuuc], [uidna_nameToASCII_72], [], AC_MSG_WARN([libicu not found: non-ascii domain names won't be supported!]))))))))))))))))))))))
-AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([please install iconv dev files]))
+AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([Unable to find c-ares dev files! apt install libcares-dev]))
+AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([Unable to find zlib dev files! apt install zlib1g-dev]))
+AC_CHECK_LIB([icuuc], [main], , AC_MSG_ERROR([Unable to find libicuuc library! apt install libicu-dev]))
+AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([Unable to find iconv dev files! apt install libiconv-dev]))
 
 AC_ARG_WITH([ssl],
 			[AS_HELP_STRING([--without-ssl], [disable support for https])],

@@ -139,7 +139,7 @@ Minicrawler prepends its own header into the output with the following meaning
  * HTTP2 – [Nghttp2](https://nghttp2.org/)
  * Unicode processing – [ICU](http://site.icu-project.org/)
 
-## Build
+## Build on Linux
 
 Tested platforms: Debian Linux, Red Hat Linux, OS X.
 
@@ -153,13 +153,13 @@ Install following dependencies (including header files, i.e. dev packages):
 On Linux with apt-get run:
 
 ```shell
-apt-get install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev
+apt install libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev
 ```
 
 The GNU Autotools are also needed and the GNU Compiler Collection, they can be installed by:
 
 ```shell
-apt-get install make autoconf automake autotools-dev libtool gcc
+apt install make autoconf automake autotools-dev libtool gcc
 ```
 
 ### Link libminicrawler to your project
@@ -203,8 +203,9 @@ make check HTTPBIN_URL=http://127.0.0.1:8000
 First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build docker image
 
 ```shell
-docker-compose build minicrawler
-docker-compose run minicrawler
+docker compose build minicrawler
+docker compose run minicrawler
+docker compose exec minicrawler bash # to get shell
 ```
 
 Then run:
