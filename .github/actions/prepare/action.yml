@@ -1,0 +1,24 @@
+name: Prepare Minicrawler
+
+runs:
+  using: composite
+  steps:
+    - name: Install environment
+      shell: bash
+      run: |
+        sudo apt update -y
+        sudo apt install -y make autoconf automake autotools-dev libtool gcc curl
+    - name: Install minicrawler dependencies
+      shell: bash
+      run: |
+        sudo apt update -y
+        sudo apt install -y libc-ares-dev zlib1g-dev libicu-dev libssl-dev libnghttp2-dev
+    - name: ca-certificates
+      shell: bash
+      run: |
+        sudo apt update -y
+        sudo apt install -y ca-certificates
+        sudo mkdir -p /var/lib/certs
+        curl -s -f -L https://curl.se/ca/cacert.pem -o ca-bundle.crt
+        cat /etc/ssl/certs/ca-certificates.crt >> ca-bundle.crt
+        cp -v ca-bundle.crt /var/lib/certs/ca-bundle.crt

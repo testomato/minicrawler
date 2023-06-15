@@ -1,0 +1,14 @@
+name: Build Minicrawler
+
+runs:
+  using: composite
+  steps:
+    - name: autogen
+      run: ./autogen.sh
+      shell: bash
+    - name: configure
+      run: ./configure --prefix=$PREFIX --with-ca-bundle=/var/lib/certs/ca-bundle.crt --with-ca-path=/etc/ssl/certs
+      shell: bash
+    - name: make
+      run: make
+      shell: bash
