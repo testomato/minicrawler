@@ -1,6 +1,6 @@
 <?php
-$tests = [
-	1 => function () {
+return [
+	function () {
 		$userAgent = 'duck & dog';
 		check_result_for_path(
 			'/user-agent', ['-A' => $userAgent],
@@ -11,7 +11,7 @@ $tests = [
 			]
 		);
 	},
-	2 => function () {
+	function () {
 		check_result_for_path(
 			'/headers', ['-w' => 'X-Duck: Dog'],
 			[
@@ -24,7 +24,7 @@ $tests = [
 			]
 		);
 	},
-	3 => function () {
+	function () {
 		check_result_for_path(
 			'/post', ['-P' => 'duck=dog'],
 			[
@@ -34,7 +34,7 @@ $tests = [
 			]
 		);
 	},
-	4 => function () {
+	function () {
 		check_result_for_path(
 			'/delete', ['-X DELETE', '-P' => 'duck=dog'],
 			[
@@ -44,7 +44,7 @@ $tests = [
 			]
 		);
 	},
-	5 => function () {
+	function () {
 		check_result_for_path(
 			'/gzip', ['-g'],
 			[
@@ -54,7 +54,7 @@ $tests = [
 			]
 		);
 	},
-	6 => function () {
+	function () {
 		check_result_for_path(
 			'/status/418', [],
 			[
@@ -64,7 +64,7 @@ $tests = [
 			]
 		);
 	},
-	7 => function () {
+	function () {
 		check_result_for_path(
 			'/redirect/9', ['-t30'],
 			[
@@ -74,7 +74,7 @@ $tests = [
 			]
 		);
 	},
-	8 => function () {
+	function () {
 		check_result_for_path(
 			'/absolute-redirect/9', ['-t30'],
 			[
@@ -84,7 +84,7 @@ $tests = [
 			]
 		);
 	},
-	9 => function () {
+	function () {
 		check_result_for_path(
 			'/cookies', ['-b' => host() . "\t0\t/\t0\t9999999999\tduck\tdog\n"],
 			[
@@ -94,7 +94,7 @@ $tests = [
 			]
 		);
 	},
-	10 => function () {
+	function () {
 		check_result_for_path(
 			'/cookies/set?duck=dog', [],
 			[
@@ -104,7 +104,7 @@ $tests = [
 			]
 		);
 	},
-	11 => function () {
+	function () {
 		check_result_for_path(
 			'/basic-auth/duck/dog', ['-u' => 'duck', '-pdog'],
 			[
@@ -117,7 +117,7 @@ $tests = [
 			]
 		);
 	},
-	12 => function () {
+	function () {
 		check_result_for_path(
 			'/digest-auth/auth/duck/dog', ['-u' => 'duck', '-pdog'],
 			[

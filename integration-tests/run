@@ -1,40 +1,100 @@
 #!/usr/bin/php
 <?php
 $errors = [];
+
+/**
+ * Default error handler
+ * @param $errno
+ * @param $errstr
+ * @param $errfile
+ * @param $errline
+ * @return bool
+ */
+function errorHandler($errno, $errstr, $errfile, $errline): bool {
+	global $errors;
+	$errors[] = [$errno, $errstr, $errfile, $errline];
+	return true;
+}
+
 set_error_handler('errorHandler');
 
-include __DIR__ . '/test_cases.php';
+/**
+ * Load test cases the array of closures
+ */
+$tests = require_once __DIR__ . '/test_cases.php';
+/** @var array $tests */
 
 echo '1..' . count($tests) . "\n";
-foreach ($tests as $i => $case) {
+
+foreach ($tests as $test) {
 	try {
-		$case();
-		echo "ok $i\n";
-	} catch (\TestFailedException $e) {
-		echo "not ok $i {$e->getMessage()}\n";
+		call_user_func($test);
+		echo "ok" . PHP_EOL;
+	} catch (Exception|\TestFailedException $e) {
+		$source = source($test);
+		echo "not ok {$e->getMessage()}\n" . $source;
 	}
 }
 
-function host() {
-	global $argv;
-	return isset($argv[1]) ? parse_url($argv[1], PHP_URL_HOST) : 
-		getenv('HTTPBIN_URL') ? parse_url(getenv('HTTPBIN_URL'), PHP_URL_HOST) : '127.0.0.1';
+/**
+ * Return source code of a closure
+ */
+function source(Closure $test): string {
+	try {
+		$f = new ReflectionFunction($test);
+		$lines = file($f->getFileName());
+		$from = $f->getStartLine() - 1;
+		$to = $f->getEndLine();
+		return PHP_EOL . implode('', array_slice($lines, $from, $to - $from)) . PHP_EOL;
+	} catch (ReflectionException $e) {
+		return '';
+	}
+
 }
 
-function url($path) {
+/**
+ * Return host file
+ * @return string
+ */
+function host(): string {
 	global $argv;
-	return rtrim(isset($argv[1]) ? $argv[1] : getenv('HTTPBIN_URL') ?: 'http://127.0.0.1:8000', '/') . $path;
+	if (isset($argv[1])) {
+		return parse_url($argv[1], PHP_URL_HOST);
+	} else {
+		return getenv('HTTPBIN_URL') ? parse_url(getenv('HTTPBIN_URL'), PHP_URL_HOST) : '127.0.0.1';
+	}
 }
 
-function check_result_for_path($path, array $args, array $checks) {
+/**
+ * @param string $path
+ * @return string
+ */
+function url(string $path): string {
+	global $argv;
+	if (isset($argv[1])) {
+		return rtrim($argv[1], '/') . $path;
+	} else {
+		return rtrim(getenv('HTTPBIN_URL') ?: 'http://127.0.0.1:80', '/') . $path;
+	}
+}
+
+/**
+ * @throws TestFailedException
+ */
+function check_result_for_path($path, array $args, array $checks): void {
 	$argsString = '';
-	foreach ($args as $flag=>$arg) $argsString .= ' ' . (is_string($flag) ? $flag . ' ' . escapeshellarg($arg) : $arg);
+
+	foreach ($args as $flag => $arg) {
+		$argsString .= ' ' . (is_string($flag) ? $flag . ' ' . escapeshellarg($arg) : $arg);
+	}
 	$cli = __DIR__ . "/../minicrawler5 $argsString  " . escapeshellarg(url($path));
+
 	$result = shell_exec($cli);
 	$lines = explode("\n", $result);
 	$headers = [];
 	$cookies = [];
 	$body = '';
+
 	while ($line = array_shift($lines)) {
 		if ($line === '') break;
 		$p = strpos($line, ':');
@@ -54,12 +114,14 @@ function check_result_for_path($path, array $args, array $checks) {
 			$headers[$key] = $val;
 		}
 	}
+
 	$headers['Cookies'] = $cookies;
 	$body = implode("\n", $lines);
 	$result = json_decode($body, true);
 	if (!$result) {
 		$result = $body;
 	}
+
 	foreach ($checks as $check) {
 		list($expected, $actual, $msg) = $check($result, $headers);
 		if ($expected !== $actual) {
@@ -78,18 +140,21 @@ function check_result_for_path($path, array $args, array $checks) {
 			throw new TestFailedException($msg);
 		}
 	}
+
 	if ($msg = getErrors()) throw new TestFailedException(implode("\n    ", $msg));
 }
 
-class TestFailedException extends Exception {}
-
-function errorHandler($errno, $errstr, $errfile, $errline) {
-	global $errors;
-	$errors[] = [$errno, $errstr, $errfile, $errline];
-	return true;
+/**
+ * @throws TestFailedException
+ */
+class TestFailedException extends Exception {
 }
 
-function getErrors() {
+
+/**
+ * @return array
+ */
+function getErrors(): array {
 	global $errors;
 	$msg = [];
 	while (($err = array_shift($errors))) {
