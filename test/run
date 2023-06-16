@@ -2,14 +2,16 @@
 <?php
 $data = file_get_contents(__DIR__ . '/urltestdata.json');
 $data = json_decode($data, true);
-$data = array_values(array_filter($data, function ($a) {return is_array($a);}));
+$data = array_values((array)array_filter($data, function ($a) {
+	return is_array($a);
+}));
 echo '1..' . count($data) . "\n";
 foreach ($data as $i => $case) {
-	$result = shell_exec( __DIR__ . '/url ' . escapeshellarg($case['input']) . ($case['base'] ? ' ' .escapeshellarg($case['base']) : '') . ' 2> /dev/null');
+	$result = shell_exec(__DIR__ . '/url ' . escapeshellarg($case['input']) . ($case['base'] ? ' ' . escapeshellarg($case['base']) : '') . ' 2> /dev/null');
 	$result = json_decode($result, true);
 	unset($case['origin']);
 	if ($result == $case) {
-		echo 'ok ' . ($i+1) . "\n";
+		echo 'ok ' . ($i + 1) . "\n";
 	} else {
 		foreach ([&$result, &$case] as &$arr) {
 			if (!is_array($arr)) {
@@ -21,6 +23,6 @@ foreach ($data as $i => $case) {
 				$arr = trim(preg_replace('/^Array\s*\((.*)\)\s*$/s', '\1', print_r($arr, true)));
 			}
 		}
-		echo 'not ok ' . ($i+1) . "\n    " . $result . "\n does not match\n    " . $case  . "\n";
+		echo 'not ok ' . ($i + 1) . "\n    " . $result . "\n does not match\n    " . $case . "\n";
 	}
 }
