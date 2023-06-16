@@ -1,10 +1,14 @@
 # Minicrawler
 
-Minicrawler parses URLs, executes HTTP (HTTP/2) requests while handling cookies, network connection management and SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and more. It is designed to handle *many* request in parallel in a *single thread*. It multiplexes connections, running the read/write communication asynchronously. The whole Minicrawler suite is licensed under the [AGPL license](license.txt).
+Minicrawler parses URLs, executes HTTP (HTTP/2) requests while handling cookies, network connection management and
+SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and
+more. It is designed to handle *many* request in parallel in a *single thread*. It multiplexes connections, running the
+read/write communication asynchronously. The whole Minicrawler suite is licensed under the [AGPL license](license.txt).
 
 ## URL Library (libminicrawler-url)
 
-[WHATWG URL Standard](https://url.spec.whatwg.org/) compliant parsing and serializing library written in C. It is fast and has only one external dependency – libicu.
+[WHATWG URL Standard](https://url.spec.whatwg.org/) compliant parsing and serializing library written in C. It is fast
+and has only one external dependency – libicu.
 The library is licensed under the [AGPL license](license.txt).
 
 ### Usage
@@ -45,7 +49,6 @@ int main(int argc, char *argv[]) {
 ```
 
 More in [test/url.c](test/url.c).
-
 
 ## Minicrawler Library (libminicrawler) Usage
 
@@ -110,45 +113,48 @@ void main() {
 
 Minicrawler prepends its own header into the output with the following meaning
 
- * **URL**: Requested URL
- * **Redirected-To**: Final absolute URL
- * **Redirect-info**: Info about each redirect
- * **Status**: HTTP Status of final response (negative in case of error)
-   * `-10` Invalid input
-   * `-9`, `-8` DNS error
-   * `-7`, `-6` Connection error
-   * `-5` SSL/TLS error
-   * `-4`, `-3` Error during sending a HTTP request
-   * `-2` Error during receiving a HTTP response
-   * `-1` Decoding or converting error
- * **Content-length**: Length of the downloaded content in bytes
- * **Timeout**: Reason of timeout in case of timeout
- * **Error-msg**: Error message in case of error (negative Status)
- * **Content-type**: Correct content type of outputed content
- * **WWW-Authenticate**: WWW-Authenticate header
- * **Cookies**: Number of cookies followed by that number of lines of parsed cookies in [Netscape/Mozilla file format](http://www.cookiecentral.com/faq/#3.5)
- * **Downtime**: Length of an interval between time of the first connection and time of the last received byte; time of the start of the first connection
- * **Timing**: Timing of request (DNS lookup, Initial connection, SSL, Request, Waiting, Content download, Total)
- * **Index**: Index of URL from command line
+* **URL**: Requested URL
+* **Redirected-To**: Final absolute URL
+* **Redirect-info**: Info about each redirect
+* **Status**: HTTP Status of final response (negative in case of error)
+    * `-10` Invalid input
+    * `-9`, `-8` DNS error
+    * `-7`, `-6` Connection error
+    * `-5` SSL/TLS error
+    * `-4`, `-3` Error during sending a HTTP request
+    * `-2` Error during receiving a HTTP response
+    * `-1` Decoding or converting error
+* **Content-length**: Length of the downloaded content in bytes
+* **Timeout**: Reason of timeout in case of timeout
+* **Error-msg**: Error message in case of error (negative Status)
+* **Content-type**: Correct content type of outputed content
+* **WWW-Authenticate**: WWW-Authenticate header
+* **Cookies**: Number of cookies followed by that number of lines of parsed cookies
+  in [Netscape/Mozilla file format](http://www.cookiecentral.com/faq/#3.5)
+* **Downtime**: Length of an interval between time of the first connection and time of the last received byte; time of
+  the start of the first connection
+* **Timing**: Timing of request (DNS lookup, Initial connection, SSL, Request, Waiting, Content download, Total)
+* **Index**: Index of URL from command line
 
 ## Dependencies
 
- * Asynchronous hostname resolving – [c-ares](http://c-ares.haxx.se/)
- * Gzip decoding – [zlib](http://zlib.net/)
- * TLS/SSL – [OpenSSL](https://www.openssl.org/)
- * HTTP2 – [Nghttp2](https://nghttp2.org/)
- * Unicode processing – [ICU](http://site.icu-project.org/)
+* Asynchronous hostname resolving – [c-ares](http://c-ares.haxx.se/)
+* Gzip decoding – [zlib](http://zlib.net/)
+* TLS/SSL – [OpenSSL](https://www.openssl.org/)
+* HTTP2 – [Nghttp2](https://nghttp2.org/)
+* Unicode processing – [ICU](http://site.icu-project.org/)
 
 ## Build on Linux
 
 Tested platforms: Debian Linux, Red Hat Linux, OS X.
 
 Install following dependencies (including header files, i.e. dev packages):
- * c-ares
- * zlib1g
- * icu
- * OpenSSL (optional)
- * nghttp2 (optional)
+
+* [c-ares](https://c-ares.org/)
+* [zlib1g](https://www.zlib.net/)
+* [icu](https://icu.unicode.org/)
+* [OpenSSL](https://www.openssl.org/) (optional)
+* [nghttp2](https://nghttp2.org/) (optional)
 
 On Linux with apt-get run:
 
@@ -164,41 +170,21 @@ apt install make autoconf automake autotools-dev libtool gcc
 
 ### Link libminicrawler to your project
 
-On OS X with homebrew `CFLAGS` and `LDFLAGS` need to contain proper paths. You can assign them directly as the configure script options.
+On macOS with homebrew `CFLAGS` and `LDFLAGS` need to contain proper paths.
+You can assign them directly as the configure script options.
 
 ```shell
  ./configure CFLAGS="-I/usr/local/include" LDFLAGS="-L/usr/local/opt -L/usr/local/lib"
 ```
 
-After installation you can link `libminicrawler` by adding this to your Makefile:
+After installation, you can link `libminicrawler` by adding this to your Makefile:
 
 ```shell
 CFLAGS += $(shell pkg-config --cflags libminicrawler-4)
 LDFLAGS += $(shell pkg-config --libs libminicrawler-4)
 ```
 
-### Unit Tests
-
-Unit tests are done by simply runnning `make check`. They need php-cli to be installed.
-
-### Integration Tests
-
-Integration tests require a running instance of [httpbin](https://github.com/Runscope/httpbin).
-You can use public one like [on nghttp2.org](https://nghttp2.org/httpbin/) or install it locally
-For example as a library from PyPI and run it using Gunicorn:
-
-```shell
-pip install httpbin
-gunicorn httpbin:app
-```
-
-Then run the following command under `integration-tests` directory
-
-```shell
-make check HTTPBIN_URL=http://127.0.0.1:8000
-```
-
-## Build with docker
+## Build minicrawler with docker
 
 First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build docker image
 
@@ -217,7 +203,42 @@ make install
 make check # for tests
 ```
 
+### Unit Tests
+
+Unit tests are done by simply running `make check`. They need php-cli to be installed.
+
+### Integration Tests
+
+Integration tests require a running instance of [httpbin](https://github.com/Runscope/httpbin).
+You can use public one like [on nghttp2.org](https://nghttp2.org/httpbin/) or install it locally
+For example as a library from PyPI and run it using Gunicorn:
+
+#### Running httpbin locally
+
+```shell
+apt install -y python3-pip
+pip install httpbin
+gunicorn httpbin:app
+```
+Then run the following command under `./integration-tests` directory
+
+```shell
+cd ./integration-tests
+make check HTTPBIN_URL=http://127.0.0.1:80
+```
+
+#### Running httpbin using Docker
+
+```shell
+docker compose up -d httpbin
+```
+
+```shell
+cd ./integration-tests
+make check 
+```
+
 ## Users
 
- * [Testomato](https://testomato.com) – A simple website monitoring tool
- * [add me here](mailto:jan@prachar.eu)
+* [Testomato](https://testomato.com) – A simple website monitoring tool
+* [add me here](mailto:jan@prachar.eu)
