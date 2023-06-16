@@ -1,15 +1,20 @@
 version: "3.9"
 
+# docker compose pull httpbin
+# docker compose up -d httpbin
 services:
   httpbin:
     image: kennethreitz/httpbin
     ports:
       - "80:80"
 
+# docker compose build minicrawler
+# docker compose run minicrawler
   minicrawler:
     tty: true
     build: etc/minicrawler
     environment:
-      - "ENVNAME=dev"
+      - ENVNAME=dev
+      - HTTPBIN_URL=http://httpbin:80
     volumes:
       - ".:/minicrawler"
