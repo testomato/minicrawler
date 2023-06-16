@@ -20,7 +20,7 @@ RUN apt-get -qqy update && apt-get -qqy install \
 	autoconf \
 	automake \
 	autotools-dev \
-  build-essential \
+	build-essential \
 	libtool \
 	gcc \
 \
@@ -28,6 +28,7 @@ RUN apt-get -qqy update && apt-get -qqy install \
 	php \
 \
 # tools
+	curl \
 	ca-certificates \
 	apt-transport-https \
 	locales \
@@ -36,15 +37,16 @@ RUN apt-get -qqy update && apt-get -qqy install \
 	&& sed -i 's/^.*\(en_US.UTF-8\)/\1/' /etc/locale.gen \
 	&& locale-gen \
 	&& ln -sf "/usr/share/zoneinfo/Europe/Prague" /etc/localtime && dpkg-reconfigure tzdata \
-	&& rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+	&& rm -rf /var/lib/apt/lists/* /var/cache/apt/* \
+# update certificates \
+	&& mkdir -p /var/lib/certs \
+	&& curl -s -f -L https://curl.se/ca/cacert.pem -o ca-bundle.crt \
+  	&& cat /etc/ssl/certs/ca-certificates.crt >> ca-bundle.crt \
+   && cp -v ca-bundle.crt /var/lib/certs/ca-bundle.crt
+
 
 ENV LC_ALL en_US.UTF-8
 
 ARG PREFIX="/var/lib/minicrawler/usr"
 
 WORKDIR /minicrawler
-
-#RUN ./autogen.sh \
-#	&& ./configure --prefix=$PREFIX --with-ca-bundle=/var/lib/certs/ca-bundle.crt --with-ca-path=/etc/ssl/certs \
-#	&& make || exit 42 \
-#	&& make install || exit 43
