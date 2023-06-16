@@ -1,5 +1,7 @@
 #!/usr/bin/php
 <?php
+const DEFAULT_HTTPBIN_URL = 'http://127.0.0.1:80';
+
 $errors = [];
 
 /**
@@ -20,9 +22,9 @@ set_error_handler('errorHandler');
 
 /**
  * Load test cases the array of closures
+ * @var array $tests
  */
 $tests = require_once __DIR__ . '/test_cases.php';
-/** @var array $tests */
 
 echo '1..' . count($tests) . "\n";
 
@@ -49,33 +51,31 @@ function source(Closure $test): string {
 	} catch (ReflectionException $e) {
 		return '';
 	}
-
 }
 
 /**
- * Return host file
- * @return string
- */
-function host(): string {
-	global $argv;
-	if (isset($argv[1])) {
-		return parse_url($argv[1], PHP_URL_HOST);
-	} else {
-		return getenv('HTTPBIN_URL') ? parse_url(getenv('HTTPBIN_URL'), PHP_URL_HOST) : '127.0.0.1';
-	}
-}
-
-/**
+ * Return full url
  * @param string $path
  * @return string
  */
-function url(string $path): string {
+function url(string $path = ''): string {
 	global $argv;
 	if (isset($argv[1])) {
 		return rtrim($argv[1], '/') . $path;
+	} elseif (getenv('HTTPBIN_URL')) {
+		return rtrim(getenv('HTTPBIN_URL'), '/') . $path;
 	} else {
-		return rtrim(getenv('HTTPBIN_URL') ?: 'http://127.0.0.1:80', '/') . $path;
+		return DEFAULT_HTTPBIN_URL . $path;
 	}
+}
+
+
+/**
+ * Return url host
+ * @return string
+ */
+function host(): string {
+	return parse_url(url(), PHP_URL_HOST) ?: '127.0.0.1';
 }
 
 /**
@@ -87,9 +87,18 @@ function check_result_for_path($path, array $args, array $checks): void {
 	foreach ($args as $flag => $arg) {
 		$argsString .= ' ' . (is_string($flag) ? $flag . ' ' . escapeshellarg($arg) : $arg);
 	}
+
 	$cli = __DIR__ . "/../minicrawler5 $argsString  " . escapeshellarg(url($path));
 
+	if (!file_exists(__DIR__ . '/../minicrawler5')) {
+		throw new TestFailedException("minicrawler5 not found in " . __DIR__ . "/../minicrawler5");
+	}
+
 	$result = shell_exec($cli);
+
+
+	echo $result;
+
 	$lines = explode("\n", $result);
 	$headers = [];
 	$cookies = [];

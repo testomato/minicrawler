@@ -1,5 +1,5 @@
 name: Prepare Minicrawler
-
+description: Prepare Minicrawler dependencies
 runs:
   using: composite
   steps:
@@ -7,7 +7,7 @@ runs:
       shell: bash
       run: |
         sudo apt update -y
-        sudo apt install -y make autoconf automake autotools-dev libtool gcc ca-certificates curl
+        sudo apt install -y make autoconf automake autotools-dev libtool gcc ca-certificates curl php
     - name: Install minicrawler dependencies
       shell: bash
       run: |

@@ -223,8 +223,7 @@ gunicorn httpbin:app
 Then run the following command under `./integration-tests` directory
 
 ```shell
-cd ./integration-tests
-make check HTTPBIN_URL=http://127.0.0.1:80
+make -C integration-tests check
 ```
 
 #### Running httpbin using Docker

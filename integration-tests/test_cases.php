@@ -6,6 +6,8 @@ return [
 			'/user-agent', ['-A' => $userAgent],
 			[
 				function ($result) use ($userAgent) {
+
+					var_dump($result);
 					return [$userAgent, $result['user-agent'], 'Expected User Agent'];
 				}
 			]

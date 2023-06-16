@@ -1,4 +1,5 @@
 name: Build Minicrawler
+description: Build Minicrawler
 
 runs:
   using: composite

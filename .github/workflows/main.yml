@@ -7,20 +7,41 @@ on:
 
 jobs:
 
-  tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/prepare
-      - uses: ./.github/actions/build
-      - name: make check
-        run: make check
+#  tests:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v3
+#      - uses: ./.github/actions/prepare
+#      - uses: ./.github/actions/build
+#      - name: make check
+#        run: make check
 
-  try:
+  integration:
     runs-on: ubuntu-latest
+    env:
+      HTTPBIN_URL: "http://127.0.0.1:80"
+
+    services:
+      httpbin:
+        image: kennethreitz/httpbin
+        ports:
+          - 80:80
+
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/prepare
       - uses: ./.github/actions/build
-      - name: try run minicrawler
-        run: ./minicrawler5 https://www.testomato.com/humans.txt
+      - name: make integration
+        run: |
+          php -r "echo 'HTTPBIN_URL=' . getenv('HTTPBIN_URL');"
+          make -C integration-tests check
+          cat integration-tests/test-suite.log
+
+#  try:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v3
+#      - uses: ./.github/actions/prepare
+#      - uses: ./.github/actions/build
+#      - name: try run minicrawler
+#        run: ./minicrawler5 https://www.testomato.com/humans.txt
