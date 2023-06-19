@@ -1,3 +1,7 @@
+https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/<WORKFLOW_FILE>/badge.svg
+![example workflow](https://github.com/testomato/minicrawler/actions/workflows/main.yml/badge.svg)
+
+
 # Minicrawler
 
 Minicrawler parses URLs, executes HTTP (HTTP/2) requests while handling cookies, network connection management and
