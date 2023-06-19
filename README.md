@@ -1,5 +1,4 @@
-![example workflow](https://github.com/testomato/minicrawler/actions/workflows/main.yml/badge.svg)
-
+[![example workflow](https://github.com/testomato/minicrawler/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/testomato/minicrawler/actions)
 
 # Minicrawler
 
