@@ -31,7 +31,27 @@ AC_PROG_AWK
 AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([cares], [ares_init], [], AC_MSG_ERROR([Unable to find c-ares dev files! apt install libcares-dev]))
 AC_CHECK_LIB([z], [inflate], [], AC_MSG_ERROR([Unable to find zlib dev files! apt install zlib1g-dev]))
-AC_CHECK_LIB([icuuc], [main], , AC_MSG_ERROR([Unable to find libicuuc library! apt install libicu-dev]))
+AC_CHECK_LIB([icuuc], [uidna_nameToASCII_63], [],
+    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_64], [],
+        AC_CHECK_LIB([icuuc], [uidna_nameToASCII_65], [],
+            AC_CHECK_LIB([icuuc], [uidna_nameToASCII_66], [],
+                AC_CHECK_LIB([icuuc], [uidna_nameToASCII_67], [],
+                    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_68], [],
+                        AC_CHECK_LIB([icuuc], [uidna_nameToASCII_69], [],
+                            AC_CHECK_LIB([icuuc], [uidna_nameToASCII_70], [],
+                                AC_CHECK_LIB([icuuc], [uidna_nameToASCII_71], [],
+                                    AC_CHECK_LIB([icuuc], [uidna_nameToASCII_72], [],
+                                        AC_MSG_WARN([Unable to find libicuuc library! apt install libicu-dev!])
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    )
+)
 AC_SEARCH_LIBS([iconv], [iconv], [], AC_MSG_ERROR([Unable to find iconv dev files! apt install libiconv-dev]))
 
 AC_ARG_WITH([ssl],

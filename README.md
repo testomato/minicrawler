@@ -222,7 +222,7 @@ apt install -y python3-pip
 pip install httpbin
 gunicorn httpbin:app
 ```
-Then run the following command under `./integration-tests` directory
+Then run the following command:
 
 ```shell
 make -C integration-tests check
@@ -235,8 +235,7 @@ docker compose up -d httpbin
 ```
 
 ```shell
-cd ./integration-tests
-make check 
+make -C integration-tests check
 ```
 
 ## Users
