@@ -81,7 +81,7 @@ AS_IF([test "${with_ssl} ${with_http2}" == "check check"], [
        AC_CHECK_LIB([nghttp2], [nghttp2_session_client_new], [
             LIBS="-lnghttp2 $LIBS"
             AC_DEFINE([HAVE_LIBNGHTTP2], [1], [Define if you have the nghttp2 library (-lnghttp2).])
-            AC_CHECK_FUNCS([nghttp2_http2_strerror nghttp2_session_callbacks_set_error_callback])
+            AC_CHECK_FUNCS([nghttp2_http2_strerror nghttp2_session_callbacks_set_error_callback nghttp2_option_set_no_rfc9113_leading_and_trailing_ws_validation])
             AC_CHECK_DECLS([NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL],
                      [], [], [[#include <nghttp2/nghttp2.h>]])
             ],

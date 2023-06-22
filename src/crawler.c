@@ -1133,8 +1133,16 @@ static int http2_create_session(mcrawler_url *u) {
 	memset(session_data, 0, sizeof(http2_session_data));
 	u->http2_session = session_data;
 
-	nghttp2_session_client_new(&session_data->session, callbacks, u);
+	// options
+	nghttp2_option *option;
+	nghttp2_option_new(&option);
+#ifdef HAVE_NGHTTP2_OPTION_SET_NO_RFC9113_LEADING_AND_TRAILING_WS_VALIDATION
+	nghttp2_option_set_no_rfc9113_leading_and_trailing_ws_validation(option, 1);
+#endif
+
+	nghttp2_session_client_new2(&session_data->session, callbacks, u, option);
 	nghttp2_session_callbacks_del(callbacks);
+	nghttp2_option_del(option);
 
 	// TCP NODELAY
 	int val = 1;
