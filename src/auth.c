@@ -98,7 +98,7 @@ void parse_single_challenge(mcrawler_url *u, char **pp, struct challenge *ch) {
 	ch->scheme = p;
 	p = strchr(p, ' ');
 	if (!p) {
-		debugf("[%d] auth challenge '%s' should contain at least realm\n", u->index, *pp);
+		debugf("[%d] single auth challenge '%s' without any params\n", u->index, *pp);
 		*pp = p;
 		return;
 	}
