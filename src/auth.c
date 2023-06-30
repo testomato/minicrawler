@@ -187,13 +187,15 @@ void parse_authchallenge(mcrawler_url *u, char *challenge) {
 	int can_basic = -1, can_digest = -1;
 
 	for (i = 0; i < 3 && challenges[i].scheme != NULL; i++) {
-		if (challenges[i].realm == NULL) {
-			debugf("[%d] missing realm for auth scheme %s\n", u->index, challenges[i].scheme);
-		} else if (!strcasecmp(challenges[i].scheme, "basic")) {
+		if (!strcasecmp(challenges[i].scheme, "basic")) {
 			can_basic = i;
 #ifdef HAVE_LIBSSL
 		} else if (!strcasecmp(challenges[i].scheme, "digest")) {
-			can_digest = i;
+			if (challenges[i].realm == NULL) {
+				debugf("[%d] missing realm for digest auth scheme\n", u->index);
+			} else {
+				can_digest = i;
+			}
 #endif
 		} else {
 			debugf("[%d] unsupported auth scheme '%s'\n", u->index, challenges[i].scheme);
