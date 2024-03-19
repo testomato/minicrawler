@@ -1,0 +1,14 @@
+**/.git
+**/.DS_Store
+**/.idea
+**/.gitlab-ci.yml
+**/.gitignore
+
+# Docker
+/.docker
+/.dockerignore
+/compose.yml
+/docker-*.*
+
+# others
+/.github

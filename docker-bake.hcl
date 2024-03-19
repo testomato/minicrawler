@@ -6,10 +6,7 @@
 ####################################################################################################
 
 target "minicrawler" {
-  args = {
-    MINICRAWLER_VERSION = "v5.2.6"
-  }
-  context    = "git@gitlab.int.wikidi.net:testomato/minicrawler.git"
+  context    = "."
   dockerfile = ".docker/minicrawler/Dockerfile"
   platforms  = ["linux/amd64", "linux/arm64"]
   ssh        = ["default"]
