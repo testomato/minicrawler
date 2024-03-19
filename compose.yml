@@ -8,11 +8,11 @@ services:
     ports:
       - "80:80"
 
-# docker compose build minicrawler
-# docker compose run minicrawler
+  # docker compose build minicrawler
+  # docker compose run minicrawler
   minicrawler:
     tty: true
-    build: etc/minicrawler
+    build: .docker/minicrawler
     environment:
       - ENVNAME=dev
       - HTTPBIN_URL=http://httpbin:80

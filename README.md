@@ -192,7 +192,7 @@ First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build dock
 
 ```shell
 docker compose build minicrawler
-docker compose run minicrawler
+docker compose run --rm minicrawler
 ```
 
 Then run:
