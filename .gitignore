@@ -30,7 +30,3 @@ test-suite.log
 /m4
 Makefile
 Makefile.in
-
-
-# docker env file
-.env
