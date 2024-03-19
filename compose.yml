@@ -1,18 +1,24 @@
+name: minicrawler
 version: "3.9"
 
 # docker compose pull httpbin
 # docker compose up -d httpbin
 services:
+
   httpbin:
     image: kennethreitz/httpbin
     ports:
       - "80:80"
 
+
   # docker compose build minicrawler
-  # docker compose run minicrawler
+  # docker compose run --rm minicrawler
   minicrawler:
     tty: true
-    build: .docker/minicrawler
+    build:
+      context: .
+      dockerfile: .docker/minicrawler/Dockerfile
+      target: minicrawler-with-php
     environment:
       - ENVNAME=dev
       - HTTPBIN_URL=http://httpbin:80
