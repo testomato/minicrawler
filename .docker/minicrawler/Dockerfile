@@ -2,7 +2,7 @@ FROM debian:bookworm-slim as minicrawler
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt update && apt -y install \
+RUN apt-get update && apt-get -y install \
     # minicrawler dev deps
     	libc-ares-dev \
     	zlib1g-dev \
