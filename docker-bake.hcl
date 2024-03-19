@@ -9,7 +9,6 @@ target "minicrawler" {
   context    = "."
   dockerfile = ".docker/minicrawler/Dockerfile"
   platforms  = ["linux/amd64", "linux/arm64"]
-  ssh        = ["default"]
   pull       = true
   tags       = [
     "dr.brzy.cz/testomato/minicrawler:latest",
