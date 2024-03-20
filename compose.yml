@@ -17,7 +17,7 @@ services:
     tty: true
     build:
       context: .
-      dockerfile: .docker/minicrawler/Dockerfile
+      dockerfile: .docker/Dockerfile
       target: minicrawler-with-php
     environment:
       - ENVNAME=dev

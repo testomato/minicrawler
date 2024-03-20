@@ -7,7 +7,7 @@
 
 target "minicrawler" {
   context    = "."
-  dockerfile = ".docker/minicrawler/Dockerfile"
+  dockerfile = ".docker/Dockerfile"
   platforms  = ["linux/amd64", "linux/arm64"]
   pull       = true
   tags       = [
