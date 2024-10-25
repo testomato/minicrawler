@@ -346,7 +346,7 @@ static ssize_t sec_read(const mcrawler_url *u, unsigned char *buf, const size_t 
 			}
 			const int n = sprintf(errbuf, "Downloading content failed");
 			if (last_e && n > 0) {
-				sprintf(errbuf + n, " (%.200s)", ERR_reason_error_string(last_e));
+				sprintf(errbuf + n, " (SSL error: %.200s)", ERR_reason_error_string(last_e));
 			}
 			return MCURL_IO_ERROR;
 		default:
