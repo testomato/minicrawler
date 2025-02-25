@@ -40,10 +40,7 @@ class Url {
 				return;
 			}
 
-			mcrawler_url_host *dup = (mcrawler_url_host *)malloc(sizeof(mcrawler_url_host));
-			memcpy(dup, host, sizeof(mcrawler_url_host));
-
-			d_host = std::unique_ptr<mcrawler_url_host>(dup);
+			d_host = std::make_unique<mcrawler_url_host>(*host);
 		}
 
 		bool is_localhost() {
