@@ -41,7 +41,11 @@ AC_CHECK_LIB([icuuc], [uidna_nameToASCII_63], [],
                             AC_CHECK_LIB([icuuc], [uidna_nameToASCII_70], [],
                                 AC_CHECK_LIB([icuuc], [uidna_nameToASCII_71], [],
                                     AC_CHECK_LIB([icuuc], [uidna_nameToASCII_72], [],
-                                        AC_MSG_WARN([Unable to find libicuuc library! apt install libicu-dev!])
+                                        AC_CHECK_LIB([icuuc], [uidna_nameToASCII_73], [],
+                                            AC_CHECK_LIB([icuuc], [uidna_nameToASCII_74], [],
+                                                AC_MSG_WARN([Unable to find libicuuc library! apt install libicu-dev!])
+                                            )
+                                        )
                                     )
                                 )
                             )
