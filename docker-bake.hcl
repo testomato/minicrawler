@@ -13,7 +13,7 @@ target "minicrawler" {
   pull       = true
   tags       = [
     "dr.brzy.cz/testomato/minicrawler:latest",
-    "dr.brzy.cz/testomato/minicrawler:v5.2.6",
+    "dr.brzy.cz/testomato/minicrawler:v5.2.7",
   ]
 }
 

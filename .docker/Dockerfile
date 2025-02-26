@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim as minicrawler-build
+FROM debian:bookworm-slim AS minicrawler-build
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get -y install \
 	# minicrawler dev deps
@@ -45,11 +45,11 @@ RUN ./autogen.sh \
 	&& make install || exit 43
 
 # Minicrawler (without build tools and dev deps)
-FROM debian:bookworm-slim as minicrawler
+FROM debian:bookworm-slim AS minicrawler
 ENV DEBIAN_FRONTEND noninteractive
 COPY --from=minicrawler-build /var/lib/minicrawler/usr /var/lib/minicrawler/usr
 
 # Minicrawler with PHP for testing and debugging
-FROM minicrawler as minicrawler-with-php
+FROM minicrawler AS minicrawler-with-php
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get -y install php
