@@ -1,5 +1,5 @@
 FROM debian:bookworm-slim AS minicrawler-build
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get -y install \
 	# minicrawler dev deps
 		libc-ares-dev \
@@ -34,7 +34,7 @@ RUN apt-get update && apt-get -y install \
 		&& cat /etc/ssl/certs/ca-certificates.crt >> ca-bundle.crt \
 		&& cp -v ca-bundle.crt /var/lib/certs/ca-bundle.crt
 
-ENV LC_ALL en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 WORKDIR /minicrawler
 COPY . /minicrawler
@@ -46,10 +46,10 @@ RUN ./autogen.sh \
 
 # Minicrawler (without build tools and dev deps)
 FROM debian:bookworm-slim AS minicrawler
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=minicrawler-build /var/lib/minicrawler/usr /var/lib/minicrawler/usr
 
 # Minicrawler with PHP for testing and debugging
 FROM minicrawler AS minicrawler-with-php
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get -y install php
