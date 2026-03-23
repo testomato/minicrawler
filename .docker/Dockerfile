@@ -49,7 +49,7 @@ RUN ./autogen.sh \
 # Minicrawler production container (without build tools and dev deps)
 # -------------------------------------------------------------------------------------------------
 
-	FROM debian:bookworm-slim AS minicrawler
+FROM debian:bookworm-slim AS minicrawler
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=minicrawler-build /var/lib/minicrawler/usr /var/lib/minicrawler/usr
 
