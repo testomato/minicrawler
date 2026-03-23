@@ -1,9 +1,9 @@
 stages:
-  - Docker
+  - build
 
 Build minicrawler container:
   tags: [ minicrawler ]
-  stage: Docker
+  stage: build
   before_script:
     - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
     - docker buildx create --use --driver docker-container --name builder-$CI_JOB_ID
