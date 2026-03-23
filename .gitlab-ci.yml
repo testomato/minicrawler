@@ -2,13 +2,12 @@ stages:
   - Docker
 
 Build minicrawler container:
-  tags: [ shell ]
+  tags: [ minicrawler ]
   stage: Docker
   before_script:
     - docker buildx rm --all-inactive --force
     - docker buildx ls | grep multi-builder || docker buildx create --use --bootstrap --name multi-builder
   script:
-    - docker buildx bake --file docker-bake.hcl minicrawler --print
     - docker buildx bake --file docker-bake.hcl minicrawler --push
   after_script:
     - docker buildx prune --all --keep-storage=10GB --force
