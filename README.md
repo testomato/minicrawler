@@ -1,10 +1,10 @@
-[![example workflow](https://github.com/testomato/minicrawler/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/testomato/minicrawler/actions)
+[![example workflow](https://github.com/testomato/minicrawler/actions/workflows/main.yml/badge.svg?branch=main)](https://github.com/testomato/minicrawler/actions)
 
 # Minicrawler
 
 Minicrawler parses URLs, executes HTTP (HTTP/2) requests while handling cookies, network connection management and
-SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookied and
-more. It is designed to handle *many* request in parallel in a *single thread*. It multiplexes connections, running the
+SSL/TLS protocols. By default it follows redirect locations and returns a full response, final URL, parsed cookies and
+more. It is designed to handle *many* requests in parallel in a *single thread*. It multiplexes connections, running the
 read/write communication asynchronously. The whole Minicrawler suite is licensed under the [AGPL license](license.txt).
 
 ## URL Library (libminicrawler-url)
@@ -91,7 +91,7 @@ void main() {
          -A STRING  custom user agent (max 255 bytes)
          -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)
          -c         convert content to text format (with UTF-8 encoding)
-         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)
+         -DMILIS    set delay time in milliseconds when downloading more pages from the same IP (default is 100 ms)
          -g         accept gzip encoding
          -h         enable output of HTTP headers
          -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)
@@ -129,7 +129,7 @@ Minicrawler prepends its own header into the output with the following meaning
 * **Content-length**: Length of the downloaded content in bytes
 * **Timeout**: Reason of timeout in case of timeout
 * **Error-msg**: Error message in case of error (negative Status)
-* **Content-type**: Correct content type of outputed content
+* **Content-type**: Correct content type of outputted content
 * **WWW-Authenticate**: WWW-Authenticate header
 * **Cookies**: Number of cookies followed by that number of lines of parsed cookies
   in [Netscape/Mozilla file format](http://www.cookiecentral.com/faq/#3.5)
@@ -186,13 +186,11 @@ CFLAGS += $(shell pkg-config --cflags libminicrawler-4)
 LDFLAGS += $(shell pkg-config --libs libminicrawler-4)
 ```
 
-## Build minicrawler with docker
-
-First create `.env` file with `COMPOSE_PROJECT_NAME=minicrawler` then build docker image
+## Build and test minicrawler
 
 ```shell
-docker compose build minicrawler
-docker compose run --rm minicrawler
+docker compose build minicrawler-dev
+docker compose run --rm minicrawler-dev
 ```
 
 Then run:
@@ -211,30 +209,10 @@ Unit tests are done by simply running `make check`. They need php-cli to be inst
 
 ### Integration Tests
 
-Integration tests require a running instance of [httpbin](https://github.com/Runscope/httpbin).
-You can use public one like [on nghttp2.org](https://nghttp2.org/httpbin/) or install it locally
-For example as a library from PyPI and run it using Gunicorn:
-
-#### Running httpbin locally
-
-```shell
-apt install -y python3-pip
-pip install httpbin
-gunicorn httpbin:app
-```
-Then run the following command:
-
-```shell
-make -C integration-tests check
-```
-
-#### Running httpbin using Docker
+Integration tests require a running instance of [httpbin](https://github.com/mccutchen/go-httpbin):
 
 ```shell
 docker compose up -d httpbin
-```
-
-```shell
 make -C integration-tests check
 ```
 
