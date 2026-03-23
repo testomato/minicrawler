@@ -1,16 +1,16 @@
 stages:
-  - build
+  - Build
 
 Build minicrawler container:
   tags: [ minicrawler ]
-  stage: build
+  stage: Build
   before_script:
     - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-    - docker buildx create --use --driver docker-container --name builder-$CI_JOB_ID
-    - docker buildx inspect --bootstrap
+    - docker Buildx create --use --driver docker-container --name Builder-$CI_JOB_ID
+    - docker Buildx inspect --bootstrap
   script:
-    - docker buildx bake --file docker-bake.hcl minicrawler --push
+    - docker Buildx bake --file docker-bake.hcl minicrawler --push
   after_script:
-    - docker buildx rm builder-$CI_JOB_ID
+    - docker Buildx rm Builder-$CI_JOB_ID
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
