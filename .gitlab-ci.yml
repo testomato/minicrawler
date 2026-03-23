@@ -6,11 +6,9 @@ Build minicrawler container:
   stage: Build
   before_script:
     - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-    - docker buildx create --use --driver docker-container --name builder-$CI_JOB_ID
+    - docker buildx create --use --driver docker-container --name ${CI_PROJECT_NAME}-builder 2>/dev/null || docker buildx use ${CI_PROJECT_NAME}-builder
     - docker buildx inspect --bootstrap
   script:
     - docker buildx bake --file docker-bake.hcl minicrawler --push
-  after_script:
-    - docker buildx rm builder-$CI_JOB_ID
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
