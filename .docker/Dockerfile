@@ -50,6 +50,6 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=minicrawler-build /var/lib/minicrawler/usr /var/lib/minicrawler/usr
 
 # Minicrawler with PHP for testing and debugging
-FROM minicrawler AS minicrawler-with-php
+FROM minicrawler-build AS minicrawler-dev
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get -y install php
