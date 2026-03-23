@@ -10,6 +10,6 @@ Build minicrawler container:
   script:
     - docker buildx bake --file docker-bake.hcl minicrawler --push
   after_script:
-    - docker buildx prune --keep-storage=10GB --force
+    - docker buildx prune --reserved-space=10GB --force
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
