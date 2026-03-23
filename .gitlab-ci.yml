@@ -5,11 +5,15 @@ Build minicrawler container:
   tags: [ minicrawler ]
   stage: Docker
   before_script:
-    - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-    - docker buildx ls | grep multi-builder || docker buildx create --use --bootstrap --name multi-builder
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker buildx create --use --driver docker-container --name multibuilder
+    - docker buildx inspect --bootstrap
+
+    # - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+    # - docker buildx ls | grep multi-builder || docker buildx create --use --bootstrap --name multi-builder
   script:
     - docker buildx bake --file docker-bake.hcl minicrawler --push
   after_script:
-    - docker buildx prune --reserved-space=10GB --force
+    - docker buildx rm multibuilder
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
