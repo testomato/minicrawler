@@ -12,8 +12,8 @@ target "minicrawler" {
   platforms  = ["linux/amd64", "linux/arm64"]
   pull       = true
   tags       = [
-    "dr.brzy.cz/testomato/minicrawler:latest",
-    "dr.brzy.cz/testomato/minicrawler:v5.2.7",
+    "gitlab.int.wikidi.net:5050/testomato/minicrawler:latest",
+    "gitlab.int.wikidi.net:5050/testomato/minicrawler:v5.2.7",
   ]
 }
 
