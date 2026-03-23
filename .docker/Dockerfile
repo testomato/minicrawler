@@ -1,5 +1,6 @@
 FROM debian:bookworm-slim AS minicrawler-build
 ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get -y install \
 	# minicrawler dev deps
 		libc-ares-dev \
@@ -44,12 +45,17 @@ RUN ./autogen.sh \
 	&& make || exit 42 \
 	&& make install || exit 43
 
-# Minicrawler (without build tools and dev deps)
-FROM debian:bookworm-slim AS minicrawler
+# -------------------------------------------------------------------------------------------------
+# Minicrawler production container (without build tools and dev deps)
+# -------------------------------------------------------------------------------------------------
+
+	FROM debian:bookworm-slim AS minicrawler
 ENV DEBIAN_FRONTEND=noninteractive
 COPY --from=minicrawler-build /var/lib/minicrawler/usr /var/lib/minicrawler/usr
 
-# Minicrawler with PHP for testing and debugging
+# -------------------------------------------------------------------------------------------------
+# Minicrawler development container with PHP for testing and debugging
+# -------------------------------------------------------------------------------------------------
 FROM minicrawler-build AS minicrawler-dev
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get -y install php
