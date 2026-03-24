@@ -11,10 +11,6 @@ target "minicrawler" {
   target     = "minicrawler"
   platforms  = ["linux/amd64", "linux/arm64"]
   pull       = true
-  # GitLab Container Registry does not support OCI attestations, without this the manifest would be corrupted
-  provenance = false
-  sbom       = false
-  output     = ["type=image,push=true,oci-mediatypes=false"]
   tags       = [
     "gitlab.int.wikidi.net:5050/testomato/minicrawler:latest",
     "gitlab.int.wikidi.net:5050/testomato/minicrawler:v5.2.7",
