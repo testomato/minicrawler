@@ -5,7 +5,7 @@ variables:
   BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
 
 Build minicrawler container:
-  tags: [ minicrawler ]
+  tags: [ testomato-minicrawler ]
   stage: Build
   before_script:
     - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
