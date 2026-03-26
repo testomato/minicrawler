@@ -219,8 +219,9 @@ make -C integration-tests check
 ## Install minicrawler to your image
 
 ```dockerfile
-COPY --from=minicrawler:latest /var/lib/minicrawler/usr /usr
+COPY --from=gitlab.int.wikidi.net:5050/testomato/minicrawler:latest /var/lib/minicrawler/usr /usr
 ```
+
 ## Users
 
 * [Testomato](https://testomato.com) – A simple website monitoring tool

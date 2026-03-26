@@ -1,9 +1,6 @@
 stages:
   - Build
 
-variables:
-  BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
-
 Build minicrawler container:
   tags: [ testomato-minicrawler ]
   stage: Build
