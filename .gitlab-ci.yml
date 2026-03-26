@@ -6,8 +6,8 @@ Build minicrawler container:
   stage: Build
   before_script:
     - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
-    - docker buildx create --use --driver docker-container --name ${CI_PROJECT_ROOT_NAMESPACE}-builder 2>/dev/null || docker buildx use ${CI_PROJECT_ROOT_NAMESPACE}-builder
-    - docker buildx inspect --bootstrap
+    - docker buildx ls | grep ${CI_PROJECT_ROOT_NAMESPACE}-builder || docker buildx create --use --bootstrap --name ${CI_PROJECT_ROOT_NAMESPACE}-builder
+    - docker buildx use ${CI_PROJECT_ROOT_NAMESPACE}-builder
   script:
     - docker buildx bake --file docker-bake.hcl minicrawler --push
   rules:
