@@ -9,7 +9,6 @@ Build minicrawler container:
     - docker buildx create --use --driver docker-container --name ${CI_PROJECT_ROOT_NAMESPACE}-builder 2>/dev/null || docker buildx use ${CI_PROJECT_ROOT_NAMESPACE}-builder
     - docker buildx inspect --bootstrap
   script:
-    - docker buildx bake --file docker-bake.hcl minicrawler --print
     - docker buildx bake --file docker-bake.hcl minicrawler --push
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
