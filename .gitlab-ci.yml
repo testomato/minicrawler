@@ -1,5 +1,26 @@
 stages:
+  - Test
   - Build
+
+# Build + run the unit tests under AddressSanitizer + UndefinedBehaviorSanitizer.
+# The runner is a shell executor, so we run everything inside the dev image
+# (which already carries the toolchain, deps and php-cli for `make check`).
+Sanitizers:
+  tags: [ shell ]
+  stage: Test
+  script:
+    - docker build -f .docker/Dockerfile --target minicrawler-dev -t minicrawler-dev-ci .
+    - >
+      docker run --rm -v "$PWD:/minicrawler" -w /minicrawler minicrawler-dev-ci bash -lc '
+      ./autogen.sh &&
+      ./configure
+        CFLAGS="-g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer"
+        CXXFLAGS="-g -O1 -std=c++14 -fsanitize=address,undefined -fno-omit-frame-pointer"
+        LDFLAGS="-fsanitize=address,undefined" &&
+      make -j"$(nproc)" &&
+      ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 make check'
+  rules:
+    - if: $CI_COMMIT_BRANCH
 
 Build minicrawler container:
   tags: [ shell ]
