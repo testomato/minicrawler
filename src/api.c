@@ -36,6 +36,7 @@ void mcrawler_init_url(mcrawler_url *u, const char *url) {
  */
 void mcrawler_reset_url(mcrawler_url *u) {
 	reset_url(u);
+	u->redirect_limit = MAX_REDIRECTS;
 	u->state = MCURL_S_PARSEDURL;
 }
 

@@ -89,7 +89,7 @@ void main() {
          -6         resolve host to IPv6 address only
          -8         convert from page encoding to UTF-8
          -A STRING  custom user agent (max 255 bytes)
-         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)
+         -b STRING  cookies in the netscape/mozilla file format (max 25 cookies)
          -c         convert content to text format (with UTF-8 encoding)
          -DMILIS    set delay time in milliseconds when downloading more pages from the same IP (default is 100 ms)
          -g         accept gzip encoding

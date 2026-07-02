@@ -16,6 +16,27 @@ jobs:
       - name: make check
         run: make check
 
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/prepare
+      - name: autogen
+        run: ./autogen.sh
+      - name: configure (ASan + UBSan)
+        run: |
+          ./configure \
+            CFLAGS="-g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer" \
+            CXXFLAGS="-g -O1 -std=c++14 -fsanitize=address,undefined -fno-omit-frame-pointer" \
+            LDFLAGS="-fsanitize=address,undefined"
+      - name: make
+        run: make
+      - name: make check (sanitized)
+        run: make check
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+
   integration:
     runs-on: ubuntu-latest
 

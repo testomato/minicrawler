@@ -106,10 +106,14 @@ static void percent_decode(char *output, int *length, const char *input) {
 			// Let bytePoint be the two bytes after byte in input, decoded, and then interpreted as hexadecimal number.
 			char bytes[3] = {0, 0, 0};
 			strncpy(bytes, p, 2);
-			int r = sscanf(bytes, "%X", (unsigned int *)(output + outp));
+			// Decode into a full-width int, then store a single byte: writing
+			// through (unsigned int *)(output + outp) would clobber 3 extra
+			// bytes and is unaligned UB.
+			unsigned int bytePoint = 0;
+			int r = sscanf(bytes, "%X", &bytePoint);
 			// Append a byte whose value is bytePoint to output.
 			if (r) {
-				outp++;
+				output[outp++] = (char)bytePoint;
 			}
 			// Skip the next two bytes in input.
 			p += 2;
@@ -539,6 +543,13 @@ int mcrawler_url_parse_host(mcrawler_url_host* host, const char *input) {
 	if (domain_to_ascii(asciiDomain, 256, domain) == MCRAWLER_URL_FAILURE) {
 		// If asciiDomain is failure, return failure.
 		debugf("Host parsing failure (4) for %s\n", input);
+		return MCRAWLER_URL_FAILURE;
+	}
+	// Defense in depth: host->domain and the crawler's host[]/hostname[]
+	// buffers are all sized for at most 255 chars. domain_to_ascii already
+	// enforces this via the ICU capacity, but guard the invariant explicitly.
+	if (strlen(asciiDomain) > 255) {
+		debugf("Host parsing failure (asciiDomain too long) for %s\n", input);
 		return MCRAWLER_URL_FAILURE;
 	}
 	// If asciiDomain contains U+0000, U+0009, U+000A, U+000D, U+0020, "#",

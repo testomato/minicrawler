@@ -31,7 +31,7 @@ int gunzip_buf(mcrawler_url *u) {
                 strcpy(u->error_msg, ERR_PREFIX "out of memory in init");
                 break;
             case Z_VERSION_ERROR:
-                sprintf(u->error_msg, ERR_PREFIX "incompatible zlib version", rc);
+                strcpy(u->error_msg, ERR_PREFIX "incompatible zlib version");
                 break;
             case Z_STREAM_ERROR: // -2
                 // parameters are invalid, such as a null pointer to the

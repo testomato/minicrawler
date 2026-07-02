@@ -738,7 +738,7 @@ static void opensocket(mcrawler_url *u)
 		}
 	} else {
 		set_atomic_int(&u->state, MCURL_S_HANDSHAKE);
-		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_WRITE | 1<<MCURL_RW_WANT_WRITE);
+		set_atomic_int(&u->rw, 1<<MCURL_RW_WANT_READ | 1<<MCURL_RW_WANT_WRITE);
 	}
 }
 
