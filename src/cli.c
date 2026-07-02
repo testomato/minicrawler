@@ -19,7 +19,7 @@ void printusage()
 	         "         -6         resolve host to IPv6 address only\n"
 	         "         -8         convert from page encoding to UTF-8\n"
 	         "         -A STRING  custom user agent (max 255 bytes)\n"
-	         "         -b STRING  cookies in the netscape/mozilla file format (max 20 cookies)\n"
+	         "         -b STRING  cookies in the netscape/mozilla file format (max 25 cookies)\n"
 	         "         -c         convert content to text format (with UTF-8 encoding)\n"
 	         "         -DMILIS    set delay time in miliseconds when downloading more pages from the same IP (default is 100 ms)\n"
 	         "         -g         accept gzip encoding\n"
@@ -44,6 +44,16 @@ void printusage()
 }
 
 static int writehead = 0;
+
+/** Abort with a usage error if an option is missing its argument (i.e. it is
+ *  the last token on the command line). argv[argc] is NULL, so an unguarded
+ *  argv[t+1] would be a NULL dereference. */
+#define NEED_ARG(t) do { \
+	if ((t) + 1 >= argc) { \
+		fprintf(stderr, "minicrawler: option %s requires an argument\n", argv[t]); \
+		exit(1); \
+	} \
+} while (0)
 
 /** nacte url z prikazove radky do struktur
  */
@@ -77,9 +87,10 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-l")) {options |= 1<<MCURL_OPT_NOT_FOLLOW_REDIRECTS; continue;}
 		if(!strncmp(argv[t], "-t", 2)) {settings->timeout = atoi(argv[t]+2); continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings->delay = atoi(argv[t]+2); continue;}
-		if(!strcmp(argv[t], "-w")) {SAFE_STRCPY(customheader, argv[t+1]); t++; continue;}
-		if(!strcmp(argv[t], "-A")) {str_replace(customagent, argv[t+1], "%version%", VERSION); t++; continue;}
+		if(!strcmp(argv[t], "-w")) {NEED_ARG(t); SAFE_STRCPY(customheader, argv[t+1]); t++; continue;}
+		if(!strcmp(argv[t], "-A")) {NEED_ARG(t); str_replace(customagent, argv[t+1], "%version%", VERSION); t++; continue;}
 		if(!strcmp(argv[t], "-b")) {
+			NEED_ARG(t);
 			p = argv[t+1];
 			while (p[0] != '\0' && ccnt < COOKIESTORAGESIZE) {
 				q = strchrnul(p, '\n');
@@ -95,13 +106,14 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 			continue;
 		}
 		if(!strcmp(argv[t], "-6")) {options |= 1<<MCURL_OPT_IPV6; continue;}
-		if(!strcmp(argv[t], "-u")) {SAFE_STRCPY(username, argv[t+1]); t++; continue;}
+		if(!strcmp(argv[t], "-u")) {NEED_ARG(t); SAFE_STRCPY(username, argv[t+1]); t++; continue;}
 		if(!strncmp(argv[t], "-p", 2)) {SAFE_STRCPY(password, argv[t] + 2); continue;}
 		if(!strcmp(argv[t], "-2")) {options |= 1<<MCURL_OPT_DISABLE_HTTP2; continue;}
 		if(!strncmp(argv[t], "-m", 2)) {maxpagesize = atoi(argv[t]+2)*1024*1024UL; continue;}
 
 		// urloptions
 		if(!strcmp(argv[t], "-P")) {
+			NEED_ARG(t);
 			url->post = malloc(strlen(argv[t+1]) + 1);
 			url->postlen = strlen(argv[t+1]);
 			memcpy(url->post, argv[t+1], url->postlen);
@@ -109,13 +121,14 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 			continue;
 		}
 		if(!strcmp(argv[t], "-C")) {
+			NEED_ARG(t);
 			if (customheader[0]) {
 				str_replace(url->customheader, customheader, "%", argv[t+1]);
 			}
 			t++;
 			continue;
 		}
-		if(!strcmp(argv[t], "-X")) {SAFE_STRCPY(url->method, argv[t+1]); t++; continue;}
+		if(!strcmp(argv[t], "-X")) {NEED_ARG(t); SAFE_STRCPY(url->method, argv[t+1]); t++; continue;}
 
 		// init url
 		mcrawler_init_url(url, argv[t]);

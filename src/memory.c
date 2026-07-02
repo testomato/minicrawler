@@ -17,10 +17,10 @@ void mcrawler_cp_cookie(mcrawler_cookie *dst, const mcrawler_cookie *src) {
 	dst->domain = malloc(strlen(src->domain) + 1);
 	dst->path = malloc(strlen(src->path) + 1);
 
-	strcpy(dst->name, src->name);
-	strcpy(dst->value, src->value);
-	strcpy(dst->domain, src->domain);
-	strcpy(dst->path, src->path);
+	if (dst->name) strcpy(dst->name, src->name);
+	if (dst->value) strcpy(dst->value, src->value);
+	if (dst->domain) strcpy(dst->domain, src->domain);
+	if (dst->path) strcpy(dst->path, src->path);
 	dst->host_only = src->host_only;
 	dst->secure = src->secure;
 	dst->expires = src->expires;

@@ -99,7 +99,7 @@ int eatchunk(mcrawler_url *u) {
 	}
 
 	// čte velikost chunku
-	for (t=u->nextchunkedpos, i=0; buf[t] != '\r' && buf[t] != '\n' && t < buflen; t++) {
+	for (t=u->nextchunkedpos, i=0; t < buflen && buf[t] != '\r' && buf[t] != '\n'; t++) {
 		if (i < 9) {
 			hex[i++] = buf[t];
 		}
