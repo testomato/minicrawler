@@ -148,12 +148,6 @@ struct mcrawler_url {
 	char *wwwauthenticate;
 	char *authorization;
 	int auth_attempt;
-	// origin (scheme+host+port) the credentials were supplied for; auto-auth is
-	// only performed when a challenging origin matches this, so credentials are
-	// never disclosed to a different host reached via redirect
-	char auth_hostname[256];
-	char auth_proto[8];
-	int auth_port;
 
 	// request
 	unsigned char *request;
@@ -204,6 +198,14 @@ struct mcrawler_url {
 	void *f;
 
 	void *userdata;
+
+	// origin (scheme+host+port) the credentials were supplied for; auto-auth is
+	// only performed when a challenging origin matches this, so credentials are
+	// never disclosed to a different host reached via redirect. Kept at the end of
+	// the struct so adding it does not shift the offsets of existing fields (ABI).
+	char auth_hostname[256];
+	char auth_proto[8];
+	int auth_port;
 };
 
 typedef struct mcrawler_settings mcrawler_settings;

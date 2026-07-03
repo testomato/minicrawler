@@ -204,6 +204,12 @@ int mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings
 	int len = tpl_Alen(tn, 1);
 	if (len < 0) {
 		len = 0;
+	} else if (len > buffer_size) {
+		// a valid blob needs at least a few bytes per url, so the element count
+		// can never exceed the blob size; reject an absurd count from a bad blob
+		debugf("urls_unserialize: url count %d exceeds blob size %d, rejecting\n", len, buffer_size);
+		tpl_free(tn);
+		return 1;
 	}
 	*urls = (mcrawler_url **)malloc((len + 1) * sizeof(mcrawler_url *));
 
@@ -212,7 +218,14 @@ int mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings
 		memset((*urls)[i], 0, sizeof(mcrawler_url));
 		mcrawler_init_url((*urls)[i], NULL);
 		tpl_unpack(tn, 1);
-		mcrawler_url_unserialize((*urls)[i], url_buf.addr, (int)url_buf.sz);
+		if (mcrawler_url_unserialize((*urls)[i], url_buf.addr, (int)url_buf.sz) != 0) {
+			// malformed per-url sub-blob: stop here rather than handing back a
+			// zero-initialised url as if it were valid
+			free(url_buf.addr);
+			(*urls)[i] = NULL;
+			tpl_free(tn);
+			return 1;
+		}
 		free(url_buf.addr);
 	}
 	(*urls)[len] = NULL;

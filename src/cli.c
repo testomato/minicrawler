@@ -133,10 +133,15 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 				char *path   = malloc(linelen + 1);
 				char *name   = malloc(linelen + 1);
 				char *value  = malloc(linelen + 1);
+				if (!domain || !path || !name || !value) {
+					free(domain); free(path); free(name); free(value);
+					break; // out of memory — stop parsing the cookie file
+				}
+				value[0] = 0; // value may be legitimately empty (only 6 fields matched)
 				int host_only = 0, secure = 0;
 				long expires = 0;
 				const int matched = sscanf(p, "%s\t%d\t%s\t%d\t%ld\t%s\t%s", domain, &host_only, path, &secure, &expires, name, value);
-				if (matched == 7) {
+				if (matched == 6 || matched == 7) { // 6: cookie with an empty value
 					cookies[ccnt].domain = domain;
 					cookies[ccnt].host_only = host_only;
 					cookies[ccnt].path = path;

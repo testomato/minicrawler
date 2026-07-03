@@ -712,6 +712,8 @@ static int is_private_addr(const mcrawler_addr *addr) {
 		if (ip[0] == 192 && ip[1] == 168) return 1;          // 192.168.0.0/16
 		if (ip[0] == 169 && ip[1] == 254) return 1;          // 169.254.0.0/16 link-local (incl. 169.254.169.254 metadata)
 		if (ip[0] == 100 && (ip[1] & 0xc0) == 64) return 1;  // 100.64.0.0/10 CGNAT
+		if ((ip[0] & 0xf0) == 224) return 1;                 // 224.0.0.0/4 multicast
+		if ((ip[0] & 0xf0) == 240) return 1;                 // 240.0.0.0/4 reserved (incl. 255.255.255.255 broadcast)
 		return 0;
 	}
 	if (addr->type == AF_INET6) {
@@ -719,6 +721,7 @@ static int is_private_addr(const mcrawler_addr *addr) {
 		static const unsigned char zero[16] = {0};
 		if (memcmp(ip, zero, 16) == 0) return 1;             // :: unspecified
 		if (memcmp(ip, zero, 15) == 0 && ip[15] == 1) return 1; // ::1 loopback
+		if (ip[0] == 0xff) return 1;                            // ff00::/8 multicast
 		if (ip[0] == 0xfe && (ip[1] & 0xc0) == 0x80) return 1;  // fe80::/10 link-local
 		if ((ip[0] & 0xfe) == 0xfc) return 1;                   // fc00::/7 unique local
 		if (memcmp(ip, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12) == 0) { // IPv4-mapped ::ffff:0:0/96
@@ -1418,9 +1421,11 @@ static void header_cb(const char *name, char *value, void *data) {
 		char *endp = NULL;
 		errno = 0;
 		const unsigned long long cl = strtoull(value, &endp, 10);
-		if (endp == value || *value == '-' || errno != 0 || cl > (unsigned long long)((size_t)-1)) {
-			// negative, non-numeric or out-of-range: do not trust it. Leaving
-			// has_contentlen = 0 falls back to reading until EOF.
+		while (*endp == ' ' || *endp == '\t') endp++; // tolerate trailing whitespace only
+		if (endp == value || *endp != 0 || *value == '-' || errno != 0 || cl > (unsigned long long)((size_t)-1)) {
+			// negative, non-numeric, trailing garbage (e.g. "123, 456") or
+			// out-of-range: do not trust it. Leaving has_contentlen = 0 falls
+			// back to reading until EOF.
 			debugf("[%d] Invalid Content-Length '%s'... ignoring\n", u->index, value);
 			return;
 		}

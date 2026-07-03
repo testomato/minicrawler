@@ -79,7 +79,7 @@ static void test_parsehead(void) {
 	// #7: multi-MB head must be handled on the heap (no crash / stack clash)
 	const size_t big = 2 * 1024 * 1024;
 	char *hbig = malloc(big + 64);
-	int n = sprintf(hbig, "HTTP/1.1 200 OK\r\n");
+	int n = snprintf(hbig, 64, "HTTP/1.1 200 OK\r\n");
 	memset(hbig + n, 'A', big);          // one huge unterminated "header" line
 	memcpy(hbig + n + big, "\r\n\r\n", 4);
 	status = -1;
@@ -150,6 +150,23 @@ static void test_cookie_domain(void) {
 	ok(u->cookiecnt == 1 && u->cookies[0].host_only == 1 && strcmp(u->cookies[0].domain, "evil.com") == 0,
 		"#11 Domain=com (no embedded dot) does not create a cross-TLD cookie");
 	free_cookie_url(u);
+
+	// #3: domain match must use the true suffix, not the first occurrence, so a
+	// host whose domain label repeats earlier still matches.
+	u = make_cookie_url("host.evil.com.evil.com");
+	u->cookiecnt = 1;
+	u->cookies[0].domain = strdup("evil.com");
+	u->cookies[0].name   = strdup("k");
+	u->cookies[0].value  = strdup("v");
+	u->cookies[0].path   = strdup("/");
+	u->cookies[0].host_only = 0;
+	u->cookies[0].secure    = 0;
+	{
+		char out[256]; size_t len = 0;
+		set_cookies_header(u, out, &len);
+		ok(len > 0, "#3 domain match uses the true suffix (repeated label host)");
+	}
+	free_cookie_url(u);
 }
 
 /* ---- #10: unserialize must reject a malformed blob, not corrupt memory ---- */
@@ -164,11 +181,11 @@ static void test_unserialize(void) {
 
 int main(void) {
 	// count of ok() calls below
-	printf("1..13\n");
+	printf("1..14\n");
 	test_str_replace();   // 3
 	test_parsehead();     // 4
 	test_eatchunk();      // 1
-	test_cookie_domain(); // 4
+	test_cookie_domain(); // 5
 	test_unserialize();   // 1
 	return failures ? 1 : 0;
 }

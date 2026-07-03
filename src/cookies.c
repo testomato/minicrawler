@@ -14,11 +14,15 @@
  * "attacker.com" for "ttacker.com", or "com" for every "*.com" host.
  */
 static int domain_match(const char *host, const char *domain) {
-	const char *p = strcasestr(host, domain);
-	if (p == NULL) {
+	const size_t hl = strlen(host), dl = strlen(domain);
+	if (dl == 0 || dl > hl) {
 		return 0;
 	}
-	if (*(p + strlen(domain)) != 0) { // domain must be a suffix of host
+	// compare at the actual suffix position; strcasestr would find the *first*
+	// occurrence, wrongly rejecting hosts whose domain label repeats earlier
+	// (e.g. host "evil.com.evil.com", domain "evil.com").
+	const char *p = host + (hl - dl);
+	if (strcasecmp(p, domain) != 0) {
 		return 0;
 	}
 	return p == host || *(p - 1) == '.'; // identical, or on a label boundary

@@ -25,7 +25,12 @@ int gunzip_buf(mcrawler_url *u) {
     consumed = 0;
     produced = 0;
 
-    max_output = resp_len > GZIP_MIN_OUTPUT / GZIP_MAX_RATIO ? resp_len * GZIP_MAX_RATIO : GZIP_MIN_OUTPUT;
+    // compute the cap in 64-bit and clamp so the multiply cannot overflow size_t
+    // (would wrap the cap to a tiny value on 32-bit builds with a large maxpagesize)
+    unsigned long long cap = (unsigned long long)resp_len * GZIP_MAX_RATIO;
+    if (cap < GZIP_MIN_OUTPUT) cap = GZIP_MIN_OUTPUT;
+    if (cap > (unsigned long long)((size_t)-1)) cap = (unsigned long long)((size_t)-1);
+    max_output = (size_t)cap;
 
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;

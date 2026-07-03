@@ -43,6 +43,11 @@ int parsehead(const unsigned char *s, const size_t len, int *status, header_call
 	buf[len] = 0;
 
 	if (status != NULL) {
+		if (len < 9) { // too short to hold "HTTP/1.x " + a status code
+			debugf("[%d] Head too short for a status line (%zu bytes)\n", index, len);
+			ret = 1;
+			goto out;
+		}
 		if (strncmp("HTTP/1.0", p, 8) && strncmp("HTTP/1.1", p, 8)) {
 			debugf("[%d] Unsupported protocol '%.*s'\n", index, 8, p);
 			ret = 1;
