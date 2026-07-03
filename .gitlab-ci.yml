@@ -1,17 +1,34 @@
+# Run one pipeline per change: merge-request pipelines for MRs, branch
+# pipelines otherwise (but not a duplicate branch pipeline while an MR is open).
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH'
+
 stages:
   - Test
   - Build
 
-# Build + run the unit tests under AddressSanitizer + UndefinedBehaviorSanitizer.
-# The runner is a shell executor, so we run everything inside the dev image
-# (which already carries the toolchain, deps and php-cli for `make check`).
+# Earlier bind-mounted / in-tree builds run as container root and leave
+# root-owned artifacts that the shell runner's `git clean` cannot remove.
+# Reset ownership to the runner user before sources are fetched.
+.fix-workspace-ownership: &fix-workspace-ownership
+  - 'docker run --rm -v "$CI_PROJECT_DIR:/w" alpine chown -R "$(id -u):$(id -g)" /w || true'
+
+# Build + run the unit tests and WHATWG URL suite under AddressSanitizer +
+# UndefinedBehaviorSanitizer. The runner is a shell executor, so we run
+# everything inside the dev image (toolchain, deps and php-cli for `make check`).
 Sanitizers:
   tags: [ shell ]
   stage: Test
+  hooks:
+    pre_get_sources_script: *fix-workspace-ownership
   script:
-    - docker build -f .docker/Dockerfile --target minicrawler-dev -t minicrawler-dev-ci .
+    - docker build -f .docker/Dockerfile --target minicrawler-dev -t minicrawler-dev-ci-$CI_PIPELINE_ID .
     - >
-      docker run --rm -v "$PWD:/minicrawler" -w /minicrawler minicrawler-dev-ci bash -lc '
+      docker run --rm -v "$PWD:/minicrawler" -w /minicrawler minicrawler-dev-ci-$CI_PIPELINE_ID bash -lc '
       ./autogen.sh &&
       ./configure
         CFLAGS="-g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer"
@@ -19,9 +36,32 @@ Sanitizers:
         LDFLAGS="-fsanitize=address,undefined" &&
       make -j"$(nproc)" &&
       ASAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 make check'
-  rules:
-    - if: $CI_COMMIT_BRANCH
+  after_script:
+    - docker rmi minicrawler-dev-ci-$CI_PIPELINE_ID 2>/dev/null || true
 
+# Integration tests against httpbin (same image as the GitHub CI) + a live
+# "try" run. Mirrors the GitHub Actions integration/try jobs.
+Integration:
+  tags: [ shell ]
+  stage: Test
+  hooks:
+    pre_get_sources_script: *fix-workspace-ownership
+  variables:
+    DEV_IMAGE: minicrawler-dev-int-$CI_PIPELINE_ID
+    HTTPBIN: mc-httpbin-$CI_PIPELINE_ID
+    NET: mc-net-$CI_PIPELINE_ID
+  script:
+    - docker build --target minicrawler-dev -t $DEV_IMAGE -f .docker/Dockerfile .
+    - docker network create $NET
+    - docker run -d --name $HTTPBIN --network $NET --platform linux/amd64 kennethreitz/httpbin
+    - docker run --rm --network $NET -e HTTPBIN_URL=http://$HTTPBIN:80 $DEV_IMAGE make -C integration-tests check
+    - docker run --rm $DEV_IMAGE ./minicrawler5 https://www.testomato.com/humans.txt
+  after_script:
+    - docker rm -f $HTTPBIN 2>/dev/null || true
+    - docker network rm $NET 2>/dev/null || true
+    - docker rmi $DEV_IMAGE 2>/dev/null || true
+
+# Build & push the production container — default branch only.
 Build minicrawler container:
   tags: [ shell ]
   stage: Build
