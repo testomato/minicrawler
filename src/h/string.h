@@ -34,17 +34,50 @@ static inline char *safe_strncpy(char *dst, const char *src, const size_t dz) {
 	return &dst[i];
 }
 
-/** neci kod na str_replace (pod free licenci)
+/** Replaces the first occurrence of substr in string with replacement, writing
+ * at most destsize-1 bytes into dest (always NUL-terminated). Output that would
+ * exceed the destination is truncated rather than overflowing it.
  */
-static inline char *str_replace( char *dest,  const char *string, const char *substr, const char *replacement ) {
-	char *tok = NULL;
+static inline char *str_replace( char *dest, const size_t destsize, const char *string, const char *substr, const char *replacement ) {
+	if (destsize == 0) {
+		return dest;
+	}
 
-	tok = strstr( string, substr );
-	if( tok == NULL ) return strcpy( dest, string );
-	memcpy( dest, string, tok - string );
-	memcpy( dest + (tok - string), replacement, strlen( replacement ) );
-	memcpy( dest + (tok - string) + strlen( replacement ), tok + strlen( substr ), strlen( string ) - strlen( substr ) - ( tok - string ) );
-	memset( dest + strlen( string ) - strlen( substr ) + strlen( replacement ), 0, 1 );
+	const char *tok = strstr( string, substr );
+	size_t di = 0, n;
+
+	if (tok == NULL) {
+		n = strlen( string );
+		if (n > destsize - 1) n = destsize - 1;
+		memcpy( dest, string, n );
+		dest[n] = 0;
+		return dest;
+	}
+
+	// prefix before the match
+	n = (size_t)(tok - string);
+	if (n > destsize - 1) n = destsize - 1;
+	memcpy( dest, string, n );
+	di = n;
+
+	// replacement
+	if (di < destsize - 1) {
+		n = strlen( replacement );
+		if (n > destsize - 1 - di) n = destsize - 1 - di;
+		memcpy( dest + di, replacement, n );
+		di += n;
+	}
+
+	// suffix after the match
+	if (di < destsize - 1) {
+		const char *rest = tok + strlen( substr );
+		n = strlen( rest );
+		if (n > destsize - 1 - di) n = destsize - 1 - di;
+		memcpy( dest + di, rest, n );
+		di += n;
+	}
+
+	dest[di] = 0;
 	return dest;
 }
 

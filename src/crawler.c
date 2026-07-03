@@ -539,6 +539,15 @@ static int set_new_url(mcrawler_url *u, char *rawurl, mcrawler_url_url *base) {
 
 	debugf("[%d] proto='%s' hostname='%s' port=%d path='%s'\n", u->index, u->proto, u->hostname, u->port, u->path);
 
+	// Bind supplied credentials to the first origin they are seen with (the
+	// operator-chosen URL). Later redirects change hostname/port/proto but not
+	// this binding, so credentials are never sent to a redirected-to host.
+	if (u->username[0] && u->auth_hostname[0] == 0) {
+		SAFE_STRCPY(u->auth_hostname, u->hostname);
+		SAFE_STRCPY(u->auth_proto, u->proto);
+		u->auth_port = u->port;
+	}
+
 	if (url->host->type == MCRAWLER_URL_HOST_IPV4) {
 		free_addr(u->prev_addr);
 		u->prev_addr = u->addr;
@@ -686,6 +695,45 @@ static void connectsocket(mcrawler_url *u) {
 	set_atomic_int(&u->rw, 1<< MCURL_RW_READY_READ | 1<<MCURL_RW_READY_WRITE);
 }
 
+/**
+ * Classifies an address as loopback / link-local / private / otherwise
+ * non-public. Used by the optional SSRF egress policy.
+ */
+static int is_private_addr(const mcrawler_addr *addr) {
+	if (addr == NULL) {
+		return 0;
+	}
+	if (addr->type == AF_INET) {
+		const unsigned char *ip = addr->ip;
+		if (ip[0] == 0) return 1;                            // 0.0.0.0/8
+		if (ip[0] == 127) return 1;                          // 127.0.0.0/8 loopback
+		if (ip[0] == 10) return 1;                           // 10.0.0.0/8
+		if (ip[0] == 172 && (ip[1] & 0xf0) == 16) return 1;  // 172.16.0.0/12
+		if (ip[0] == 192 && ip[1] == 168) return 1;          // 192.168.0.0/16
+		if (ip[0] == 169 && ip[1] == 254) return 1;          // 169.254.0.0/16 link-local (incl. 169.254.169.254 metadata)
+		if (ip[0] == 100 && (ip[1] & 0xc0) == 64) return 1;  // 100.64.0.0/10 CGNAT
+		if ((ip[0] & 0xf0) == 224) return 1;                 // 224.0.0.0/4 multicast
+		if ((ip[0] & 0xf0) == 240) return 1;                 // 240.0.0.0/4 reserved (incl. 255.255.255.255 broadcast)
+		return 0;
+	}
+	if (addr->type == AF_INET6) {
+		const unsigned char *ip = addr->ip;
+		static const unsigned char zero[16] = {0};
+		if (memcmp(ip, zero, 16) == 0) return 1;             // :: unspecified
+		if (memcmp(ip, zero, 15) == 0 && ip[15] == 1) return 1; // ::1 loopback
+		if (ip[0] == 0xff) return 1;                            // ff00::/8 multicast
+		if (ip[0] == 0xfe && (ip[1] & 0xc0) == 0x80) return 1;  // fe80::/10 link-local
+		if ((ip[0] & 0xfe) == 0xfc) return 1;                   // fc00::/7 unique local
+		if (memcmp(ip, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12) == 0) { // IPv4-mapped ::ffff:0:0/96
+			mcrawler_addr v4 = { .type = AF_INET, .length = 4 };
+			memcpy(v4.ip, ip + 12, 4);
+			return is_private_addr(&v4);
+		}
+		return 0;
+	}
+	return 0;
+}
+
 /** uz znam IP, otevri socket
  */
 static void opensocket(mcrawler_url *u)
@@ -693,6 +741,26 @@ static void opensocket(mcrawler_url *u)
 	int flags;
 	struct sockaddr_storage addr;
 	socklen_t addrlen;
+
+	// Optional SSRF egress policy: block non-public targets and unusual ports.
+	// This covers both IP-literal URLs and hosts reached via redirect, since
+	// every connection funnels through here after the address is resolved.
+	if (u->options & 1<<MCURL_OPT_BLOCK_PRIVATE_IP) {
+		if (is_private_addr(u->addr)) {
+			char straddr[INET6_ADDRSTRLEN];
+			inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
+			debugf("[%d] Blocked connection to non-public address %s (SSRF protection)\n", u->index, straddr);
+			sprintf(u->error_msg, "Blocked connection to non-public address (SSRF protection)");
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+			return;
+		}
+		if (u->port != 80 && u->port != 443) {
+			debugf("[%d] Blocked connection to disallowed port %d (SSRF protection)\n", u->index, u->port);
+			sprintf(u->error_msg, "Blocked connection to disallowed port %d (SSRF protection)", u->port);
+			set_atomic_int(&u->state, MCURL_S_ERROR);
+			return;
+		}
+	}
 
 	if (u->sockfd) {
 		close_conn(u);
@@ -1324,6 +1392,18 @@ static void empty_handshake(mcrawler_url *u) {
 	set_atomic_int(&u->state, MCURL_S_GENREQUEST);
 }
 
+/**
+ * True when the current request origin (scheme+host+port) is the same origin the
+ * credentials were supplied for. Used to avoid disclosing HTTP credentials to a
+ * different host after a redirect.
+ */
+static int auth_origin_matches(const mcrawler_url *u) {
+	return u->auth_hostname[0]
+		&& u->port == u->auth_port
+		&& !strcasecmp(u->hostname, u->auth_hostname)
+		&& !strcmp(u->proto, u->auth_proto);
+}
+
 static void header_cb(const char *name, char *value, void *data) {
 	mcrawler_url *u = (mcrawler_url *)data;
 	if (!strcasecmp(name, ":status")) {
@@ -1332,8 +1412,25 @@ static void header_cb(const char *name, char *value, void *data) {
 	}
 
 	if (!strcasecmp(name, "Content-Length")) {
+		if (u->chunked) {
+			// RFC 7230: Transfer-Encoding takes precedence and a message carrying
+			// both is a framing / request-smuggling risk — ignore Content-Length.
+			debugf("[%d] Ignoring Content-Length (chunked transfer-encoding present)\n", u->index);
+			return;
+		}
+		char *endp = NULL;
+		errno = 0;
+		const unsigned long long cl = strtoull(value, &endp, 10);
+		while (*endp == ' ' || *endp == '\t') endp++; // tolerate trailing whitespace only
+		if (endp == value || *endp != 0 || *value == '-' || errno != 0 || cl > (unsigned long long)((size_t)-1)) {
+			// negative, non-numeric, trailing garbage (e.g. "123, 456") or
+			// out-of-range: do not trust it. Leaving has_contentlen = 0 falls
+			// back to reading until EOF.
+			debugf("[%d] Invalid Content-Length '%s'... ignoring\n", u->index, value);
+			return;
+		}
 		u->has_contentlen = 1;
-		u->contentlen = atoi(value);
+		u->contentlen = (size_t)cl;
 		debugf("[%d] Head, Content-Length: %zd\n", u->index, u->contentlen);
 		if (!strcmp(u->method, "HEAD")) { // there will be no content
 			u->contentlen = 0;
@@ -1395,7 +1492,9 @@ static void header_cb(const char *name, char *value, void *data) {
 		if ((p = strstr(value, " charset="))) {
 			u->contenttype = malloc(p - value + 1);
 			memcpy(u->contenttype, value, p-value+1);
-			for (int i = p-value; u->contenttype[i] == ' ' || u->contenttype[i] == ';'; i--) u->contenttype[i] = 0;
+			// strip trailing separators; bound at index 0 so a value that is all
+			// spaces/semicolons before "charset=" cannot underflow the buffer.
+			for (int i = p-value; i >= 0 && (u->contenttype[i] == ' ' || u->contenttype[i] == ';'); i--) u->contenttype[i] = 0;
 			p += 9;
 			if (strlen(p) < sizeof(u->charset)) {
 				strcpy(u->charset, p);
@@ -1412,7 +1511,12 @@ static void header_cb(const char *name, char *value, void *data) {
 		u->wwwauthenticate = strdup(value);
 		if (u->status == 401 && u->username[0]) {
 			// TODO: header can exists multiple times
-			parse_authchallenge(u, value);
+			if (auth_origin_matches(u)) {
+				parse_authchallenge(u, value);
+			} else {
+				debugf("[%d] Not authenticating to origin %s://%s:%d — credentials were supplied for %s://%s:%d\n",
+					u->index, u->proto, u->hostname, u->port, u->auth_proto, u->auth_hostname, u->auth_port);
+			}
 		}
 		return;
 	}
@@ -1529,6 +1633,7 @@ void reset_url(mcrawler_url *u) {
 	u->chunked = 0;
 	u->gzipped = 0;
 	u->ssl_options.opts = 0;
+	u->ssl_options.max_proto = 0; // do not carry a lowered TLS cap across redirects
 	if (u->contenttype) {
 		free(u->contenttype);
 		u->contenttype = NULL;

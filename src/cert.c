@@ -6,6 +6,7 @@
 #include <openssl/err.h>
 #include <openssl/x509v3.h>
 #include <openssl/asn1.h>
+#include <arpa/inet.h>
 #ifdef HAVE_LIBNGHTTP2
 #include <nghttp2/nghttp2.h>
 #endif
@@ -318,6 +319,10 @@ int create_ssl(mcrawler_url *u) {
 	SSL_set_bio(ssl, sbio, sbio);
 #ifdef HAVE_DECL_SSL_GET_MAX_PROTO_VERSION
 	SSL_set_max_proto_version(ssl, u->ssl_options.max_proto);
+	// Set an explicit minimum-version floor so the step-down retry logic
+	// (lower_ssl_protocol) can never be driven below policy by an active MITM
+	// forcing handshake failures.
+	SSL_set_min_proto_version(ssl, TLS1_2_VERSION);
 #else
 	SSL_set_options(ssl, u->ssl_options.opts);
 #endif
@@ -325,8 +330,19 @@ int create_ssl(mcrawler_url *u) {
 	SSL_set_app_data(ssl, (char *)u);
 
 #ifdef HAVE_SSL_GET0_PARAM
-	X509_VERIFY_PARAM *vpm = SSL_get0_param(ssl);;
-	X509_VERIFY_PARAM_set1_host(vpm, u->hostname, 0);
+	X509_VERIFY_PARAM *vpm = SSL_get0_param(ssl);
+	unsigned char ipbuf[sizeof(struct in6_addr)];
+	if (inet_pton(AF_INET, u->hostname, ipbuf) == 1 || inet_pton(AF_INET6, u->hostname, ipbuf) == 1) {
+		// IP-literal target: match against IP SANs rather than dNSName
+		X509_VERIFY_PARAM_set1_ip_asc(vpm, u->hostname);
+	} else {
+		X509_VERIFY_PARAM_set1_host(vpm, u->hostname, 0);
+	}
+#else
+	// Without SSL_get0_param we cannot enforce hostname verification, which would
+	// silently accept any valid certificate for any host (fail-open MITM). Refuse
+	// to build rather than ship that. Upgrade OpenSSL (>= 1.0.2) to build with TLS.
+#	error "TLS hostname verification unavailable (no SSL_get0_param); refusing to build a fail-open TLS client. Upgrade OpenSSL or build --without SSL."
 #endif
 
 	if (u->options & 1<<MCURL_OPT_INSECURE) {

@@ -13,6 +13,7 @@ test-suite.log
 
 # make check files
 /test/url
+/test/unit
 /test/run.log
 /test/run.trs
 /integration-tests/run.log

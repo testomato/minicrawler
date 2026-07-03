@@ -8,15 +8,29 @@
 
 #define ERR_PREFIX "Gzip decompression error: "
 
+// Decompression-bomb guard: cap the inflated output at GZIP_MAX_RATIO times the
+// compressed size, but always allow at least GZIP_MIN_OUTPUT so small legitimate
+// responses are never truncated. This is independent of maxpagesize so a few-KB
+// gzip response cannot be made to pin a full maxpagesize buffer.
+#define GZIP_MAX_RATIO 100
+#define GZIP_MIN_OUTPUT (1UL << 20) // 1 MiB
+
 int gunzip_buf(mcrawler_url *u) {
     int             rc;
-    size_t          len, resp_len, consumed, produced;
+    size_t          len, resp_len, consumed, produced, max_output;
     z_stream        strm;
     unsigned char  *buf, *body_start, *prev_buf;
 
     resp_len = buf_len(u) - u->headlen;
     consumed = 0;
     produced = 0;
+
+    // compute the cap in 64-bit and clamp so the multiply cannot overflow size_t
+    // (would wrap the cap to a tiny value on 32-bit builds with a large maxpagesize)
+    unsigned long long cap = (unsigned long long)resp_len * GZIP_MAX_RATIO;
+    if (cap < GZIP_MIN_OUTPUT) cap = GZIP_MIN_OUTPUT;
+    if (cap > (unsigned long long)((size_t)-1)) cap = (unsigned long long)((size_t)-1);
+    max_output = (size_t)cap;
 
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
@@ -86,6 +100,14 @@ int gunzip_buf(mcrawler_url *u) {
                 if (strm.avail_out > 0) {
                     debugf("[%d] gzip decompress: no progress possible (avail_in=%ld, avail_out=%ld)\n", u->index, strm.avail_in, strm.avail_out);
                     rc = 0;
+                    goto done;
+                }
+
+                // decompression-bomb guard: refuse to keep expanding past the cap
+                if (strm.total_out > max_output) {
+                    debugf("[%d] gzip decompress: output exceeded limit of %zd bytes (input %zd)\n", u->index, max_output, resp_len);
+                    strcpy(u->error_msg, ERR_PREFIX "decompressed size limit exceeded");
+                    rc = Z_DATA_ERROR;
                     goto done;
                 }
 
