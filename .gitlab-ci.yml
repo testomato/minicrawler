@@ -11,11 +11,14 @@ stages:
   - Test
   - Build
 
-# Earlier bind-mounted / in-tree builds run as container root and leave
-# root-owned artifacts that the shell runner's `git clean` cannot remove.
-# Reset ownership to the runner user before sources are fetched.
-.fix-workspace-ownership: &fix-workspace-ownership
-  - 'docker run --rm -v "$CI_PROJECT_DIR:/w" alpine chown -R "$(id -u):$(id -g)" /w || true'
+# The Sanitizers job bind-mounts the workspace and builds as container root,
+# leaving root-owned artifacts that the shell runner's `git clean` cannot remove
+# on the next job/pipeline. Reset ownership to the runner user before every job's
+# source fetch so the checkout always succeeds.
+default:
+  hooks:
+    pre_get_sources_script:
+      - 'docker run --rm -v "$CI_PROJECT_DIR:/w" alpine chown -R "$(id -u):$(id -g)" /w || true'
 
 # Build + run the unit tests and WHATWG URL suite under AddressSanitizer +
 # UndefinedBehaviorSanitizer. The runner is a shell executor, so we run
@@ -23,8 +26,6 @@ stages:
 Sanitizers:
   tags: [ shell ]
   stage: Test
-  hooks:
-    pre_get_sources_script: *fix-workspace-ownership
   script:
     - docker build -f .docker/Dockerfile --target minicrawler-dev -t minicrawler-dev-ci-$CI_PIPELINE_ID .
     - >
@@ -44,8 +45,6 @@ Sanitizers:
 Integration:
   tags: [ shell ]
   stage: Test
-  hooks:
-    pre_get_sources_script: *fix-workspace-ownership
   variables:
     DEV_IMAGE: minicrawler-dev-int-$CI_PIPELINE_ID
     HTTPBIN: mc-httpbin-$CI_PIPELINE_ID
