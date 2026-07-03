@@ -104,17 +104,25 @@ int mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size) {
 		return 1;
 	}
 
-	tpl_load(tn, TPL_MEM, buffer, buffer_size);
-	tpl_unpack(tn, 0);
+	// A crafted blob must not be able to corrupt memory: validate the tpl load,
+	// bound every string copy to its fixed destination, and clamp the cookie count.
+	if (tpl_load(tn, TPL_MEM, buffer, buffer_size) != 0) {
+		tpl_free(tn);
+		return 1;
+	}
+	if (tpl_unpack(tn, 0) <= 0) {
+		tpl_free(tn);
+		return 1;
+	}
 
-	strcpy(url->rawurl, rawurl); free(rawurl);
-	strcpy(url->method, method); free(method);
-	strcpy(url->customagent, customagent); free(customagent);
-	strcpy(url->customheader, customheader); free(customheader);
-	strcpy(url->username, username); free(username);
-	strcpy(url->password, password); free(password);
-	strcpy(url->error_msg, error_msg); free(error_msg);
-	strcpy(url->charset, charset); free(charset);
+	safe_strncpy(url->rawurl, rawurl ? rawurl : "", sizeof(url->rawurl)); free(rawurl);
+	safe_strncpy(url->method, method ? method : "", sizeof(url->method)); free(method);
+	safe_strncpy(url->customagent, customagent ? customagent : "", sizeof(url->customagent)); free(customagent);
+	safe_strncpy(url->customheader, customheader ? customheader : "", sizeof(url->customheader)); free(customheader);
+	safe_strncpy(url->username, username ? username : "", sizeof(url->username)); free(username);
+	safe_strncpy(url->password, password ? password : "", sizeof(url->password)); free(password);
+	safe_strncpy(url->error_msg, error_msg ? error_msg : "", sizeof(url->error_msg)); free(error_msg);
+	safe_strncpy(url->charset, charset ? charset : "", sizeof(url->charset)); free(charset);
 
 	url->post = post.addr;
 	url->postlen = post.sz;
@@ -125,8 +133,15 @@ int mcrawler_url_unserialize(mcrawler_url *url, void *buffer, int buffer_size) {
 	buf_write(url, buf.addr, buf.sz);
 	free(buf.addr);
 
-	url->cookiecnt = tpl_Alen(tn, 1);
-	for (int i = 0; i < url->cookiecnt; i++) {
+	int ccnt = tpl_Alen(tn, 1);
+	if (ccnt < 0) {
+		ccnt = 0;
+	} else if (ccnt > COOKIESTORAGESIZE) {
+		debugf("unserialize: cookie count %d exceeds storage, clamping to %d\n", ccnt, COOKIESTORAGESIZE);
+		ccnt = COOKIESTORAGESIZE;
+	}
+	url->cookiecnt = ccnt;
+	for (int i = 0; i < ccnt; i++) {
 		tpl_unpack(tn, 1);
 		url->cookies[i] = cookie;
 	}
@@ -180,10 +195,16 @@ int mcrawler_urls_unserialize(mcrawler_url ***urls, mcrawler_settings **settings
 		return 1;
 	}
 
-	tpl_load(tn, TPL_MEM, buffer, buffer_size);
+	if (tpl_load(tn, TPL_MEM, buffer, buffer_size) != 0) {
+		tpl_free(tn);
+		return 1;
+	}
 	tpl_unpack(tn, 0);
 
 	int len = tpl_Alen(tn, 1);
+	if (len < 0) {
+		len = 0;
+	}
 	*urls = (mcrawler_url **)malloc((len + 1) * sizeof(mcrawler_url *));
 
 	for (int i = 0; i < len; i++) {

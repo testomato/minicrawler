@@ -34,15 +34,19 @@ minicrawler@MINICRAWLER_API_VERSION@_SOURCES = $(minicrawler_sources)
 minicrawler@MINICRAWLER_API_VERSION@_CFLAGS = $(AM_CFLAGS) -fPIE
 minicrawler@MINICRAWLER_API_VERSION@_LDFLAGS = $(AM_LDFLAGS) -pie
 
-check_PROGRAMS = test/url
+check_PROGRAMS = test/url test/unit
 
 test_url_SOURCES = test/url.c test/json/json.c $(libminicrawler_url_sources)
 test_url_CFLAGS = $(AM_CFLAGS)
 test_url_LDFLAGS = $(AM_LDFLAGS) -lm
 #test_url_LDADD = libminicrawler-url.la
 
+# Regression / unit tests for libminicrawler internals (issues #5–#19).
+test_unit_SOURCES = test/unit.c $(libminicrawler_sources)
+test_unit_CFLAGS = $(AM_CFLAGS)
+
 LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build-aux/tap-driver.sh
-TESTS = test/run
+TESTS = test/run test/unit
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libminicrawler/libminicrawler-$(MINICRAWLER_API_VERSION).pc libminicrawler/libminicrawler-url-$(MINICRAWLER_API_VERSION).pc

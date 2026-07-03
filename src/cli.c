@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
+#include <time.h>
 #include <arpa/inet.h>
 
 #include "h/config.h"
@@ -25,6 +27,7 @@ void printusage()
 	         "         -g         accept gzip encoding\n"
 	         "         -h         enable output of HTTP headers\n"
 	         "         -i         enable impatient mode (minicrawler exits few seconds earlier if it doesn't make enough progress)\n"
+	         "         -I         SSRF protection: refuse loopback/link-local/private addresses and ports other than 80/443\n"
 	         "         -k         disable SSL certificate verification (allow insecure connections)\n"
 	         "         -l         do not follow redirects\n"
 	         "         -mINT      maximum page size in MiB (default 2 MiB)\n"
@@ -55,6 +58,31 @@ static int writehead = 0;
 	} \
 } while (0)
 
+/**
+ * Appends formatted output to buf at *plen, never writing past bufsize-1 bytes
+ * (buf stays NUL-terminated). On truncation *plen is pinned to bufsize-1 so all
+ * subsequent appends become no-ops. Returns the number of bytes appended.
+ */
+static int append_fmt(char *buf, size_t bufsize, int *plen, const char *fmt, ...) {
+	if (bufsize == 0 || (size_t)*plen >= bufsize - 1) {
+		*plen = bufsize ? (int)(bufsize - 1) : 0;
+		return 0;
+	}
+	va_list ap;
+	va_start(ap, fmt);
+	const int n = vsnprintf(buf + *plen, bufsize - *plen, fmt, ap);
+	va_end(ap);
+	if (n < 0) {
+		return 0;
+	}
+	if ((size_t)n >= bufsize - *plen) {
+		*plen = (int)(bufsize - 1); // truncated
+		return (int)(bufsize - 1);
+	}
+	*plen += n;
+	return n;
+}
+
 /** nacte url z prikazove radky do struktur
  */
 void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *settings)
@@ -80,6 +108,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-S")) {options |= 1<<MCURL_OPT_NONSSL; continue;}
 		if(!strcmp(argv[t], "-h")) {writehead=1; continue;}
 		if(!strcmp(argv[t], "-i")) {settings->impatient=1; continue;}
+		if(!strcmp(argv[t], "-I")) {options |= 1<<MCURL_OPT_BLOCK_PRIVATE_IP; continue;}
 		if(!strcmp(argv[t], "-c")) {options |= 1<<MCURL_OPT_CONVERT_TO_TEXT | 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-8")) {options |= 1<<MCURL_OPT_CONVERT_TO_UTF8; continue;}
 		if(!strcmp(argv[t], "-g")) {options |= 1<<MCURL_OPT_GZIP; continue;}
@@ -88,19 +117,38 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strncmp(argv[t], "-t", 2)) {settings->timeout = atoi(argv[t]+2); continue;}
 		if(!strncmp(argv[t], "-D", 2)) {settings->delay = atoi(argv[t]+2); continue;}
 		if(!strcmp(argv[t], "-w")) {NEED_ARG(t); SAFE_STRCPY(customheader, argv[t+1]); t++; continue;}
-		if(!strcmp(argv[t], "-A")) {NEED_ARG(t); str_replace(customagent, argv[t+1], "%version%", VERSION); t++; continue;}
+		if(!strcmp(argv[t], "-A")) {NEED_ARG(t); str_replace(customagent, sizeof(customagent), argv[t+1], "%version%", VERSION); t++; continue;}
 		if(!strcmp(argv[t], "-b")) {
 			NEED_ARG(t);
 			p = argv[t+1];
 			while (p[0] != '\0' && ccnt < COOKIESTORAGESIZE) {
 				q = strchrnul(p, '\n');
-				cookies[ccnt].name = malloc(q-p);
-				cookies[ccnt].value = malloc(q-p);
-				cookies[ccnt].domain = malloc(q-p);
-				cookies[ccnt].path = malloc(q-p);
-				sscanf(p, "%s\t%d\t%s\t%d\t%ld\t%s\t%s", cookies[ccnt].domain, &cookies[ccnt].host_only, cookies[ccnt].path, &cookies[ccnt].secure, &cookies[ccnt].expires, cookies[ccnt].name, cookies[ccnt].value);
+				const size_t linelen = (size_t)(q - p);
+				if (linelen == 0) { // skip empty lines
+					p = (q[0] == '\n') ? q + 1 : q;
+					continue;
+				}
+				// each whitespace-delimited field is at most the whole line long, +1 for NUL
+				char *domain = malloc(linelen + 1);
+				char *path   = malloc(linelen + 1);
+				char *name   = malloc(linelen + 1);
+				char *value  = malloc(linelen + 1);
+				int host_only = 0, secure = 0;
+				long expires = 0;
+				const int matched = sscanf(p, "%s\t%d\t%s\t%d\t%ld\t%s\t%s", domain, &host_only, path, &secure, &expires, name, value);
+				if (matched == 7) {
+					cookies[ccnt].domain = domain;
+					cookies[ccnt].host_only = host_only;
+					cookies[ccnt].path = path;
+					cookies[ccnt].secure = secure;
+					cookies[ccnt].expires = (time_t)expires;
+					cookies[ccnt].name = name;
+					cookies[ccnt].value = value;
+					ccnt++;
+				} else {
+					free(domain); free(path); free(name); free(value);
+				}
 				p = (q[0] == '\n') ? q + 1 : q;
-				ccnt++;
 			}
 			t++;
 			continue;
@@ -123,7 +171,7 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 		if(!strcmp(argv[t], "-C")) {
 			NEED_ARG(t);
 			if (customheader[0]) {
-				str_replace(url->customheader, customheader, "%", argv[t+1]);
+				str_replace(url->customheader, sizeof(url->customheader), customheader, "%", argv[t+1]);
 			}
 			t++;
 			continue;
@@ -168,46 +216,36 @@ void initurls(int argc, char *argv[], mcrawler_url **urls, mcrawler_settings *se
 /**
  * Formats timing data for output
  */
-static int format_timing(char *dest, mcrawler_timing *timing, int state, int start) {
-	int n, len = 0;
+static void format_timing(char *buf, size_t bufsize, int *plen, mcrawler_timing *timing, int state, int start) {
 	const int now = timing->done;
 	if (start) {
-		n = sprintf(dest+len, "Redirect=%d ms; ", (timing->dnsstart ? timing->dnsstart : timing->connectionstart ? timing->connectionstart : timing->requeststart) - start);
-		if (n > 0) len += n;
+		append_fmt(buf, bufsize, plen, "Redirect=%d ms; ", (timing->dnsstart ? timing->dnsstart : timing->connectionstart ? timing->connectionstart : timing->requeststart) - start);
 	}
 	if (timing->dnsstart) {
-		n = sprintf(dest+len, "DNS Lookup=%d ms; ", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
-		if (n > 0) len += n;
+		append_fmt(buf, bufsize, plen, "DNS Lookup=%d ms; ", (timing->dnsend ? timing->dnsend : now) - timing->dnsstart);
 	}
 	if (timing->connectionstart) {
-		n = sprintf(dest+len, "Initial connection=%d ms; ", (timing->sslstart ? timing->sslstart : (timing->requeststart ? timing->requeststart : now)) - timing->connectionstart);
-		if (n > 0) len += n;
+		append_fmt(buf, bufsize, plen, "Initial connection=%d ms; ", (timing->sslstart ? timing->sslstart : (timing->requeststart ? timing->requeststart : now)) - timing->connectionstart);
 	}
 	if (timing->sslstart) {
-		n = sprintf(dest+len, "SSL=%d ms; ", (timing->sslend ? timing->sslend : now) - timing->sslstart);
-		if (n > 0) len += n;
+		append_fmt(buf, bufsize, plen, "SSL=%d ms; ", (timing->sslend ? timing->sslend : now) - timing->sslstart);
 	}
 	if (timing->requeststart) {
-		n = sprintf(dest+len, "Request=%d ms; ", (timing->requestend ? timing->requestend : now) - timing->requeststart);
-		if (n > 0) len += n;
+		append_fmt(buf, bufsize, plen, "Request=%d ms; ", (timing->requestend ? timing->requestend : now) - timing->requeststart);
 	}
 	if (timing->requestend) {
-		n = sprintf(dest+len, "Waiting=%d ms; ", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
-		if (n > 0) len += n;
+		append_fmt(buf, bufsize, plen, "Waiting=%d ms; ", (timing->firstbyte ? timing->firstbyte : now) - timing->requestend);
 	}
 	if (timing->firstbyte) {
-		n = sprintf(dest+len, "Content download=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - timing->firstbyte);
-		if (n > 0) len += n;
+		append_fmt(buf, bufsize, plen, "Content download=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - timing->firstbyte);
 	}
 	if (start || timing->connectionstart || timing->requeststart) {
 		// after redirect only requeststart is available
 		if (!start) {
 			start = timing->connectionstart ? timing->connectionstart : timing->requeststart;
 		}
-		n = sprintf(dest+len, "Total=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - start);
-		if (n > 0) len += n;
+		append_fmt(buf, bufsize, plen, "Total=%d ms; ", (timing->lastread && state > MCURL_S_RECVREPLY ? timing->lastread : now) - start);
 	}
-	return len;
 }
 
 void output(mcrawler_url *u, void *arg) {
@@ -215,25 +253,22 @@ void output(mcrawler_url *u, void *arg) {
 
 	unsigned char header[16384], *http_header, *http_body;
 	char *h = (char *)header;
-	int n, hlen = 0;
+	const size_t hsize = sizeof(header);
+	int hlen = 0;
 	size_t http_header_len, http_body_len;
 
 	mcrawler_url_header(u, &http_header, &http_header_len);
 	mcrawler_url_body(u, &http_body, &http_body_len);
 
-	n = sprintf(h + hlen, "URL: %s", u->rawurl);
-	if (n > 0) hlen += n;
+	append_fmt(h, hsize, &hlen, "URL: %s", u->rawurl);
 	if (u->redirectedto != NULL) {
-		n = sprintf(h+hlen, "\nRedirected-To: %s", u->redirectedto);
-		if (n > 0) hlen += n;
+		append_fmt(h, hsize, &hlen, "\nRedirected-To: %s", u->redirectedto);
 	}
 	for (mcrawler_redirect_info *rinfo = u->redirect_info; rinfo; rinfo = rinfo->next) {
-		n = sprintf(h+hlen, "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
-		if (n > 0) hlen += n;
-		hlen += format_timing(h+hlen, &rinfo->timing, MCURL_S_DOWNLOADED, 0);
+		append_fmt(h, hsize, &hlen, "\nRedirect-info: %s %d; ", rinfo->url, rinfo->status);
+		format_timing(h, hsize, &hlen, &rinfo->timing, MCURL_S_DOWNLOADED, 0);
 	}
-	n = sprintf(h+hlen, "\nStatus: %d\nContent-length: %zd\n", u->status, http_body_len);
-	if (n > 0) hlen += n;
+	append_fmt(h, hsize, &hlen, "\nStatus: %d\nContent-length: %zd\n", u->status, http_body_len);
 
 	if (url_state <= MCURL_S_RECVREPLY) {
 		char timeouterr[50];
@@ -263,35 +298,28 @@ void output(mcrawler_url *u, void *arg) {
 				strcpy(timeouterr, "HTTP server timed out"); break;
 		}
 
-		n = sprintf(h+hlen, "Timeout: %d (%s); %s\n", url_state, mcrawler_state_to_s(url_state), timeouterr);
-		if (n > 0) hlen += n;
+		append_fmt(h, hsize, &hlen, "Timeout: %d (%s); %s\n", url_state, mcrawler_state_to_s(url_state), timeouterr);
 	}
 	if (*u->error_msg) {
-		n = sprintf(h+hlen, "Error-msg: %s\n", u->error_msg);
-		if (n > 0) hlen += n;
+		append_fmt(h, hsize, &hlen, "Error-msg: %s\n", u->error_msg);
 	}
 	if (u->contenttype && *u->contenttype) {
-		n = sprintf(h+hlen, "Content-type: %s", u->contenttype);
-		if (n > 0) hlen += n;
+		append_fmt(h, hsize, &hlen, "Content-type: %s", u->contenttype);
 		if (*u->charset) {
-			n = sprintf(h+hlen, "; charset=%s\n", u->charset);
-			if (n > 0) hlen += n;
+			append_fmt(h, hsize, &hlen, "; charset=%s\n", u->charset);
 		} else {
-			*(h+hlen) = '\n'; hlen++;
+			append_fmt(h, hsize, &hlen, "\n");
 		}
 	}
 	if (u->wwwauthenticate && *u->wwwauthenticate) {
-		n = sprintf(h+hlen, "WWW-Authenticate: %s\n", u->wwwauthenticate);
-		if (n > 0) hlen += n;
+		append_fmt(h, hsize, &hlen, "WWW-Authenticate: %s\n", u->wwwauthenticate);
 	}
 	if (u->cookiecnt) {
-		n = sprintf(h+hlen, "Cookies: %d\n", u->cookiecnt);
-		if (n > 0) hlen += n;
+		append_fmt(h, hsize, &hlen, "Cookies: %d\n", u->cookiecnt);
 		// netscape cookies.txt format
 		// @see http://www.cookiecentral.com/faq/#3.5
 		for (int t = 0; t < u->cookiecnt; t++) {
-			n = sprintf(h+hlen, "%s\t%d\t%s\t%d\t%ld\t%s\t%s\n", u->cookies[t].domain, u->cookies[t].host_only, u->cookies[t].path, u->cookies[t].secure, u->cookies[t].expires, u->cookies[t].name, u->cookies[t].value);
-			if (n > 0) hlen += n;
+			append_fmt(h, hsize, &hlen, "%s\t%d\t%s\t%d\t%ld\t%s\t%s\n", u->cookies[t].domain, u->cookies[t].host_only, u->cookies[t].path, u->cookies[t].secure, u->cookies[t].expires, u->cookies[t].name, u->cookies[t].value);
 		}
 	}
 
@@ -304,19 +332,15 @@ void output(mcrawler_url *u, void *arg) {
 	} else {
 		downtime = u->timing.done;
 	}
-	n = sprintf(h+hlen, "Downtime: %dms; %dms", downtime, u->downstart);
-	if (n > 0) hlen += n;
+	append_fmt(h, hsize, &hlen, "Downtime: %dms; %dms", downtime, u->downstart);
 	if (u->addr != NULL) {
 		char straddr[INET6_ADDRSTRLEN];
 		inet_ntop(u->addr->type, u->addr->ip, straddr, sizeof(straddr));
-		n = sprintf(h+hlen, " (ip=%s)", straddr);
-		if (n > 0) hlen += n;
+		append_fmt(h, hsize, &hlen, " (ip=%s)", straddr);
 	}
-	n = sprintf(h+hlen, "\nTiming: ");
-	if (n > 0) hlen += n;
-	hlen += format_timing(h+hlen, &u->timing, url_state, u->downstart);
-	n = sprintf(h+hlen, "\nIndex: %d\n\n", u->index);
-	if (n > 0) hlen += n;
+	append_fmt(h, hsize, &hlen, "\nTiming: ");
+	format_timing(h, hsize, &hlen, &u->timing, url_state, u->downstart);
+	append_fmt(h, hsize, &hlen, "\nIndex: %d\n\n", u->index);
 
 	write_all(STDOUT_FILENO, header, hlen);
 	if (writehead) {

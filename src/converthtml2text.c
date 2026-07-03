@@ -295,7 +295,13 @@ int converthtml2text(char *s, int len)
 	int ending = CH_NEWLINE;
 
 	while (p_src < end) {
-		assert(p_dst <= p_src);
+		// Invariant: the compacted output never overtakes the read cursor.
+		// If it ever did (on unexpected input) writing would clobber unread
+		// source bytes, so stop converting instead of aborting the process.
+		if (p_dst > p_src) {
+			debugf("converthtml2text: output cursor overtook input, stopping\n");
+			break;
+		}
 		switch (*p_src) {
 			case '\r':
 				++p_src;

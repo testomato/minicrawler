@@ -15,6 +15,13 @@ static inline size_t buf_alloc(mcrawler_buf *buf, size_t len) {
 		len = pagesize * 1024;
 	}
 
+	// The dynamic buffer must be able to hold what is already buffered; an
+	// embedder-supplied maxpagesize smaller than the current fill would
+	// otherwise make the memcpy below overflow the freshly allocated buffer.
+	if (len < buf->bufp) {
+		len = buf->bufp;
+	}
+
 	buf->dyn_buf = malloc(len);
 	if (buf->dyn_buf) {
 		buf->buf_sz = len;

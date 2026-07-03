@@ -27,9 +27,17 @@ unsigned char *find_head_end(unsigned char *s, const size_t len) {
  * @see https://www.ietf.org/rfc/rfc2616.txt
  */
 int parsehead(const unsigned char *s, const size_t len, int *status, header_callback header_callback, void *data, int index) {
-	char buf[len + 1];
+	// The head length is attacker-controlled (bounded only by the receive buffer,
+	// up to maxpagesize). Copy it onto the heap instead of a stack VLA to avoid a
+	// multi-MB stack allocation (stack-clash / overflow).
+	char *buf = malloc(len + 1);
+	if (buf == NULL) {
+		debugf("[%d] parsehead: cannot allocate %zu bytes for head\n", index, len);
+		return 1;
+	}
 	char *p = buf, *q;
 	char *name, *value;
+	int ret = 0;
 
 	memcpy(buf, s, len);
 	buf[len] = 0;
@@ -37,15 +45,24 @@ int parsehead(const unsigned char *s, const size_t len, int *status, header_call
 	if (status != NULL) {
 		if (strncmp("HTTP/1.0", p, 8) && strncmp("HTTP/1.1", p, 8)) {
 			debugf("[%d] Unsupported protocol '%.*s'\n", index, 8, p);
-			return 1;
+			ret = 1;
+			goto out;
 		}
 
 		p += 9;
 		*status = atoi(p);
-		assert(*status > 0);
+		if (*status <= 0) { // malformed / non-numeric status ("HTTP/1.1 000", "HTTP/1.1 xyz")
+			debugf("[%d] Invalid HTTP status code in status line\n", index);
+			ret = 1;
+			goto out;
+		}
 
 		p = strchr(p, '\n');
-		assert(p != 0); // we know, there are two newlines somewhere
+		if (p == NULL) { // should not happen (find_head_end guarantees newlines), but do not abort
+			debugf("[%d] Malformed head: no newline after status line\n", index);
+			ret = 1;
+			goto out;
+		}
 	}
 
 	while (1) {
@@ -54,7 +71,9 @@ int parsehead(const unsigned char *s, const size_t len, int *status, header_call
 
 		name = p;
 		p = strpbrk(p, "\r\n:");
-		assert(p != 0);
+		if (p == NULL) {
+			break;
+		}
 		if (*p != ':') {
 			debugf("[%d] Header name terminator ':' not found\n", index);
 			continue;
@@ -64,7 +83,8 @@ int parsehead(const unsigned char *s, const size_t len, int *status, header_call
 		while (*p == ' ' || *p == '\t') p++;
 		value = p;
 		while (1) {
-			while (*p != '\r' && *p != '\n') p++;
+			while (*p && *p != '\r' && *p != '\n') p++; // guard against runaway read past end of head
+			if (*p == 0) break;
 			q = p;
 			while (*q == '\r' || *q == '\n') q++;
 			if (*q == ' ' || *q == '\t') { // value continues
@@ -74,13 +94,15 @@ int parsehead(const unsigned char *s, const size_t len, int *status, header_call
 			}
 		}
 
-		*p = 0; p++;
+		if (*p) { *p = 0; p++; }
 
 		header_callback(name, value, data);
 	}
 
-	return 0;
-}  
+out:
+	free(buf);
+	return ret;
+}
 
 /** sezere to radku tam, kde ceka informaci o delce chunku
  *  jedinou vyjimkou je, kdyz tam najde 0, tehdy posune i contentlen, aby dal vedet, ze jsme na konci
@@ -110,7 +132,10 @@ int eatchunk(mcrawler_url *u) {
 		return 0;
 	}
 
-	assert(i > 0);
+	if (i == 0) { // empty chunk-size line (e.g. response starts with CRLF) — malformed, stop
+		debugf("[%d] Empty chunk size line\n", u->index);
+		return 0;
+	}
 	hex[i] = 0;
 	size = strtol((char *)hex, NULL, 16);
 
@@ -120,7 +145,6 @@ int eatchunk(mcrawler_url *u) {
 	if (u->nextchunkedpos != u->headlen) {
 		movestart -= 2; // CRLF before chunksize
 	}
-	assert(t <= buflen);
 	memmove(buf+movestart, buf+t, buflen-t);		// cely zbytek posun
 	buf_del(u, t-movestart);					// ukazatel taky
 	

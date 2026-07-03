@@ -108,6 +108,7 @@ enum mcrawler_url_options {
 	MCURL_OPT_INSECURE,
 	MCURL_OPT_NOT_FOLLOW_REDIRECTS,
 	MCURL_OPT_DISABLE_HTTP2,
+	MCURL_OPT_BLOCK_PRIVATE_IP, // refuse loopback/link-local/private targets and non-80/443 ports (SSRF protection)
 };
 
 struct mcrawler_url {
@@ -147,6 +148,12 @@ struct mcrawler_url {
 	char *wwwauthenticate;
 	char *authorization;
 	int auth_attempt;
+	// origin (scheme+host+port) the credentials were supplied for; auto-auth is
+	// only performed when a challenging origin matches this, so credentials are
+	// never disclosed to a different host reached via redirect
+	char auth_hostname[256];
+	char auth_proto[8];
+	int auth_port;
 
 	// request
 	unsigned char *request;

@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <string.h>
 #include "h/config.h"
+#include "h/string.h"
 #include "h/proto.h"
 
 void mcrawler_init_settings(mcrawler_settings *settings) {
